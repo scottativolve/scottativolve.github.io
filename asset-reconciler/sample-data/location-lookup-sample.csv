@@ -1,0 +1,14 @@
+Location,Address,Town,Postcode,Latitude,Longitude,Expected Devices,Region,Site Type
+Ashfield House,14 Ashfield Road,Manchester,M14 6JN,53.4457,-2.227,12,North West,Supported living
+Beechwood Lodge,2 Beech Grove,Leeds,LS6 2AN,53.8175,-1.572,8,Yorkshire,Residential
+Cedar Court,77 Cedar Avenue,Birmingham,B29 6NA,52.4392,-1.9412,15,Midlands,Supported living
+Dovecote Mews,5 Dovecote Lane,Nottingham,NG9 1HG,52.927,-1.213,6,Midlands,Residential
+Elmtree House,31 Elm Street,Liverpool,L15 3HW,53.3925,-2.913,10,North West,Residential
+Fernbank,8 Fern Road,Sheffield,S7 1RQ,53.3552,-1.492,7,Yorkshire,Supported living
+Greenacres,112 Green Lane,Bristol,BS7 8LT,51.483,-2.584,9,South West,Residential
+Hazel Grove Villas,3 Hazel Close,Stoke,ST4 2QG,53.002,-2.186,5,Midlands,Supported living
+Ivy House,46 Ivy Bank,Newcastle,NE3 1TN,55.006,-1.625,11,North East,Residential
+Juniper Court,9 Juniper Way,Cardiff,CF14 4XW,51.509,-3.193,8,Wales,Supported living
+Kingsley Lodge,20 Kingsley Road,Preston,PR2 1BQ,53.772,-2.708,6,North West,Residential
+Head Office,Unit 4 Waterside,Derby,DE1 3QT,52.927,-1.482,24,Corporate,Office
+Larchfield House,18 Larch Road,Wigan,WN1 1XX,,,6,North West,Residential

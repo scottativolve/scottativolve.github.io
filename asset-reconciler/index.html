@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asset Reconciler — Freshservice &amp; Intune</title>
+<meta name="description" content="Compare Freshservice and Intune exports, find the records that disagree, build the correction import, and map the estate. Runs entirely in your browser.">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Cpath d='M9 21.5 16 9l7 12.5z' fill='%23fff'/%3E%3C/svg%3E">
+
+<link rel="stylesheet" href="lib/leaflet/leaflet.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div class="app">
+  <div class="brand">
+    <div class="logo">AR</div>
+    <div>
+      <div class="title">Asset Reconciler</div>
+      <div class="subtitle">Freshservice · Intune</div>
+    </div>
+  </div>
+
+  <div class="header" id="header"></div>
+  <nav class="sidebar" id="sidebar" aria-label="Sources and views"></nav>
+  <main class="main" id="main"></main>
+</div>
+
+<noscript>
+  <div style="padding:40px;font-family:system-ui,sans-serif">
+    <h1>JavaScript is required</h1>
+    <p>This tool reads your export files inside the browser. It cannot work with scripting turned off.</p>
+  </div>
+</noscript>
+
+<script src="lib/leaflet/leaflet.js"></script>
+
+<script src="js/util.js"></script>
+<script src="js/csv.js"></script>
+<script src="js/schema.js"></script>
+<script src="js/normalize.js"></script>
+<script src="js/store.js"></script>
+<script src="js/geocode.js"></script>
+<script src="js/match.js"></script>
+<script src="js/rules.js"></script>
+<script src="js/views.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/table.js"></script>
+<script src="js/map.js"></script>
+<script src="js/fsexport.js"></script>
+<script src="js/sampledata.js"></script>
+<script src="js/app.js"></script>
+<script>window.App.init();</script>
+
+</body>
+</html>
