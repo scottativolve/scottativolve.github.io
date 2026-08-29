@@ -3950,6 +3950,7 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
   var layer = null;
   var legendCtl = null;
   var lastFit = null;
+  var savedView = null;
 
   /* Leaflet writes marker colours as SVG presentation attributes. Support for
      var() there is not universal, so resolve the tokens to concrete colours
@@ -4068,11 +4069,30 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
     return 'var(--series-1)';
   }
 
+  /* Re-rendering the Map tab replaces the #map element, which would leave the
+     cached Leaflet instance bound to a detached node - markers get drawn into
+     a container that is no longer on the page, and the map reads as blank. So
+     check the instance still owns the live element, and rebuild it if not,
+     carrying the user's current pan and zoom across. */
   function ensureMap(elId) {
     if (!global.L) return null;
-    if (map) return map;
-    map = global.L.map(elId, { scrollWheelZoom: true, zoomControl: true, preferCanvas: false })
-      .setView([54.0, -2.4], 6);
+    var host = document.getElementById(elId);
+    if (!host) return null;
+
+    if (map) {
+      var container = null;
+      try { container = map.getContainer(); } catch (e) { container = null; }
+      if (container === host && document.body.contains(container)) return map;
+
+      try { savedView = { center: map.getCenter(), zoom: map.getZoom() }; } catch (e) { /* never rendered */ }
+      try { map.remove(); } catch (e) { /* already torn down */ }
+      map = null; layer = null; legendCtl = null;
+    }
+
+    map = global.L.map(host, { scrollWheelZoom: true, zoomControl: true, preferCanvas: false });
+    if (savedView) map.setView(savedView.center, savedView.zoom);
+    else map.setView([54.0, -2.4], 6);
+
     global.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -4199,8 +4219,9 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
     legendCtl.addTo(m);
 
     // Fit once per distinct set of points, so re-colouring doesn't yank the view.
+    // A map rebuilt from scratch with no remembered view needs the fit too.
     var sig = pts.length + ':' + pts.map(function (s) { return s.key; }).join(',');
-    if (sig !== lastFit) {
+    if (sig !== lastFit || !savedView) {
       lastFit = sig;
       try {
         m.fitBounds(global.L.latLngBounds(pts.map(function (s) { return [s.lat, s.lon]; })).pad(0.12));
@@ -4209,8 +4230,19 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
     setTimeout(function () { m.invalidateSize(); }, 60);
   }
 
-  function invalidate() { if (map) setTimeout(function () { map.invalidateSize(); }, 60); }
-  function reset() { lastFit = null; }
+  function invalidate() {
+    if (!map) return;
+    setTimeout(function () {
+      try {
+        map.invalidateSize();
+        savedView = { center: map.getCenter(), zoom: map.getZoom() };
+      } catch (e) { /* container gone; the next ensureMap rebuilds */ }
+    }, 60);
+  }
+
+  /* Called when the underlying site set changes enough that the view should be
+     re-fitted rather than preserved. */
+  function reset() { lastFit = null; savedView = null; }
 
   global.EstateMap = {
     aggregate: aggregate,
