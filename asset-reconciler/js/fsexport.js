@@ -48,38 +48,81 @@
      have one and the current value fills the rest, so the column is never
      blank. */
 
-  var FS_FIELDS = [
-    { field: 'name',        label: 'Device name (Display Name)' },
-    { field: 'model',       label: 'Product / model' },
-    { field: 'assetTag',    label: 'Asset tag' },
-    { field: 'serial',      label: 'Serial number' },
-    { field: 'location',    label: 'Location' },
-    { field: 'user',        label: 'Assigned user' },
-    { field: 'state',       label: 'Asset state' },
-    { field: 'assetType',   label: 'Asset type' },
-    { field: 'department',  label: 'Department' },
-    { field: 'os',          label: 'Operating system' },
-    { field: 'osVersion',   label: 'OS version' },
-    { field: 'lastCheckIn', label: 'Last Intune check-in' }
-  ];
+  /* Where a column's value comes from. Which system is authoritative differs
+     per field and is not something the tool can decide: Freshservice's Product
+     is written by its own discovery agent and Intune reports hardware
+     separately, so for that column Freshservice is right and copying Intune
+     over it would be destructive - while for the assigned user Intune is the
+     fresher of the two. So the choice is explicit, per column. */
+  var COLUMN_SOURCES = {
+    fs: [
+      { field: 'name',        label: 'Device name (Display Name)' },
+      { field: 'model',       label: 'Product / model' },
+      { field: 'assetTag',    label: 'Asset tag' },
+      { field: 'serial',      label: 'Serial number' },
+      { field: 'location',    label: 'Location' },
+      { field: 'user',        label: 'Assigned user' },
+      { field: 'state',       label: 'Asset state' },
+      { field: 'assetType',   label: 'Asset type' },
+      { field: 'department',  label: 'Department' },
+      { field: 'os',          label: 'Operating system' },
+      { field: 'osVersion',   label: 'OS version' }
+    ],
+    intune: [
+      { field: 'name',        label: 'Device name' },
+      { field: 'user',        label: 'Primary user' },
+      { field: 'serial',      label: 'Serial number' },
+      { field: 'model',       label: 'Model' },
+      { field: 'manufacturer',label: 'Manufacturer' },
+      { field: 'os',          label: 'Operating system' },
+      { field: 'osVersion',   label: 'OS version' },
+      { field: 'lastCheckIn', label: 'Last check-in' },
+      { field: 'compliance',  label: 'Compliance' },
+      { field: 'ownership',   label: 'Ownership' },
+      { field: 'category',    label: 'Category' }
+    ]
+  };
 
   function fsFieldValue(row, field) {
     if (field === 'name') return row.name;
     if (field === 'assetTag') return row.assetTag;
     if (field === 'assetType') return row.assetType;
     if (field === 'department') return row.department;
-    if (field === 'lastCheckIn') return row.lastCheckIn ? U.fmtDate(row.lastCheckIn) : '';
     return R.currentValue(row, field);
   }
 
+  function intuneFieldValue(row, field) {
+    var i = row.intune;
+    if (!i) return '';
+    if (field === 'user') return N.personDisplay(i.primaryUser, i.primaryUpn);
+    if (field === 'lastCheckIn') return row.lastCheckIn ? U.fmtDate(row.lastCheckIn) : '';
+    return N.clean(i[field]);
+  }
+
+  /* One accessor for any column spec. */
+  function columnValue(row, col) {
+    if (!col) return '';
+    if (col.kind === 'fixed') return col.value === undefined ? '' : col.value;
+    if (col.kind === 'intune') return intuneFieldValue(row, col.field);
+    return fsFieldValue(row, col.field);          // 'fs', and legacy 'field'
+  }
+
+  function sourceLabel(col) {
+    if (!col) return '';
+    if (col.kind === 'fixed') return 'Fixed value';
+    var group = col.kind === 'intune' ? 'intune' : 'fs';
+    var def = COLUMN_SOURCES[group].filter(function (f) { return f.field === col.field; })[0];
+    return (group === 'intune' ? 'Intune: ' : 'Freshservice: ') + (def ? def.label : col.field);
+  }
+
   /* The three columns a stock Freshservice asset import will not accept a file
-     without. Editable, removable, and extendable for instances that mandate
-     more. */
+     without. Product deliberately comes from Freshservice: overwriting it with
+     Intune's wording would change good data on every row. */
   function defaultAlwaysColumns() {
     return [
       { header: 'Workspace', kind: 'fixed', value: 'IT' },
-      { header: 'Name',      kind: 'field', field: 'name' },
-      { header: 'Product',   kind: 'field', field: 'model' }
+      { header: 'Name',      kind: 'fs', field: 'name' },
+      { header: 'Product',   kind: 'fs', field: 'model' }
     ];
   }
 
@@ -211,19 +254,15 @@
 
     add(matchHeader, function (p) { return p.key; });
 
+    // A column says where its value comes from, and that is what it gets. A
+    // correction never quietly overrides it - Product is configured to come
+    // from Freshservice precisely so that a Model correction cannot rewrite it.
     (cfg.alwaysColumns || []).forEach(function (col) {
-      if (col.kind === 'fixed') {
-        add(col.header, function () { return col.value === undefined ? '' : col.value; });
-        return;
-      }
-      add(col.header, function (p) {
-        // A corrected value for this field takes precedence; otherwise the
-        // column carries what Freshservice already has, so it is never empty.
-        var ch = changeFor(p, col.field);
-        return ch ? ch.proposed : fsFieldValue(p.row, col.field);
-      });
+      add(col.header, function (p) { return columnValue(p.row, col); });
     });
 
+    // Corrections fill the rows that have one; the rest keep their current
+    // Freshservice value so the column is never blank on an unchanged row.
     fieldsUsed.forEach(function (f) {
       add(H[f] || f, function (p) {
         var ch = changeFor(p, f);
@@ -238,6 +277,27 @@
       return obj;
     });
     return global.CSV.stringify(rows, headers);
+  }
+
+  /* Columns whose heading is claimed by a correction, or vice versa - the
+     always-column wins, so say so rather than let the correction vanish. */
+  function columnConflicts(cfg) {
+    var out = [];
+    (cfg.alwaysColumns || []).forEach(function (col) {
+      if (col.kind === 'fixed') return;
+      var f = cfg.fields[col.field];
+      if (f && f.enabled) {
+        out.push({ header: col.header, field: col.field, source: sourceLabel(col) });
+      }
+    });
+    return out;
+  }
+
+  /* How many rows would have nothing in a given column. */
+  function blankCount(proposals, col) {
+    return proposals.filter(function (p) {
+      return N.isBlank(columnValue(p.row, col));
+    }).length;
   }
 
   /* Which mandatory columns are missing from the current configuration. */
@@ -355,7 +415,11 @@
   global.FSExport = {
     DEFAULT_HEADERS: DEFAULT_HEADERS,
     UPDATABLE: UPDATABLE,
-    FS_FIELDS: FS_FIELDS,
+    COLUMN_SOURCES: COLUMN_SOURCES,
+    columnValue: columnValue,
+    sourceLabel: sourceLabel,
+    columnConflicts: columnConflicts,
+    blankCount: blankCount,
     fsFieldValue: fsFieldValue,
     defaultAlwaysColumns: defaultAlwaysColumns,
     missingRequired: missingRequired,

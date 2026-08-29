@@ -164,7 +164,11 @@
       code: 'model-mismatch',
       label: 'Model differs',
       severity: 'low',
-      help: 'The recorded hardware model does not agree between the two systems.',
+      defaultOff: true,
+      help: 'The recorded hardware model does not agree between the two systems. Off by default: ' +
+            'Freshservice takes this from its own discovery agent and Intune reports it separately, so the ' +
+            'wording differs on almost every device without anything being wrong. Turn it on only if you have ' +
+            'aligned how both systems name hardware.',
       test: function (r) {
         return r.fs && r.intune && !N.looseEqual(r.fs.model, r.intune.model);
       },
@@ -175,7 +179,10 @@
       code: 'os-mismatch',
       label: 'OS differs',
       severity: 'low',
-      help: 'The operating system recorded in Freshservice does not match what Intune reports.',
+      defaultOff: true,
+      help: 'The operating system recorded in Freshservice does not match what Intune reports. Off by default: ' +
+            'the two are populated from different agents — Freshservice discovery typically gives "Windows 11" ' +
+            'where Intune gives "Windows" — so they disagree structurally rather than meaningfully.',
       test: function (r) {
         return r.fs && r.intune && !N.isBlank(r.fs.os) && !N.isBlank(r.intune.os) &&
                !N.looseEqual(r.fs.os, r.intune.os);
@@ -233,10 +240,19 @@
 
   var SEVERITY_ORDER = { high: 3, medium: 2, low: 1 };
 
+  /* A rule with no stored preference falls back to its own default, so a check
+     that is noise for most estates can ship switched off without preventing
+     anyone turning it on. */
+  function isEnabled(rule, enabled) {
+    var stored = enabled ? enabled[rule.code] : undefined;
+    if (stored === undefined) return !rule.defaultOff;
+    return stored !== false;
+  }
+
   /* Run every enabled rule over every row, writing `issues` and `severity`. */
   function apply(result, cfg, enabled) {
     var ctx = { hasLocations: result.sites && result.sites.size > 0 };
-    var active = RULES.filter(function (r) { return !enabled || enabled[r.code] !== false; });
+    var active = RULES.filter(function (r) { return isEnabled(r, enabled); });
     var tally = {};
     active.forEach(function (r) { tally[r.code] = 0; });
 
@@ -306,6 +322,7 @@
     RULES: RULES,
     BY_CODE: BY_CODE,
     apply: apply,
+    isEnabled: isEnabled,
     proposedValue: proposedValue,
     currentValue: currentValue,
     SEVERITY_ORDER: SEVERITY_ORDER

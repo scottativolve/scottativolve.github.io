@@ -136,11 +136,19 @@ Each check can be switched off in Settings, and every threshold is adjustable.
 | In use but silent | Medium | Marked in use, but long gone quiet |
 | Serial number differs | Medium | Matched on name, but the serials disagree |
 | No serial in Freshservice | Low | Blocks reliable future matching |
-| Model / OS differs | Low | Inventory drift |
+| Model / OS differs | Low | Inventory drift — **off by default**, see below |
 | Duplicate device name | Medium | Usually a rebuild whose old record was never retired |
 | Not compliant in Intune | Medium | Intune reports a policy failure |
 | Site confirmed a different location | High | From a returned verification sheet |
 | Site reported device missing | High | From a returned verification sheet |
+
+**Model differs** and **OS differs** ship switched off. The two systems populate
+those fields from different agents — Freshservice discovery typically records
+`Windows 11` and a full product name where Intune reports `Windows` and its own
+model string — so they disagree on almost every device without anything being
+wrong. Flagging that is noise, and acting on it would overwrite the better data.
+Turn them on in Settings only if you have deliberately aligned how both systems
+name hardware.
 
 ---
 
@@ -211,15 +219,24 @@ requires:
 | `Name` | the Display Name from Freshservice |
 | `Product` | the Product already recorded in Freshservice |
 
-Each row's heading, and where its value comes from, is editable, and you can add
-more for an instance that mandates others — either a fixed value or any field
-Freshservice already holds. If one of the required three is missing the page
-says so before you download.
+Each row's heading and its value are editable, and you can add more for an
+instance that mandates others. A column takes a fixed value, **any field
+Freshservice holds, or any field Intune holds** — the picker is grouped by
+system. If one of the required three is missing, the page says so before you
+download, and it warns when a column would be blank on some rows.
 
-Where a column names a field you are *also* correcting, the corrected value is
-used on the rows that have one and the current value fills the rest, so a
-required column is never left blank. Duplicate headings collapse to one column,
-so making `Name` the match column doesn't produce two.
+**Which system is authoritative is per column, and the tool won't guess.**
+`Product` defaults to the Freshservice value on purpose: Freshservice populates
+it from its own discovery agent and Intune reports hardware separately, so
+copying Intune over it would rewrite good data on every row. The assigned user
+is the opposite — Intune is the fresher of the two. Set each column to whichever
+system is right for it.
+
+A column's declared source is what it gets; a correction never silently
+overrides it. If you switch on a correction for a field that a column also
+names, the column wins and the page says so, so a correction can't disappear
+without explanation. Duplicate headings collapse to one column, so making `Name`
+the match column doesn't produce two.
 
 If nothing comes out, the page says which switched-off fields would produce
 changes for those devices, and how many, with a button to turn each one on.

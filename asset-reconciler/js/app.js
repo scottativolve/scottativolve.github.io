@@ -20,6 +20,12 @@
     // it the defaults rather than an import that Freshservice will reject.
     if (!Array.isArray(out.alwaysColumns) || !out.alwaysColumns.length) {
       out.alwaysColumns = FX.defaultAlwaysColumns();
+    } else {
+      // Columns saved before the source could be Intune used kind:'field',
+      // which always meant Freshservice.
+      out.alwaysColumns = out.alwaysColumns.map(function (c) {
+        return c && c.kind === 'field' ? Object.assign({}, c, { kind: 'fs' }) : c;
+      });
     }
     delete out.reference;
     delete out.referenceHeaders;
@@ -1269,27 +1275,47 @@
     var sampleRow = scopedRows[0] || state.result.rows[0];
 
     (cfg.alwaysColumns || []).forEach(function (col, idx) {
-      var example = col.kind === 'fixed'
-        ? (col.value || '')
-        : (sampleRow ? FX.fsFieldValue(sampleRow, col.field) : '');
+      var example = sampleRow ? FX.columnValue(sampleRow, col) : '';
+      var blanks = FX.blankCount(proposals, col);
+
+      function optionsFor(group, prefix) {
+        return FX.COLUMN_SOURCES[group].map(function (f) {
+          return U.el('option', {
+            value: prefix + ':' + f.field,
+            selected: col.kind === prefix && col.field === f.field
+          }, f.label);
+        });
+      }
+
+      var picker = U.el('select', {
+        onchange: function (e) {
+          var v = e.target.value;
+          if (v === '__fixed') {
+            col.kind = 'fixed';
+            if (col.value === undefined) col.value = '';
+          } else {
+            var parts = v.split(':');
+            col.kind = parts[0];
+            col.field = parts[1];
+          }
+          persistFsConfig(); render();
+        }
+      }, [
+        U.el('option', { value: '__fixed', selected: col.kind === 'fixed' }, 'Fixed value'),
+        U.el('optgroup', { label: 'From Freshservice' }, optionsFor('fs', 'fs')),
+        U.el('optgroup', { label: 'From Intune' }, optionsFor('intune', 'intune'))
+      ]);
 
       var valueCell = U.el('td', {}, [
-        U.el('select', {
-          onchange: function (e) {
-            if (e.target.value === '__fixed') { col.kind = 'fixed'; if (col.value === undefined) col.value = ''; }
-            else { col.kind = 'field'; col.field = e.target.value; }
-            persistFsConfig(); render();
-          }
-        }, [U.el('option', { value: '__fixed', selected: col.kind === 'fixed' }, 'Fixed value')].concat(
-          FX.FS_FIELDS.map(function (f) {
-            return U.el('option', { value: f.field, selected: col.kind === 'field' && col.field === f.field }, f.label);
-          })
-        )),
+        picker,
         col.kind === 'fixed' ? U.el('input', {
           type: 'text', value: col.value || '', placeholder: 'e.g. IT',
           style: { marginTop: '4px', width: '100%' },
           onchange: function (e) { col.value = e.target.value; persistFsConfig(); render(); }
-        }) : null
+        }) : null,
+        blanks ? U.el('div', {
+          class: 'hint', style: { color: 'var(--critical)', marginTop: '3px' }
+        }, 'blank on ' + U.num(blanks) + ' of ' + U.num(proposals.length) + ' rows') : null
       ]);
 
       colBody.appendChild(U.el('tr', {}, [
@@ -1307,6 +1333,19 @@
     });
     colTable.appendChild(colBody);
     colCard.appendChild(colTable);
+
+    var conflicts = FX.columnConflicts(cfg);
+    if (conflicts.length) {
+      colCard.appendChild(U.el('div', { style: { marginTop: '10px' } }, [
+        U.el('span', { class: 'badge medium' }, [U.el('span', { class: 'sev sev-medium' }), 'Correction overridden']),
+        U.el('div', { class: 'hint', style: { marginTop: '4px' } },
+          conflicts.map(function (c) {
+            return '"' + c.header + '" is set to ' + c.source + ', so the correction you switched on for that ' +
+                   'field will not reach the file.';
+          }).join(' ') +
+          ' The column above wins — change its source, or untick the field in "What to update".')
+      ]));
+    }
 
     colCard.appendChild(U.el('div', { class: 'row', style: { marginTop: '10px' } }, [
       U.el('button', {
@@ -1356,6 +1395,10 @@
       var suggestions = [];
       FX.UPDATABLE.forEach(function (u) {
         if (cfg.fields[u.field] && cfg.fields[u.field].enabled) return;
+        // Only offer a field some enabled check is actually complaining about.
+        // Model and OS differ structurally between the two systems, so with
+        // those checks off they are noise, not a suggestion.
+        if (!fieldHasLiveRule(u.field)) return;
         var trial = JSON.parse(JSON.stringify(cfg));
         trial.fields[u.field].enabled = true;
         if (u.sources.indexOf('manual') >= 0 && u.field === 'state') {
@@ -1442,11 +1485,17 @@
   function fieldWeight(field) {
     var worst = 0;
     R.RULES.forEach(function (rule) {
-      if (rule.fix && rule.fix.field === field) {
+      if (rule.fix && rule.fix.field === field && R.isEnabled(rule, state.enabledRules)) {
         worst = Math.max(worst, R.SEVERITY_ORDER[rule.severity] || 0);
       }
     });
     return worst;
+  }
+
+  function fieldHasLiveRule(field) {
+    return R.RULES.some(function (rule) {
+      return rule.fix && rule.fix.field === field && R.isEnabled(rule, state.enabledRules);
+    });
   }
 
   /* ==================================================================== */
@@ -1527,7 +1576,7 @@
     rulesCard.appendChild(U.el('h2', {}, 'Checks'));
     rulesCard.appendChild(U.el('p', { class: 'hint' }, 'Turn off any check that is not meaningful for your estate.'));
     R.RULES.forEach(function (rule) {
-      var on = state.enabledRules[rule.code] !== false;
+      var on = R.isEnabled(rule, state.enabledRules);
       rulesCard.appendChild(U.el('div', { style: { padding: '7px 0', borderBottom: '1px solid var(--grid)' } }, [
         U.el('label', { class: 'check' }, [
           U.el('input', {

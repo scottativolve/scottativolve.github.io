@@ -2934,7 +2934,11 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
       code: 'model-mismatch',
       label: 'Model differs',
       severity: 'low',
-      help: 'The recorded hardware model does not agree between the two systems.',
+      defaultOff: true,
+      help: 'The recorded hardware model does not agree between the two systems. Off by default: ' +
+            'Freshservice takes this from its own discovery agent and Intune reports it separately, so the ' +
+            'wording differs on almost every device without anything being wrong. Turn it on only if you have ' +
+            'aligned how both systems name hardware.',
       test: function (r) {
         return r.fs && r.intune && !N.looseEqual(r.fs.model, r.intune.model);
       },
@@ -2945,7 +2949,10 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
       code: 'os-mismatch',
       label: 'OS differs',
       severity: 'low',
-      help: 'The operating system recorded in Freshservice does not match what Intune reports.',
+      defaultOff: true,
+      help: 'The operating system recorded in Freshservice does not match what Intune reports. Off by default: ' +
+            'the two are populated from different agents — Freshservice discovery typically gives "Windows 11" ' +
+            'where Intune gives "Windows" — so they disagree structurally rather than meaningfully.',
       test: function (r) {
         return r.fs && r.intune && !N.isBlank(r.fs.os) && !N.isBlank(r.intune.os) &&
                !N.looseEqual(r.fs.os, r.intune.os);
@@ -3003,10 +3010,19 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
 
   var SEVERITY_ORDER = { high: 3, medium: 2, low: 1 };
 
+  /* A rule with no stored preference falls back to its own default, so a check
+     that is noise for most estates can ship switched off without preventing
+     anyone turning it on. */
+  function isEnabled(rule, enabled) {
+    var stored = enabled ? enabled[rule.code] : undefined;
+    if (stored === undefined) return !rule.defaultOff;
+    return stored !== false;
+  }
+
   /* Run every enabled rule over every row, writing `issues` and `severity`. */
   function apply(result, cfg, enabled) {
     var ctx = { hasLocations: result.sites && result.sites.size > 0 };
-    var active = RULES.filter(function (r) { return !enabled || enabled[r.code] !== false; });
+    var active = RULES.filter(function (r) { return isEnabled(r, enabled); });
     var tally = {};
     active.forEach(function (r) { tally[r.code] = 0; });
 
@@ -3076,6 +3092,7 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
     RULES: RULES,
     BY_CODE: BY_CODE,
     apply: apply,
+    isEnabled: isEnabled,
     proposedValue: proposedValue,
     currentValue: currentValue,
     SEVERITY_ORDER: SEVERITY_ORDER
@@ -4411,38 +4428,81 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
      have one and the current value fills the rest, so the column is never
      blank. */
 
-  var FS_FIELDS = [
-    { field: 'name',        label: 'Device name (Display Name)' },
-    { field: 'model',       label: 'Product / model' },
-    { field: 'assetTag',    label: 'Asset tag' },
-    { field: 'serial',      label: 'Serial number' },
-    { field: 'location',    label: 'Location' },
-    { field: 'user',        label: 'Assigned user' },
-    { field: 'state',       label: 'Asset state' },
-    { field: 'assetType',   label: 'Asset type' },
-    { field: 'department',  label: 'Department' },
-    { field: 'os',          label: 'Operating system' },
-    { field: 'osVersion',   label: 'OS version' },
-    { field: 'lastCheckIn', label: 'Last Intune check-in' }
-  ];
+  /* Where a column's value comes from. Which system is authoritative differs
+     per field and is not something the tool can decide: Freshservice's Product
+     is written by its own discovery agent and Intune reports hardware
+     separately, so for that column Freshservice is right and copying Intune
+     over it would be destructive - while for the assigned user Intune is the
+     fresher of the two. So the choice is explicit, per column. */
+  var COLUMN_SOURCES = {
+    fs: [
+      { field: 'name',        label: 'Device name (Display Name)' },
+      { field: 'model',       label: 'Product / model' },
+      { field: 'assetTag',    label: 'Asset tag' },
+      { field: 'serial',      label: 'Serial number' },
+      { field: 'location',    label: 'Location' },
+      { field: 'user',        label: 'Assigned user' },
+      { field: 'state',       label: 'Asset state' },
+      { field: 'assetType',   label: 'Asset type' },
+      { field: 'department',  label: 'Department' },
+      { field: 'os',          label: 'Operating system' },
+      { field: 'osVersion',   label: 'OS version' }
+    ],
+    intune: [
+      { field: 'name',        label: 'Device name' },
+      { field: 'user',        label: 'Primary user' },
+      { field: 'serial',      label: 'Serial number' },
+      { field: 'model',       label: 'Model' },
+      { field: 'manufacturer',label: 'Manufacturer' },
+      { field: 'os',          label: 'Operating system' },
+      { field: 'osVersion',   label: 'OS version' },
+      { field: 'lastCheckIn', label: 'Last check-in' },
+      { field: 'compliance',  label: 'Compliance' },
+      { field: 'ownership',   label: 'Ownership' },
+      { field: 'category',    label: 'Category' }
+    ]
+  };
 
   function fsFieldValue(row, field) {
     if (field === 'name') return row.name;
     if (field === 'assetTag') return row.assetTag;
     if (field === 'assetType') return row.assetType;
     if (field === 'department') return row.department;
-    if (field === 'lastCheckIn') return row.lastCheckIn ? U.fmtDate(row.lastCheckIn) : '';
     return R.currentValue(row, field);
   }
 
+  function intuneFieldValue(row, field) {
+    var i = row.intune;
+    if (!i) return '';
+    if (field === 'user') return N.personDisplay(i.primaryUser, i.primaryUpn);
+    if (field === 'lastCheckIn') return row.lastCheckIn ? U.fmtDate(row.lastCheckIn) : '';
+    return N.clean(i[field]);
+  }
+
+  /* One accessor for any column spec. */
+  function columnValue(row, col) {
+    if (!col) return '';
+    if (col.kind === 'fixed') return col.value === undefined ? '' : col.value;
+    if (col.kind === 'intune') return intuneFieldValue(row, col.field);
+    return fsFieldValue(row, col.field);          // 'fs', and legacy 'field'
+  }
+
+  function sourceLabel(col) {
+    if (!col) return '';
+    if (col.kind === 'fixed') return 'Fixed value';
+    var group = col.kind === 'intune' ? 'intune' : 'fs';
+    var def = COLUMN_SOURCES[group].filter(function (f) { return f.field === col.field; })[0];
+    return (group === 'intune' ? 'Intune: ' : 'Freshservice: ') + (def ? def.label : col.field);
+  }
+
   /* The three columns a stock Freshservice asset import will not accept a file
-     without. Editable, removable, and extendable for instances that mandate
-     more. */
+     without. Product deliberately comes from Freshservice: overwriting it with
+     Intune's wording would change good data on every row. */
   function defaultAlwaysColumns() {
     return [
       { header: 'Workspace', kind: 'fixed', value: 'IT' },
-      { header: 'Name',      kind: 'field', field: 'name' },
-      { header: 'Product',   kind: 'field', field: 'model' }
+      { header: 'Name',      kind: 'fs', field: 'name' },
+      { header: 'Product',   kind: 'fs', field: 'model' }
     ];
   }
 
@@ -4574,19 +4634,15 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
 
     add(matchHeader, function (p) { return p.key; });
 
+    // A column says where its value comes from, and that is what it gets. A
+    // correction never quietly overrides it - Product is configured to come
+    // from Freshservice precisely so that a Model correction cannot rewrite it.
     (cfg.alwaysColumns || []).forEach(function (col) {
-      if (col.kind === 'fixed') {
-        add(col.header, function () { return col.value === undefined ? '' : col.value; });
-        return;
-      }
-      add(col.header, function (p) {
-        // A corrected value for this field takes precedence; otherwise the
-        // column carries what Freshservice already has, so it is never empty.
-        var ch = changeFor(p, col.field);
-        return ch ? ch.proposed : fsFieldValue(p.row, col.field);
-      });
+      add(col.header, function (p) { return columnValue(p.row, col); });
     });
 
+    // Corrections fill the rows that have one; the rest keep their current
+    // Freshservice value so the column is never blank on an unchanged row.
     fieldsUsed.forEach(function (f) {
       add(H[f] || f, function (p) {
         var ch = changeFor(p, f);
@@ -4601,6 +4657,27 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
       return obj;
     });
     return global.CSV.stringify(rows, headers);
+  }
+
+  /* Columns whose heading is claimed by a correction, or vice versa - the
+     always-column wins, so say so rather than let the correction vanish. */
+  function columnConflicts(cfg) {
+    var out = [];
+    (cfg.alwaysColumns || []).forEach(function (col) {
+      if (col.kind === 'fixed') return;
+      var f = cfg.fields[col.field];
+      if (f && f.enabled) {
+        out.push({ header: col.header, field: col.field, source: sourceLabel(col) });
+      }
+    });
+    return out;
+  }
+
+  /* How many rows would have nothing in a given column. */
+  function blankCount(proposals, col) {
+    return proposals.filter(function (p) {
+      return N.isBlank(columnValue(p.row, col));
+    }).length;
   }
 
   /* Which mandatory columns are missing from the current configuration. */
@@ -4718,7 +4795,11 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
   global.FSExport = {
     DEFAULT_HEADERS: DEFAULT_HEADERS,
     UPDATABLE: UPDATABLE,
-    FS_FIELDS: FS_FIELDS,
+    COLUMN_SOURCES: COLUMN_SOURCES,
+    columnValue: columnValue,
+    sourceLabel: sourceLabel,
+    columnConflicts: columnConflicts,
+    blankCount: blankCount,
     fsFieldValue: fsFieldValue,
     defaultAlwaysColumns: defaultAlwaysColumns,
     missingRequired: missingRequired,
@@ -4775,6 +4856,12 @@ window.SampleData = {
     // it the defaults rather than an import that Freshservice will reject.
     if (!Array.isArray(out.alwaysColumns) || !out.alwaysColumns.length) {
       out.alwaysColumns = FX.defaultAlwaysColumns();
+    } else {
+      // Columns saved before the source could be Intune used kind:'field',
+      // which always meant Freshservice.
+      out.alwaysColumns = out.alwaysColumns.map(function (c) {
+        return c && c.kind === 'field' ? Object.assign({}, c, { kind: 'fs' }) : c;
+      });
     }
     delete out.reference;
     delete out.referenceHeaders;
@@ -6024,27 +6111,47 @@ window.SampleData = {
     var sampleRow = scopedRows[0] || state.result.rows[0];
 
     (cfg.alwaysColumns || []).forEach(function (col, idx) {
-      var example = col.kind === 'fixed'
-        ? (col.value || '')
-        : (sampleRow ? FX.fsFieldValue(sampleRow, col.field) : '');
+      var example = sampleRow ? FX.columnValue(sampleRow, col) : '';
+      var blanks = FX.blankCount(proposals, col);
+
+      function optionsFor(group, prefix) {
+        return FX.COLUMN_SOURCES[group].map(function (f) {
+          return U.el('option', {
+            value: prefix + ':' + f.field,
+            selected: col.kind === prefix && col.field === f.field
+          }, f.label);
+        });
+      }
+
+      var picker = U.el('select', {
+        onchange: function (e) {
+          var v = e.target.value;
+          if (v === '__fixed') {
+            col.kind = 'fixed';
+            if (col.value === undefined) col.value = '';
+          } else {
+            var parts = v.split(':');
+            col.kind = parts[0];
+            col.field = parts[1];
+          }
+          persistFsConfig(); render();
+        }
+      }, [
+        U.el('option', { value: '__fixed', selected: col.kind === 'fixed' }, 'Fixed value'),
+        U.el('optgroup', { label: 'From Freshservice' }, optionsFor('fs', 'fs')),
+        U.el('optgroup', { label: 'From Intune' }, optionsFor('intune', 'intune'))
+      ]);
 
       var valueCell = U.el('td', {}, [
-        U.el('select', {
-          onchange: function (e) {
-            if (e.target.value === '__fixed') { col.kind = 'fixed'; if (col.value === undefined) col.value = ''; }
-            else { col.kind = 'field'; col.field = e.target.value; }
-            persistFsConfig(); render();
-          }
-        }, [U.el('option', { value: '__fixed', selected: col.kind === 'fixed' }, 'Fixed value')].concat(
-          FX.FS_FIELDS.map(function (f) {
-            return U.el('option', { value: f.field, selected: col.kind === 'field' && col.field === f.field }, f.label);
-          })
-        )),
+        picker,
         col.kind === 'fixed' ? U.el('input', {
           type: 'text', value: col.value || '', placeholder: 'e.g. IT',
           style: { marginTop: '4px', width: '100%' },
           onchange: function (e) { col.value = e.target.value; persistFsConfig(); render(); }
-        }) : null
+        }) : null,
+        blanks ? U.el('div', {
+          class: 'hint', style: { color: 'var(--critical)', marginTop: '3px' }
+        }, 'blank on ' + U.num(blanks) + ' of ' + U.num(proposals.length) + ' rows') : null
       ]);
 
       colBody.appendChild(U.el('tr', {}, [
@@ -6062,6 +6169,19 @@ window.SampleData = {
     });
     colTable.appendChild(colBody);
     colCard.appendChild(colTable);
+
+    var conflicts = FX.columnConflicts(cfg);
+    if (conflicts.length) {
+      colCard.appendChild(U.el('div', { style: { marginTop: '10px' } }, [
+        U.el('span', { class: 'badge medium' }, [U.el('span', { class: 'sev sev-medium' }), 'Correction overridden']),
+        U.el('div', { class: 'hint', style: { marginTop: '4px' } },
+          conflicts.map(function (c) {
+            return '"' + c.header + '" is set to ' + c.source + ', so the correction you switched on for that ' +
+                   'field will not reach the file.';
+          }).join(' ') +
+          ' The column above wins — change its source, or untick the field in "What to update".')
+      ]));
+    }
 
     colCard.appendChild(U.el('div', { class: 'row', style: { marginTop: '10px' } }, [
       U.el('button', {
@@ -6111,6 +6231,10 @@ window.SampleData = {
       var suggestions = [];
       FX.UPDATABLE.forEach(function (u) {
         if (cfg.fields[u.field] && cfg.fields[u.field].enabled) return;
+        // Only offer a field some enabled check is actually complaining about.
+        // Model and OS differ structurally between the two systems, so with
+        // those checks off they are noise, not a suggestion.
+        if (!fieldHasLiveRule(u.field)) return;
         var trial = JSON.parse(JSON.stringify(cfg));
         trial.fields[u.field].enabled = true;
         if (u.sources.indexOf('manual') >= 0 && u.field === 'state') {
@@ -6197,11 +6321,17 @@ window.SampleData = {
   function fieldWeight(field) {
     var worst = 0;
     R.RULES.forEach(function (rule) {
-      if (rule.fix && rule.fix.field === field) {
+      if (rule.fix && rule.fix.field === field && R.isEnabled(rule, state.enabledRules)) {
         worst = Math.max(worst, R.SEVERITY_ORDER[rule.severity] || 0);
       }
     });
     return worst;
+  }
+
+  function fieldHasLiveRule(field) {
+    return R.RULES.some(function (rule) {
+      return rule.fix && rule.fix.field === field && R.isEnabled(rule, state.enabledRules);
+    });
   }
 
   /* ==================================================================== */
@@ -6282,7 +6412,7 @@ window.SampleData = {
     rulesCard.appendChild(U.el('h2', {}, 'Checks'));
     rulesCard.appendChild(U.el('p', { class: 'hint' }, 'Turn off any check that is not meaningful for your estate.'));
     R.RULES.forEach(function (rule) {
-      var on = state.enabledRules[rule.code] !== false;
+      var on = R.isEnabled(rule, state.enabledRules);
       rulesCard.appendChild(U.el('div', { style: { padding: '7px 0', borderBottom: '1px solid var(--grid)' } }, [
         U.el('label', { class: 'check' }, [
           U.el('input', {
