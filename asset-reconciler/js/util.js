@@ -27,7 +27,16 @@
 
   function qs(sel, root) { return (root || document).querySelector(sel); }
   function qsa(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
-  function clear(node) { while (node && node.firstChild) node.removeChild(node.firstChild); return node; }
+  /* Emptying a container by repeated removeChild can throw when a re-render is
+     triggered from a handler on a child that is being removed (the focused
+     input's blur, typically) and the two passes interleave. replaceChildren
+     empties in one step and cannot get into that state. */
+  function clear(node) {
+    if (!node) return node;
+    if (node.replaceChildren) node.replaceChildren();
+    else node.textContent = '';
+    return node;
+  }
 
   /* ---------------------------------------------------------- formatting */
 

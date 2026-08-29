@@ -16,7 +16,15 @@
     var base = FX.defaultConfig();
     if (!saved || typeof saved !== 'object') return base;
     var out = Object.assign({}, base, saved);
-    ['fields', 'headers', 'reference', 'referenceHeaders'].forEach(function (k) {
+    // A config saved before required columns existed has no alwaysColumns; give
+    // it the defaults rather than an import that Freshservice will reject.
+    if (!Array.isArray(out.alwaysColumns) || !out.alwaysColumns.length) {
+      out.alwaysColumns = FX.defaultAlwaysColumns();
+    }
+    delete out.reference;
+    delete out.referenceHeaders;
+
+    ['fields', 'headers'].forEach(function (k) {
       out[k] = Object.assign({}, base[k], saved[k] || {});
       if (k === 'fields') {
         // Each field is itself an object; fill in any it is missing.
@@ -41,7 +49,9 @@
     siteFilter: null,
     issueFilter: null,
     includeOtherOnMap: false,
-    exportScope: 'all'          // 'all' | 'view'
+    exportScope: 'all',         // 'all' | 'view'
+    persist: global.Store.get('persist', true),   // keep the working set between visits
+    restoredAt: null
   };
 
   var grid = null;
@@ -117,11 +127,90 @@
       return;
     }
     state.result = R.apply(global.Match.reconcile(data, state.cfg), state.cfg, state.enabledRules);
+    saveWorkingSet();
+  }
+
+  /* ------------------------------------------------------ working set */
+
+  function workingSet() {
+    var payload = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      cfg: state.cfg,
+      enabledRules: state.enabledRules,
+      customViews: state.customViews,
+      fsConfig: state.fsConfig,
+      sources: {}
+    };
+    SOURCE_IDS.forEach(function (id) {
+      var src = state.sources[id];
+      if (!src) return;
+      payload.sources[id] = {
+        fileName: src.fileName, headers: src.headers,
+        mapping: src.mapping, raw: src.raw
+      };
+    });
+    return payload;
+  }
+
+  var persistFailed = false;
+  var saveWorkingSet = U.debounce(function () {
+    if (!state.persist || !global.DB.available) return;
+    if (!Object.keys(state.sources).length) return;
+    global.DB.save(workingSet()).then(function () {
+      state.savedAt = new Date();
+      persistFailed = false;
+    }).catch(function (err) {
+      if (persistFailed) return;              // say it once, not on every keystroke
+      persistFailed = true;
+      U.toast(err.message + ' Your data is still loaded in this tab, but it will not come back ' +
+              'next time — use "Save project" instead.', 'err', 10000);
+    });
+  }, 900);
+
+  function restoreWorkingSet() {
+    if (!state.persist || !global.DB.available) return Promise.resolve(false);
+    return global.DB.load().then(function (payload) {
+      if (!payload || !payload.sources || !Object.keys(payload.sources).length) return false;
+      Object.keys(payload.sources).forEach(function (id) {
+        var src = payload.sources[id];
+        if (!src || !src.raw) return;
+        state.sources[id] = {
+          id: id, fileName: src.fileName, headers: src.headers,
+          mapping: src.mapping, raw: src.raw
+        };
+        project(id);
+      });
+      if (payload.cfg) state.cfg = global.Match.settings(payload.cfg);
+      if (payload.enabledRules) state.enabledRules = payload.enabledRules;
+      if (payload.customViews) state.customViews = payload.customViews;
+      if (payload.fsConfig) state.fsConfig = mergeFsConfig(payload.fsConfig);
+      state.restoredAt = payload.savedAt ? new Date(payload.savedAt) : null;
+      state.savedAt = state.restoredAt;
+      recompute();
+      return true;
+    }).catch(function () { return false; });
+  }
+
+  function forgetWorkingSet(alsoClearLoaded) {
+    return global.DB.clear().then(function () {
+      state.savedAt = null;
+      state.restoredAt = null;
+      if (alsoClearLoaded) {
+        state.sources = {};
+        state.result = null;
+        state.siteFilter = null;
+        state.issueFilter = null;
+        global.EstateMap.reset();
+      }
+      render();
+    });
   }
 
   function clearSource(id) {
     delete state.sources[id];
     recompute();
+    if (!Object.keys(state.sources).length) global.DB.clear();
     render();
   }
 
@@ -301,19 +390,33 @@
     }
   }
 
+  /* Emptying the page fires change/blur on whichever field had focus, and those
+     handlers commit their value and ask for a re-render - from inside the
+     render that is already tearing the page down. Collapse that into one
+     re-render after the current pass instead of letting them interleave. */
+  var rendering = false;
+  var renderQueued = false;
+
   function render() {
-    renderHeader();
-    renderSidebar();
-    var main = U.qs('#main');
-    U.clear(main);
-    ({
-      data: renderData,
-      dashboard: renderDashboard,
-      devices: renderDevices,
-      map: renderMap,
-      export: renderExport,
-      settings: renderSettings
-    }[state.tab] || renderData)(main);
+    if (rendering) { renderQueued = true; return; }
+    rendering = true;
+    try {
+      renderHeader();
+      renderSidebar();
+      var main = U.qs('#main');
+      U.clear(main);
+      ({
+        data: renderData,
+        dashboard: renderDashboard,
+        devices: renderDevices,
+        map: renderMap,
+        export: renderExport,
+        settings: renderSettings
+      }[state.tab] || renderData)(main);
+    } finally {
+      rendering = false;
+    }
+    if (renderQueued) { renderQueued = false; render(); }
   }
 
   /* ==================================================================== */
@@ -370,8 +473,36 @@
       U.el('h1', {}, 'Load your exports'),
       U.el('div', { class: 'sub' },
         'Drop the CSVs straight in. Nothing is uploaded anywhere — the files are read in this browser tab and the ' +
-        'data never leaves your machine.')
+        'data never leaves your machine.' +
+        (state.persist && global.DB.available
+          ? ' It is kept in this browser so it is still here when you come back.'
+          : ' It is held in this tab only, so closing it loses the data.'))
     ]));
+
+    if (state.result && global.DB.available) {
+      main.appendChild(U.el('div', {
+        class: 'row', style: { marginBottom: '14px', fontSize: '12.5px', color: 'var(--text-secondary)' }
+      }, [
+        U.el('span', { class: 'badge ' + (state.persist ? 'ok' : 'low') }, [
+          U.el('span', { class: 'sev sev-' + (state.persist ? 'ok' : 'low') }),
+          state.persist ? 'Saved on this computer' : 'Not being saved'
+        ]),
+        state.persist && state.savedAt
+          ? U.el('span', {}, 'last saved ' + state.savedAt.toLocaleString('en-GB', {
+              day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }))
+          : null,
+        state.persist ? U.el('button', {
+          class: 'btn sm ghost',
+          onclick: function () {
+            if (!confirm('Remove the loaded data from this browser and start with an empty tool?')) return;
+            forgetWorkingSet(true).then(function () { U.toast('Cleared.', 'ok'); });
+          }
+        }, 'Clear and start again') : null,
+        U.el('button', {
+          class: 'btn sm ghost', onclick: function () { setTab('settings'); }
+        }, state.persist ? 'Turn off' : 'Turn on')
+      ]));
+    }
 
     // The generic area takes several files at once and works out what each one
     // is from its headings; the labelled boxes below take one file each and
@@ -1107,43 +1238,91 @@
       'own label.'));
     main.appendChild(setup);
 
-    /* --------------------------------------------------- reference columns */
-    var refCard = U.el('div', { class: 'card' });
-    refCard.appendChild(U.el('header', {}, [
-      U.el('h2', {}, 'Extra columns for reference'),
-      U.el('span', { class: 'sub' }, 'Included for context, not changed')
+    /* ----------------------------------------------- always-on columns */
+    var missing = FX.missingRequired(cfg);
+    var colCard = U.el('div', { class: 'card' });
+    colCard.appendChild(U.el('header', {}, [
+      U.el('h2', {}, 'Columns on every row'),
+      U.el('span', { class: 'sub' }, 'Required fields and anything else the file should carry')
     ]));
-    refCard.appendChild(U.el('p', { class: 'hint' },
-      'These carry the value Freshservice already holds, so they identify the asset for whoever reviews or ' +
-      'approves the file. Mapping one on import writes the same value back, which changes nothing; leave it ' +
-      'unmapped and it is just context. To correct a field rather than echo it, tick it above instead.'));
+    colCard.appendChild(U.el('p', { class: 'hint' },
+      'Freshservice rejects an import that is missing a mandatory field, so these appear on every row whether or ' +
+      'not they are what you are correcting. A column takes either a fixed value or the value Freshservice already ' +
+      'holds. Where a column names a field you are also correcting, the corrected value is used on the rows that ' +
+      'have one and the current value fills the rest, so the column is never blank.'));
 
-    var refGrid = U.el('div', { class: 'grid3', style: { marginTop: '10px' } });
-    FX.REFERENCE.forEach(function (r) {
-      var updating = cfg.fields[r.field] && cfg.fields[r.field].enabled;
-      var isMatch = (cfg.headers[cfg.matchField] || '') === (cfg.referenceHeaders[r.field] || r.header);
-      var blocked = updating || isMatch;
-      refGrid.appendChild(U.el('div', {}, [
-        U.el('label', { class: 'check' }, [
-          U.el('input', {
-            type: 'checkbox',
-            checked: !blocked && !!cfg.reference[r.field],
-            disabled: blocked,
-            onchange: function (e) { cfg.reference[r.field] = e.target.checked; persistFsConfig(); render(); }
-          }),
-          r.label
-        ]),
-        blocked ? U.el('div', { class: 'hint', style: { marginLeft: '24px' } },
-          updating ? 'already included as an update' : 'already the match column') : null,
-        !blocked && cfg.reference[r.field] ? U.el('input', {
-          type: 'text', style: { marginLeft: '24px', marginTop: '4px', width: 'calc(100% - 24px)' },
-          value: cfg.referenceHeaders[r.field] || r.header,
-          onchange: function (e) { cfg.referenceHeaders[r.field] = e.target.value; persistFsConfig(); }
+    if (missing.length) {
+      colCard.appendChild(U.el('div', {
+        class: 'badge high', style: { marginBottom: '10px' }
+      }, [U.el('span', { class: 'sev sev-high' }),
+          'Missing required column' + (missing.length > 1 ? 's' : '') + ': ' + missing.join(', ')]));
+    }
+
+    var colTable = U.el('table', { class: 'map-table' });
+    colTable.appendChild(U.el('thead', {}, U.el('tr', {}, [
+      U.el('th', { style: { width: '32%' } }, 'Column heading'),
+      U.el('th', { style: { width: '34%' } }, 'Value'),
+      U.el('th', {}, 'Example from your data'),
+      U.el('th', { style: { width: '36px' } }, '')
+    ])));
+    var colBody = U.el('tbody');
+    var sampleRow = scopedRows[0] || state.result.rows[0];
+
+    (cfg.alwaysColumns || []).forEach(function (col, idx) {
+      var example = col.kind === 'fixed'
+        ? (col.value || '')
+        : (sampleRow ? FX.fsFieldValue(sampleRow, col.field) : '');
+
+      var valueCell = U.el('td', {}, [
+        U.el('select', {
+          onchange: function (e) {
+            if (e.target.value === '__fixed') { col.kind = 'fixed'; if (col.value === undefined) col.value = ''; }
+            else { col.kind = 'field'; col.field = e.target.value; }
+            persistFsConfig(); render();
+          }
+        }, [U.el('option', { value: '__fixed', selected: col.kind === 'fixed' }, 'Fixed value')].concat(
+          FX.FS_FIELDS.map(function (f) {
+            return U.el('option', { value: f.field, selected: col.kind === 'field' && col.field === f.field }, f.label);
+          })
+        )),
+        col.kind === 'fixed' ? U.el('input', {
+          type: 'text', value: col.value || '', placeholder: 'e.g. IT',
+          style: { marginTop: '4px', width: '100%' },
+          onchange: function (e) { col.value = e.target.value; persistFsConfig(); render(); }
         }) : null
+      ]);
+
+      colBody.appendChild(U.el('tr', {}, [
+        U.el('td', {}, U.el('input', {
+          type: 'text', value: col.header, style: { width: '100%' },
+          onchange: function (e) { col.header = e.target.value; persistFsConfig(); render(); }
+        })),
+        valueCell,
+        U.el('td', { class: 'hint' }, example === '' ? '(blank in Freshservice)' : U.truncate(String(example), 34)),
+        U.el('td', {}, U.el('button', {
+          class: 'btn sm ghost', title: 'Remove this column',
+          onclick: function () { cfg.alwaysColumns.splice(idx, 1); persistFsConfig(); render(); }
+        }, '✕'))
       ]));
     });
-    refCard.appendChild(refGrid);
-    main.appendChild(refCard);
+    colTable.appendChild(colBody);
+    colCard.appendChild(colTable);
+
+    colCard.appendChild(U.el('div', { class: 'row', style: { marginTop: '10px' } }, [
+      U.el('button', {
+        class: 'btn sm',
+        onclick: function () {
+          cfg.alwaysColumns.push({ header: '', kind: 'fixed', value: '' });
+          persistFsConfig(); render();
+        }
+      }, '+ Add column'),
+      U.el('button', {
+        class: 'btn sm ghost',
+        title: 'Put back Workspace, Name and Product',
+        onclick: function () { cfg.alwaysColumns = FX.defaultAlwaysColumns(); persistFsConfig(); render(); }
+      }, 'Reset to the required three')
+    ]));
+    main.appendChild(colCard);
 
     /* ------------------------------------------------------- the result */
     var out = U.el('div', { class: 'card' });
@@ -1372,7 +1551,39 @@
     housekeeping.appendChild(U.el('p', { class: 'hint' },
       'The tool keeps your column mappings, thresholds, saved views and geocoding results in this browser' +
       (global.Store.persistent ? '' : ' — except that this browser is blocking storage, so they will be lost when the tab closes') +
-      '. Device data is never written to disk unless you use "Save project".'));
+      '.'));
+
+    housekeeping.appendChild(U.el('div', { style: { margin: '12px 0', paddingTop: '10px', borderTop: '1px solid var(--grid)' } }, [
+      U.el('label', { class: 'check' }, [
+        U.el('input', {
+          type: 'checkbox', checked: state.persist, disabled: !global.DB.available,
+          onchange: function (e) {
+            state.persist = e.target.checked;
+            global.Store.set('persist', state.persist);
+            if (state.persist) { saveWorkingSet(); U.toast('Your loaded data will be here next time.', 'ok'); }
+            else { forgetWorkingSet(false); U.toast('Stored data removed. This tab keeps working.', 'ok'); }
+            render();
+          }
+        }),
+        U.el('strong', {}, 'Keep the loaded data in this browser between visits')
+      ]),
+      U.el('div', { class: 'hint', style: { marginLeft: '24px', marginTop: '4px' } },
+        global.DB.available
+          ? 'On, this stores the device and user rows from your exports on this computer, so closing the tab and ' +
+            'coming back tomorrow picks up where you left off. It stays on this machine and in this browser ' +
+            'profile — it is not uploaded and other people on other machines cannot see it. Off, the data lives ' +
+            'only in the open tab. Either way, "Save project" is there for handing work to someone else.'
+          : 'This browser does not allow local databases, so the working set cannot be kept. Use "Save project".'),
+      state.savedAt ? U.el('div', { class: 'hint', style: { marginLeft: '24px', marginTop: '4px' } },
+        'Last saved ' + state.savedAt.toLocaleString('en-GB')) : null,
+      state.persist && global.DB.available ? U.el('button', {
+        class: 'btn sm', style: { marginLeft: '24px', marginTop: '8px' },
+        onclick: function () {
+          if (!confirm('Remove the stored copy? The data stays loaded in this tab until you close it.')) return;
+          forgetWorkingSet(false).then(function () { U.toast('Stored copy removed.', 'ok'); });
+        }
+      }, 'Forget the stored copy now') : null
+    ]));
     housekeeping.appendChild(U.el('div', { class: 'row' }, [
       U.el('button', {
         class: 'btn sm', onclick: function () {
@@ -1576,7 +1787,7 @@
     });
     document.body.appendChild(input);
     input.click();
-    setTimeout(function () { document.body.removeChild(input); }, 1000);
+    setTimeout(function () { if (input.parentNode) input.parentNode.removeChild(input); }, 1000);
   }
 
   /* ==================================================================== */
@@ -1638,7 +1849,7 @@
     });
     document.body.appendChild(input);
     input.click();
-    setTimeout(function () { document.body.removeChild(input); }, 1000);
+    setTimeout(function () { if (input.parentNode) input.parentNode.removeChild(input); }, 1000);
   }
 
   function loadSample() {
@@ -1726,7 +1937,19 @@
       if (state.tab === 'map') global.EstateMap.invalidate();
     }, 250));
 
+    // Render the empty shell straight away, then bring back the previous
+    // working set - IndexedDB is asynchronous, so waiting on it would leave
+    // the page blank.
     render();
+    restoreWorkingSet().then(function (restored) {
+      if (!restored) return;
+      setTab('dashboard');
+      U.toast('Picked up where you left off — ' +
+        Object.keys(state.sources).map(function (id) {
+          return S.SOURCES[id].short + ' ' + U.num(state.sources[id].records.length);
+        }).join(', ') +
+        (state.restoredAt ? ', saved ' + U.fmtDate(state.restoredAt) : ''), 'ok', 7000);
+    });
   }
 
   global.App = { init: init, state: state, render: render, loadSample: loadSample, recompute: recompute };

@@ -13,6 +13,11 @@ page; no device or user data is uploaded anywhere, and there is no server
 component. The one exception is optional geocoding, which sends *site addresses
 only* — never device or user data — and only when you press the button.
 
+By default the loaded data is also **kept in that browser** so you can close the
+tab and pick the work up later. That is a local database on your own machine,
+not a server, and it can be switched off or wiped from Settings. See
+[Settings and what is stored](#settings-and-what-is-stored).
+
 ---
 
 ## Contents
@@ -195,12 +200,26 @@ one, and the reason it is being proposed. Nothing is included unless it would
 actually change, so a field where the two systems already agree produces no
 column.
 
-**Extra columns for reference.** Serial number, asset tag, location and the
-rest can be carried into the file *without* being changed — they are written
-with the value Freshservice already holds. Use these when whoever reviews or
-approves the file needs to recognise the asset, or when your import needs a
-second identifying column. A field already being corrected can't also be a
-reference column; the update takes precedence, and the checkbox says so.
+**Columns on every row.** Freshservice rejects an asset import that is missing
+a mandatory field, so some columns have to be present whether or not they are
+what you are correcting. The tool ships with the three a stock instance
+requires:
+
+| Column | Value |
+|---|---|
+| `Workspace` | fixed, `IT` |
+| `Name` | the Display Name from Freshservice |
+| `Product` | the Product already recorded in Freshservice |
+
+Each row's heading, and where its value comes from, is editable, and you can add
+more for an instance that mandates others — either a fixed value or any field
+Freshservice already holds. If one of the required three is missing the page
+says so before you download.
+
+Where a column names a field you are *also* correcting, the corrected value is
+used on the rows that have one and the current value fills the rest, so a
+required column is never left blank. Duplicate headings collapse to one column,
+so making `Name` the match column doesn't produce two.
 
 If nothing comes out, the page says which switched-off fields would produce
 changes for those devices, and how many, with a button to turn each one on.
@@ -286,17 +305,33 @@ they already flow through the location lookup and appear on the map with the
 
 ## Settings and what is stored
 
-The tool keeps your column mappings, thresholds, saved views, import settings
-and geocoding results in the browser's local storage. Device data is never
-written to disk.
+Two separate things are stored, both on your own machine:
 
-The deliberate exception is **Save project**, which writes everything currently
-loaded — including the device data — to a `.json` file you choose, so you can
-close the tab and pick the work up later, or hand the whole state to a
-colleague. Treat that file the way you would treat the original exports.
+**Settings** — column mappings, thresholds, saved views, import configuration
+and geocoding results — live in the browser's local storage. Small, and not
+sensitive.
 
-If your browser blocks local storage, the tool says so in Settings and falls
-back to keeping settings for the session only.
+**The working set** — the actual rows from your exports — is kept in a local
+database (IndexedDB) in the same browser, so closing the tab and coming back
+tomorrow picks up where you left off, with your files, your settings and your
+filters intact. This is on by default and holds real device and user data.
+It stays in that browser profile on that machine: it is not uploaded, and
+someone signing in on another machine sees nothing.
+
+Turn it off with **Keep the loaded data in this browser between visits** in
+Settings, which also wipes what is already stored; the tab you have open keeps
+working. **Clear and start again** on the Data tab does both at once. If the
+browser blocks local databases, the tool says so and falls back to holding data
+in the open tab only.
+
+Bear in mind what that means in practice: on a shared or kiosk machine, the next
+person using the same browser profile opens the tool and sees your estate. Turn
+the setting off there, or clear it when you finish.
+
+**Save project** is the separate, deliberate export: it writes everything
+currently loaded to a `.json` file you choose, for handing work to a colleague
+or moving between machines. Treat that file the way you would treat the original
+exports.
 
 ---
 
@@ -337,7 +372,8 @@ asset-reconciler/
 │   ├── map.js              Leaflet map and site aggregation
 │   ├── geocode.js          postcodes.io and Nominatim lookups
 │   ├── fsexport.js         import file, change log and site packs
-│   ├── store.js            local storage
+│   ├── store.js            local storage for settings
+│   ├── db.js               IndexedDB store for the loaded working set
 │   └── sampledata.js       generated — do not edit by hand
 ├── lib/leaflet/            Leaflet 1.9.4, vendored so there is no CDN dependency
 ├── sample-data/            example input files

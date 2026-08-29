@@ -9,7 +9,7 @@
      those differ between tenants (and between the default and custom fields).
      Every header here is editable in the UI and remembered. */
   var DEFAULT_HEADERS = {
-    name:      'Display Name',
+    name:      'Name',
     assetTag:  'Asset Tag',
     serial:    'Serial Number',
     user:      'Used By',
@@ -37,25 +37,50 @@
     manual: 'Fixed value'
   };
 
-  /* Columns carried through for identification and context rather than to
-     change anything. They are written with the value Freshservice already
-     holds, so mapping one on import is a no-op, and leaving it unmapped just
-     gives whoever reviews the file something to recognise the asset by. */
-  var REFERENCE = [
-    { field: 'name',        label: 'Device name',        header: 'Display Name' },
-    { field: 'assetTag',    label: 'Asset tag',          header: 'Asset Tag' },
-    { field: 'serial',      label: 'Serial number',      header: 'Serial Number' },
-    { field: 'location',    label: 'Location',           header: 'Location' },
-    { field: 'user',        label: 'Assigned user',      header: 'Used By' },
-    { field: 'state',       label: 'Asset state',        header: 'Asset State' },
-    { field: 'lastCheckIn', label: 'Last Intune check-in', header: 'Last Check-in' }
+  /* Columns that appear on every row regardless of what is being corrected.
+
+     Freshservice rejects an asset import that is missing a mandatory field, so
+     these are not decoration: an instance that requires Workspace, Name and
+     Product needs all three present on every line, including lines where none
+     of them is the thing being changed. A column can take a fixed value or the
+     value Freshservice already holds for a field. Where a column names a field
+     that is also being corrected, the corrected value wins for the rows that
+     have one and the current value fills the rest, so the column is never
+     blank. */
+
+  var FS_FIELDS = [
+    { field: 'name',        label: 'Device name (Display Name)' },
+    { field: 'model',       label: 'Product / model' },
+    { field: 'assetTag',    label: 'Asset tag' },
+    { field: 'serial',      label: 'Serial number' },
+    { field: 'location',    label: 'Location' },
+    { field: 'user',        label: 'Assigned user' },
+    { field: 'state',       label: 'Asset state' },
+    { field: 'assetType',   label: 'Asset type' },
+    { field: 'department',  label: 'Department' },
+    { field: 'os',          label: 'Operating system' },
+    { field: 'osVersion',   label: 'OS version' },
+    { field: 'lastCheckIn', label: 'Last Intune check-in' }
   ];
 
-  function referenceValue(row, field) {
+  function fsFieldValue(row, field) {
     if (field === 'name') return row.name;
     if (field === 'assetTag') return row.assetTag;
+    if (field === 'assetType') return row.assetType;
+    if (field === 'department') return row.department;
     if (field === 'lastCheckIn') return row.lastCheckIn ? U.fmtDate(row.lastCheckIn) : '';
     return R.currentValue(row, field);
+  }
+
+  /* The three columns a stock Freshservice asset import will not accept a file
+     without. Editable, removable, and extendable for instances that mandate
+     more. */
+  function defaultAlwaysColumns() {
+    return [
+      { header: 'Workspace', kind: 'fixed', value: 'IT' },
+      { header: 'Name',      kind: 'field', field: 'name' },
+      { header: 'Product',   kind: 'field', field: 'model' }
+    ];
   }
 
   function defaultConfig() {
@@ -74,9 +99,7 @@
       onlyChanged: true,
       requireIntuneMatch: true,
       skipRetired: true,
-      reference: { serial: false, assetTag: false, name: false, location: false,
-                   user: false, state: false, lastCheckIn: false },
-      referenceHeaders: REFERENCE.reduce(function (acc, r) { acc[r.field] = r.header; return acc; }, {})
+      alwaysColumns: defaultAlwaysColumns()
     };
   }
 
@@ -158,7 +181,7 @@
   function toImportCsv(proposals, cfg) {
     cfg = cfg || defaultConfig();
     var H = cfg.headers;
-    var matchHeader = H[cfg.matchField] || 'Display Name';
+    var matchHeader = H[cfg.matchField] || 'Name';
 
     var fieldsUsed = [];
     proposals.forEach(function (p) {
@@ -166,37 +189,69 @@
         if (fieldsUsed.indexOf(c.field) < 0) fieldsUsed.push(c.field);
       });
     });
-    // Keep a stable, human-sensible column order.
     var order = UPDATABLE.map(function (u) { return u.field; });
     fieldsUsed.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
 
-    // Reference columns sit between the match column and the updates. A field
-    // being updated already has a column, so it never doubles up here.
-    var refCfg = cfg.reference || {};
-    var refHeaders = cfg.referenceHeaders || {};
-    var refs = REFERENCE.filter(function (r) {
-      if (!refCfg[r.field]) return false;
-      if (fieldsUsed.indexOf(r.field) >= 0) return false;
-      return (refHeaders[r.field] || r.header) !== matchHeader;
+    /* Build the column list once, each with its own accessor, so headers and
+       values cannot drift apart. Order: the match column, then the always-on
+       columns, then whatever is left of the corrections. */
+    var columns = [];
+    var taken = {};
+
+    function add(header, get) {
+      header = String(header || '').trim();
+      if (!header || taken[header]) return;      // never emit a duplicate heading
+      taken[header] = true;
+      columns.push({ header: header, get: get });
+    }
+
+    function changeFor(p, field) {
+      return p.changes.filter(function (c) { return c.field === field; })[0] || null;
+    }
+
+    add(matchHeader, function (p) { return p.key; });
+
+    (cfg.alwaysColumns || []).forEach(function (col) {
+      if (col.kind === 'fixed') {
+        add(col.header, function () { return col.value === undefined ? '' : col.value; });
+        return;
+      }
+      add(col.header, function (p) {
+        // A corrected value for this field takes precedence; otherwise the
+        // column carries what Freshservice already has, so it is never empty.
+        var ch = changeFor(p, col.field);
+        return ch ? ch.proposed : fsFieldValue(p.row, col.field);
+      });
     });
 
-    var headers = [matchHeader]
-      .concat(refs.map(function (r) { return refHeaders[r.field] || r.header; }))
-      .concat(fieldsUsed.map(function (f) { return H[f] || f; }));
+    fieldsUsed.forEach(function (f) {
+      add(H[f] || f, function (p) {
+        var ch = changeFor(p, f);
+        return ch ? ch.proposed : fsFieldValue(p.row, f);
+      });
+    });
 
+    var headers = columns.map(function (c) { return c.header; });
     var rows = proposals.map(function (p) {
       var obj = {};
-      obj[matchHeader] = p.key;
-      refs.forEach(function (r) {
-        obj[refHeaders[r.field] || r.header] = referenceValue(p.row, r.field);
-      });
-      fieldsUsed.forEach(function (f) {
-        var ch = p.changes.filter(function (c) { return c.field === f; })[0];
-        obj[H[f] || f] = ch ? ch.proposed : '';
-      });
+      columns.forEach(function (c) { obj[c.header] = c.get(p); });
       return obj;
     });
     return global.CSV.stringify(rows, headers);
+  }
+
+  /* Which mandatory columns are missing from the current configuration. */
+  function missingRequired(cfg) {
+    var have = {};
+    var matchHeader = (cfg.headers[cfg.matchField] || '').trim().toLowerCase();
+    if (matchHeader) have[matchHeader] = true;
+    (cfg.alwaysColumns || []).forEach(function (c) {
+      var h = String(c.header || '').trim().toLowerCase();
+      if (h) have[h] = true;
+    });
+    return ['Workspace', 'Name', 'Product'].filter(function (r) {
+      return !have[r.toLowerCase()];
+    });
   }
 
   /* A separate audit file: what changed, from what, to what, and why. */
@@ -300,8 +355,10 @@
   global.FSExport = {
     DEFAULT_HEADERS: DEFAULT_HEADERS,
     UPDATABLE: UPDATABLE,
-    REFERENCE: REFERENCE,
-    referenceValue: referenceValue,
+    FS_FIELDS: FS_FIELDS,
+    fsFieldValue: fsFieldValue,
+    defaultAlwaysColumns: defaultAlwaysColumns,
+    missingRequired: missingRequired,
     SOURCE_LABELS: SOURCE_LABELS,
     defaultConfig: defaultConfig,
     buildProposals: buildProposals,
