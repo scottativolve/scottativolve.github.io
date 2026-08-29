@@ -8,19 +8,40 @@
 
   var SOURCE_IDS = ['freshservice', 'intune', 'locations', 'verification'];
 
+  /* A config saved by an older build can be missing whole sections, and a
+     shallow merge would leave the UI dereferencing keys that aren't there.
+     Merge the nested objects one level down so new fields always get their
+     defaults. */
+  function mergeFsConfig(saved) {
+    var base = FX.defaultConfig();
+    if (!saved || typeof saved !== 'object') return base;
+    var out = Object.assign({}, base, saved);
+    ['fields', 'headers', 'reference', 'referenceHeaders'].forEach(function (k) {
+      out[k] = Object.assign({}, base[k], saved[k] || {});
+      if (k === 'fields') {
+        // Each field is itself an object; fill in any it is missing.
+        Object.keys(base.fields).forEach(function (f) {
+          out.fields[f] = Object.assign({}, base.fields[f], (saved.fields || {})[f] || {});
+        });
+      }
+    });
+    return out;
+  }
+
   var state = {
     sources: {},                 // id -> { fileName, headers, raw, mapping, records }
     result: null,
     cfg: global.Match.settings(global.Store.get('cfg', null) || {}),
     enabledRules: global.Store.get('enabledRules', {}),
     customViews: global.Store.get('customViews', []),
-    fsConfig: Object.assign(FX.defaultConfig(), global.Store.get('fsConfig', {})),
+    fsConfig: mergeFsConfig(global.Store.get('fsConfig', {})),
     tab: 'data',
     viewId: 'attention',
     mapMode: global.Store.get('mapMode', 'count'),
     siteFilter: null,
     issueFilter: null,
-    includeOtherOnMap: false
+    includeOtherOnMap: false,
+    exportScope: 'all'          // 'all' | 'view'
   };
 
   var grid = null;
@@ -691,7 +712,8 @@
     }, 'Site check sheet'));
     controls.appendChild(U.el('button', {
       class: 'btn sm primary',
-      onclick: function () { setTab('export'); }
+      title: 'Build the correction file from the devices in this view',
+      onclick: function () { state.exportScope = 'view'; setTab('export'); }
     }, 'Build import file'));
     main.appendChild(controls);
 
@@ -951,8 +973,42 @@
         'included, and every proposed change is listed before you download anything.')
     ]));
 
-    var proposals = FX.buildProposals(state.result.rows, cfg);
+    var view = viewById(state.viewId);
+    var viewRows = rowsForView(view);
+    var scopedRows = state.exportScope === 'view' ? viewRows : state.result.rows;
+
+    var proposals = FX.buildProposals(scopedRows, cfg);
     var changeCount = proposals.reduce(function (a, p) { return a + p.changes.length; }, 0);
+
+    /* Which devices the file covers. Getting this wrong is expensive - it is
+       the difference between correcting 16 assets and correcting 1,000 - so it
+       is stated at the top rather than left implicit. */
+    var scopeCard = U.el('div', { class: 'card' });
+    scopeCard.appendChild(U.el('h2', {}, 'Which devices'));
+    scopeCard.appendChild(U.el('div', { class: 'row', style: { marginTop: '10px' } }, [
+      U.el('label', { class: 'check' }, [
+        U.el('input', {
+          type: 'radio', name: 'exportscope', checked: state.exportScope === 'view',
+          onchange: function () { state.exportScope = 'view'; render(); }
+        }),
+        'Just the current view — ' + view.name + ' (' + U.num(viewRows.length) + ' devices)'
+      ]),
+      U.el('label', { class: 'check' }, [
+        U.el('input', {
+          type: 'radio', name: 'exportscope', checked: state.exportScope === 'all',
+          onchange: function () { state.exportScope = 'all'; render(); }
+        }),
+        'Every device (' + U.num(state.result.rows.length) + ')'
+      ])
+    ]));
+    if (state.exportScope === 'view' && (state.siteFilter || state.issueFilter)) {
+      scopeCard.appendChild(U.el('div', { class: 'hint', style: { marginTop: '6px' } },
+        'The filters you set on the Devices tab apply too: ' +
+        [state.siteFilter ? 'site ' + state.siteFilter.name : null,
+         state.issueFilter ? 'issue ' + ((R.BY_CODE[state.issueFilter] || {}).label || '') : null]
+          .filter(Boolean).join(', ') + '.'));
+    }
+    main.appendChild(scopeCard);
 
     /* ------------------------------------------------------ what to fix */
     var setup = U.el('div', { class: 'card' });
@@ -1042,13 +1098,52 @@
           type: 'checkbox', checked: cfg.skipRetired,
           onchange: function (e) { cfg.skipRetired = e.target.checked; persistFsConfig(); render(); }
         }), 'Skip assets already marked retired or disposed'
-      ])
+      ]),
+      U.el('span', { class: 'hint' }, '(except where the device is still checking in — those are the ones to correct)')
     ]));
     setup.appendChild(U.el('div', { class: 'hint', style: { marginTop: '8px' } },
       'Freshservice matches rows on the column you pick here, so it has to be a field that is filled in and unique ' +
       'on the assets you are updating. Check the headings against your own instance — a custom field will use its ' +
       'own label.'));
     main.appendChild(setup);
+
+    /* --------------------------------------------------- reference columns */
+    var refCard = U.el('div', { class: 'card' });
+    refCard.appendChild(U.el('header', {}, [
+      U.el('h2', {}, 'Extra columns for reference'),
+      U.el('span', { class: 'sub' }, 'Included for context, not changed')
+    ]));
+    refCard.appendChild(U.el('p', { class: 'hint' },
+      'These carry the value Freshservice already holds, so they identify the asset for whoever reviews or ' +
+      'approves the file. Mapping one on import writes the same value back, which changes nothing; leave it ' +
+      'unmapped and it is just context. To correct a field rather than echo it, tick it above instead.'));
+
+    var refGrid = U.el('div', { class: 'grid3', style: { marginTop: '10px' } });
+    FX.REFERENCE.forEach(function (r) {
+      var updating = cfg.fields[r.field] && cfg.fields[r.field].enabled;
+      var isMatch = (cfg.headers[cfg.matchField] || '') === (cfg.referenceHeaders[r.field] || r.header);
+      var blocked = updating || isMatch;
+      refGrid.appendChild(U.el('div', {}, [
+        U.el('label', { class: 'check' }, [
+          U.el('input', {
+            type: 'checkbox',
+            checked: !blocked && !!cfg.reference[r.field],
+            disabled: blocked,
+            onchange: function (e) { cfg.reference[r.field] = e.target.checked; persistFsConfig(); render(); }
+          }),
+          r.label
+        ]),
+        blocked ? U.el('div', { class: 'hint', style: { marginLeft: '24px' } },
+          updating ? 'already included as an update' : 'already the match column') : null,
+        !blocked && cfg.reference[r.field] ? U.el('input', {
+          type: 'text', style: { marginLeft: '24px', marginTop: '4px', width: 'calc(100% - 24px)' },
+          value: cfg.referenceHeaders[r.field] || r.header,
+          onchange: function (e) { cfg.referenceHeaders[r.field] = e.target.value; persistFsConfig(); }
+        }) : null
+      ]));
+    });
+    refCard.appendChild(refGrid);
+    main.appendChild(refCard);
 
     /* ------------------------------------------------------- the result */
     var out = U.el('div', { class: 'card' });
@@ -1077,8 +1172,53 @@
     ]));
 
     if (!proposals.length) {
-      out.appendChild(U.el('div', { class: 'empty' },
-        'Nothing to change with the current settings. Turn on more fields above, or loosen the filters.'));
+      // Work out which of the switched-off fields would actually yield changes
+      // for these devices, rather than leaving the user to guess.
+      var suggestions = [];
+      FX.UPDATABLE.forEach(function (u) {
+        if (cfg.fields[u.field] && cfg.fields[u.field].enabled) return;
+        var trial = JSON.parse(JSON.stringify(cfg));
+        trial.fields[u.field].enabled = true;
+        if (u.sources.indexOf('manual') >= 0 && u.field === 'state') {
+          trial.fields[u.field].source = 'manual';
+          trial.fields[u.field].manualValue = 'In Use';
+        }
+        var n = FX.buildProposals(scopedRows, trial)
+          .reduce(function (a, p) { return a + p.changes.filter(function (c) { return c.field === u.field; }).length; }, 0);
+        if (n) suggestions.push({ label: u.label, n: n, field: u.field, weight: fieldWeight(u.field) });
+      });
+
+      var empty = U.el('div', { class: 'empty' });
+      empty.appendChild(U.el('div', { style: { fontWeight: '600', marginBottom: '6px' } },
+        'Nothing to change for these ' + U.num(scopedRows.length) + ' devices with the fields switched on above.'));
+      if (suggestions.length) {
+        empty.appendChild(U.el('div', {}, 'These would give you something:'));
+        var list = U.el('div', { class: 'row', style: { justifyContent: 'center', marginTop: '10px' } });
+        // Order by how much the field matters, not by how many rows it touches:
+        // a cosmetic OS difference on every device should not outrank the six
+        // assets whose recorded state is actually wrong.
+        suggestions.sort(function (a, b) {
+          return b.weight - a.weight || b.n - a.n;
+        }).slice(0, 4).forEach(function (sg) {
+          list.appendChild(U.el('button', {
+            class: 'btn sm',
+            onclick: function () {
+              cfg.fields[sg.field].enabled = true;
+              if (sg.field === 'state') {
+                cfg.fields[sg.field].source = 'manual';
+                if (!cfg.fields[sg.field].manualValue) cfg.fields[sg.field].manualValue = 'In Use';
+              }
+              persistFsConfig(); render();
+            }
+          }, 'Turn on ' + sg.label + ' (' + U.num(sg.n) + ')'));
+        });
+        empty.appendChild(list);
+      } else {
+        empty.appendChild(U.el('div', { class: 'hint' },
+          'Freshservice and Intune already agree on every field this tool can correct for these devices. ' +
+          'Widen the scope above, or pick a different view.'));
+      }
+      out.appendChild(empty);
     } else {
       var wrap = U.el('div', { class: 'table-wrap' });
       var t = U.el('table', { class: 'grid' });
@@ -1117,6 +1257,18 @@
   }
 
   function persistFsConfig() { global.Store.set('fsConfig', state.fsConfig); }
+
+  /* How much correcting this field matters, taken from the worst severity of
+     the checks that name it as their fix. */
+  function fieldWeight(field) {
+    var worst = 0;
+    R.RULES.forEach(function (rule) {
+      if (rule.fix && rule.fix.field === field) {
+        worst = Math.max(worst, R.SEVERITY_ORDER[rule.severity] || 0);
+      }
+    });
+    return worst;
+  }
 
   /* ==================================================================== */
   /*  tab: settings                                                       */
@@ -1412,7 +1564,7 @@
               global.Store.set('customViews', state.customViews);
             }
             if (json.cfg) { state.cfg = global.Match.settings(json.cfg); global.Store.set('cfg', state.cfg); }
-            if (json.fsConfig) { state.fsConfig = Object.assign(FX.defaultConfig(), json.fsConfig); persistFsConfig(); }
+            if (json.fsConfig) { state.fsConfig = mergeFsConfig(json.fsConfig); persistFsConfig(); }
             recompute(); render();
             U.toast('Configuration imported.', 'ok');
           } catch (err) {
@@ -1472,7 +1624,7 @@
             if (p.cfg) state.cfg = global.Match.settings(p.cfg);
             if (p.enabledRules) state.enabledRules = p.enabledRules;
             if (p.customViews) state.customViews = p.customViews;
-            if (p.fsConfig) state.fsConfig = Object.assign(FX.defaultConfig(), p.fsConfig);
+            if (p.fsConfig) state.fsConfig = mergeFsConfig(p.fsConfig);
             global.EstateMap.reset();
             recompute();
             setTab('dashboard');

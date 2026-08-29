@@ -4296,6 +4296,27 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
     manual: 'Fixed value'
   };
 
+  /* Columns carried through for identification and context rather than to
+     change anything. They are written with the value Freshservice already
+     holds, so mapping one on import is a no-op, and leaving it unmapped just
+     gives whoever reviews the file something to recognise the asset by. */
+  var REFERENCE = [
+    { field: 'name',        label: 'Device name',        header: 'Display Name' },
+    { field: 'assetTag',    label: 'Asset tag',          header: 'Asset Tag' },
+    { field: 'serial',      label: 'Serial number',      header: 'Serial Number' },
+    { field: 'location',    label: 'Location',           header: 'Location' },
+    { field: 'user',        label: 'Assigned user',      header: 'Used By' },
+    { field: 'state',       label: 'Asset state',        header: 'Asset State' },
+    { field: 'lastCheckIn', label: 'Last Intune check-in', header: 'Last Check-in' }
+  ];
+
+  function referenceValue(row, field) {
+    if (field === 'name') return row.name;
+    if (field === 'assetTag') return row.assetTag;
+    if (field === 'lastCheckIn') return row.lastCheckIn ? U.fmtDate(row.lastCheckIn) : '';
+    return R.currentValue(row, field);
+  }
+
   function defaultConfig() {
     return {
       matchField: 'name',
@@ -4311,7 +4332,10 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
       },
       onlyChanged: true,
       requireIntuneMatch: true,
-      skipRetired: true
+      skipRetired: true,
+      reference: { serial: false, assetTag: false, name: false, location: false,
+                   user: false, state: false, lastCheckIn: false },
+      referenceHeaders: REFERENCE.reduce(function (acc, r) { acc[r.field] = r.header; return acc; }, {})
     };
   }
 
@@ -4329,7 +4353,12 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
 
     rows.forEach(function (row) {
       if (!row.fs) return;                                   // nothing to update
-      if (cfg.skipRetired && N.isRetiredState(row.state)) return;
+      // Skipping retired assets is about not disturbing genuinely dead kit. An
+      // asset flagged "retired but still in use" is demonstrably not dead, and
+      // correcting that state is the whole point of the row - so the skip must
+      // not remove exactly the assets the rule was written to find.
+      if (cfg.skipRetired && N.isRetiredState(row.state) &&
+          row.issues.indexOf('state-conflict-active') < 0) return;
       if (cfg.requireIntuneMatch && !row.intune && !row.ver) return;
 
       var key = matchValue(row, cfg.matchField);
@@ -4400,10 +4429,26 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
     var order = UPDATABLE.map(function (u) { return u.field; });
     fieldsUsed.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
 
-    var headers = [matchHeader].concat(fieldsUsed.map(function (f) { return H[f] || f; }));
+    // Reference columns sit between the match column and the updates. A field
+    // being updated already has a column, so it never doubles up here.
+    var refCfg = cfg.reference || {};
+    var refHeaders = cfg.referenceHeaders || {};
+    var refs = REFERENCE.filter(function (r) {
+      if (!refCfg[r.field]) return false;
+      if (fieldsUsed.indexOf(r.field) >= 0) return false;
+      return (refHeaders[r.field] || r.header) !== matchHeader;
+    });
+
+    var headers = [matchHeader]
+      .concat(refs.map(function (r) { return refHeaders[r.field] || r.header; }))
+      .concat(fieldsUsed.map(function (f) { return H[f] || f; }));
+
     var rows = proposals.map(function (p) {
       var obj = {};
       obj[matchHeader] = p.key;
+      refs.forEach(function (r) {
+        obj[refHeaders[r.field] || r.header] = referenceValue(p.row, r.field);
+      });
       fieldsUsed.forEach(function (f) {
         var ch = p.changes.filter(function (c) { return c.field === f; })[0];
         obj[H[f] || f] = ch ? ch.proposed : '';
@@ -4514,6 +4559,8 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
   global.FSExport = {
     DEFAULT_HEADERS: DEFAULT_HEADERS,
     UPDATABLE: UPDATABLE,
+    REFERENCE: REFERENCE,
+    referenceValue: referenceValue,
     SOURCE_LABELS: SOURCE_LABELS,
     defaultConfig: defaultConfig,
     buildProposals: buildProposals,
@@ -4555,19 +4602,40 @@ window.SampleData = {
 
   var SOURCE_IDS = ['freshservice', 'intune', 'locations', 'verification'];
 
+  /* A config saved by an older build can be missing whole sections, and a
+     shallow merge would leave the UI dereferencing keys that aren't there.
+     Merge the nested objects one level down so new fields always get their
+     defaults. */
+  function mergeFsConfig(saved) {
+    var base = FX.defaultConfig();
+    if (!saved || typeof saved !== 'object') return base;
+    var out = Object.assign({}, base, saved);
+    ['fields', 'headers', 'reference', 'referenceHeaders'].forEach(function (k) {
+      out[k] = Object.assign({}, base[k], saved[k] || {});
+      if (k === 'fields') {
+        // Each field is itself an object; fill in any it is missing.
+        Object.keys(base.fields).forEach(function (f) {
+          out.fields[f] = Object.assign({}, base.fields[f], (saved.fields || {})[f] || {});
+        });
+      }
+    });
+    return out;
+  }
+
   var state = {
     sources: {},                 // id -> { fileName, headers, raw, mapping, records }
     result: null,
     cfg: global.Match.settings(global.Store.get('cfg', null) || {}),
     enabledRules: global.Store.get('enabledRules', {}),
     customViews: global.Store.get('customViews', []),
-    fsConfig: Object.assign(FX.defaultConfig(), global.Store.get('fsConfig', {})),
+    fsConfig: mergeFsConfig(global.Store.get('fsConfig', {})),
     tab: 'data',
     viewId: 'attention',
     mapMode: global.Store.get('mapMode', 'count'),
     siteFilter: null,
     issueFilter: null,
-    includeOtherOnMap: false
+    includeOtherOnMap: false,
+    exportScope: 'all'          // 'all' | 'view'
   };
 
   var grid = null;
@@ -5238,7 +5306,8 @@ window.SampleData = {
     }, 'Site check sheet'));
     controls.appendChild(U.el('button', {
       class: 'btn sm primary',
-      onclick: function () { setTab('export'); }
+      title: 'Build the correction file from the devices in this view',
+      onclick: function () { state.exportScope = 'view'; setTab('export'); }
     }, 'Build import file'));
     main.appendChild(controls);
 
@@ -5498,8 +5567,42 @@ window.SampleData = {
         'included, and every proposed change is listed before you download anything.')
     ]));
 
-    var proposals = FX.buildProposals(state.result.rows, cfg);
+    var view = viewById(state.viewId);
+    var viewRows = rowsForView(view);
+    var scopedRows = state.exportScope === 'view' ? viewRows : state.result.rows;
+
+    var proposals = FX.buildProposals(scopedRows, cfg);
     var changeCount = proposals.reduce(function (a, p) { return a + p.changes.length; }, 0);
+
+    /* Which devices the file covers. Getting this wrong is expensive - it is
+       the difference between correcting 16 assets and correcting 1,000 - so it
+       is stated at the top rather than left implicit. */
+    var scopeCard = U.el('div', { class: 'card' });
+    scopeCard.appendChild(U.el('h2', {}, 'Which devices'));
+    scopeCard.appendChild(U.el('div', { class: 'row', style: { marginTop: '10px' } }, [
+      U.el('label', { class: 'check' }, [
+        U.el('input', {
+          type: 'radio', name: 'exportscope', checked: state.exportScope === 'view',
+          onchange: function () { state.exportScope = 'view'; render(); }
+        }),
+        'Just the current view — ' + view.name + ' (' + U.num(viewRows.length) + ' devices)'
+      ]),
+      U.el('label', { class: 'check' }, [
+        U.el('input', {
+          type: 'radio', name: 'exportscope', checked: state.exportScope === 'all',
+          onchange: function () { state.exportScope = 'all'; render(); }
+        }),
+        'Every device (' + U.num(state.result.rows.length) + ')'
+      ])
+    ]));
+    if (state.exportScope === 'view' && (state.siteFilter || state.issueFilter)) {
+      scopeCard.appendChild(U.el('div', { class: 'hint', style: { marginTop: '6px' } },
+        'The filters you set on the Devices tab apply too: ' +
+        [state.siteFilter ? 'site ' + state.siteFilter.name : null,
+         state.issueFilter ? 'issue ' + ((R.BY_CODE[state.issueFilter] || {}).label || '') : null]
+          .filter(Boolean).join(', ') + '.'));
+    }
+    main.appendChild(scopeCard);
 
     /* ------------------------------------------------------ what to fix */
     var setup = U.el('div', { class: 'card' });
@@ -5589,13 +5692,52 @@ window.SampleData = {
           type: 'checkbox', checked: cfg.skipRetired,
           onchange: function (e) { cfg.skipRetired = e.target.checked; persistFsConfig(); render(); }
         }), 'Skip assets already marked retired or disposed'
-      ])
+      ]),
+      U.el('span', { class: 'hint' }, '(except where the device is still checking in — those are the ones to correct)')
     ]));
     setup.appendChild(U.el('div', { class: 'hint', style: { marginTop: '8px' } },
       'Freshservice matches rows on the column you pick here, so it has to be a field that is filled in and unique ' +
       'on the assets you are updating. Check the headings against your own instance — a custom field will use its ' +
       'own label.'));
     main.appendChild(setup);
+
+    /* --------------------------------------------------- reference columns */
+    var refCard = U.el('div', { class: 'card' });
+    refCard.appendChild(U.el('header', {}, [
+      U.el('h2', {}, 'Extra columns for reference'),
+      U.el('span', { class: 'sub' }, 'Included for context, not changed')
+    ]));
+    refCard.appendChild(U.el('p', { class: 'hint' },
+      'These carry the value Freshservice already holds, so they identify the asset for whoever reviews or ' +
+      'approves the file. Mapping one on import writes the same value back, which changes nothing; leave it ' +
+      'unmapped and it is just context. To correct a field rather than echo it, tick it above instead.'));
+
+    var refGrid = U.el('div', { class: 'grid3', style: { marginTop: '10px' } });
+    FX.REFERENCE.forEach(function (r) {
+      var updating = cfg.fields[r.field] && cfg.fields[r.field].enabled;
+      var isMatch = (cfg.headers[cfg.matchField] || '') === (cfg.referenceHeaders[r.field] || r.header);
+      var blocked = updating || isMatch;
+      refGrid.appendChild(U.el('div', {}, [
+        U.el('label', { class: 'check' }, [
+          U.el('input', {
+            type: 'checkbox',
+            checked: !blocked && !!cfg.reference[r.field],
+            disabled: blocked,
+            onchange: function (e) { cfg.reference[r.field] = e.target.checked; persistFsConfig(); render(); }
+          }),
+          r.label
+        ]),
+        blocked ? U.el('div', { class: 'hint', style: { marginLeft: '24px' } },
+          updating ? 'already included as an update' : 'already the match column') : null,
+        !blocked && cfg.reference[r.field] ? U.el('input', {
+          type: 'text', style: { marginLeft: '24px', marginTop: '4px', width: 'calc(100% - 24px)' },
+          value: cfg.referenceHeaders[r.field] || r.header,
+          onchange: function (e) { cfg.referenceHeaders[r.field] = e.target.value; persistFsConfig(); }
+        }) : null
+      ]));
+    });
+    refCard.appendChild(refGrid);
+    main.appendChild(refCard);
 
     /* ------------------------------------------------------- the result */
     var out = U.el('div', { class: 'card' });
@@ -5624,8 +5766,53 @@ window.SampleData = {
     ]));
 
     if (!proposals.length) {
-      out.appendChild(U.el('div', { class: 'empty' },
-        'Nothing to change with the current settings. Turn on more fields above, or loosen the filters.'));
+      // Work out which of the switched-off fields would actually yield changes
+      // for these devices, rather than leaving the user to guess.
+      var suggestions = [];
+      FX.UPDATABLE.forEach(function (u) {
+        if (cfg.fields[u.field] && cfg.fields[u.field].enabled) return;
+        var trial = JSON.parse(JSON.stringify(cfg));
+        trial.fields[u.field].enabled = true;
+        if (u.sources.indexOf('manual') >= 0 && u.field === 'state') {
+          trial.fields[u.field].source = 'manual';
+          trial.fields[u.field].manualValue = 'In Use';
+        }
+        var n = FX.buildProposals(scopedRows, trial)
+          .reduce(function (a, p) { return a + p.changes.filter(function (c) { return c.field === u.field; }).length; }, 0);
+        if (n) suggestions.push({ label: u.label, n: n, field: u.field, weight: fieldWeight(u.field) });
+      });
+
+      var empty = U.el('div', { class: 'empty' });
+      empty.appendChild(U.el('div', { style: { fontWeight: '600', marginBottom: '6px' } },
+        'Nothing to change for these ' + U.num(scopedRows.length) + ' devices with the fields switched on above.'));
+      if (suggestions.length) {
+        empty.appendChild(U.el('div', {}, 'These would give you something:'));
+        var list = U.el('div', { class: 'row', style: { justifyContent: 'center', marginTop: '10px' } });
+        // Order by how much the field matters, not by how many rows it touches:
+        // a cosmetic OS difference on every device should not outrank the six
+        // assets whose recorded state is actually wrong.
+        suggestions.sort(function (a, b) {
+          return b.weight - a.weight || b.n - a.n;
+        }).slice(0, 4).forEach(function (sg) {
+          list.appendChild(U.el('button', {
+            class: 'btn sm',
+            onclick: function () {
+              cfg.fields[sg.field].enabled = true;
+              if (sg.field === 'state') {
+                cfg.fields[sg.field].source = 'manual';
+                if (!cfg.fields[sg.field].manualValue) cfg.fields[sg.field].manualValue = 'In Use';
+              }
+              persistFsConfig(); render();
+            }
+          }, 'Turn on ' + sg.label + ' (' + U.num(sg.n) + ')'));
+        });
+        empty.appendChild(list);
+      } else {
+        empty.appendChild(U.el('div', { class: 'hint' },
+          'Freshservice and Intune already agree on every field this tool can correct for these devices. ' +
+          'Widen the scope above, or pick a different view.'));
+      }
+      out.appendChild(empty);
     } else {
       var wrap = U.el('div', { class: 'table-wrap' });
       var t = U.el('table', { class: 'grid' });
@@ -5664,6 +5851,18 @@ window.SampleData = {
   }
 
   function persistFsConfig() { global.Store.set('fsConfig', state.fsConfig); }
+
+  /* How much correcting this field matters, taken from the worst severity of
+     the checks that name it as their fix. */
+  function fieldWeight(field) {
+    var worst = 0;
+    R.RULES.forEach(function (rule) {
+      if (rule.fix && rule.fix.field === field) {
+        worst = Math.max(worst, R.SEVERITY_ORDER[rule.severity] || 0);
+      }
+    });
+    return worst;
+  }
 
   /* ==================================================================== */
   /*  tab: settings                                                       */
@@ -5959,7 +6158,7 @@ window.SampleData = {
               global.Store.set('customViews', state.customViews);
             }
             if (json.cfg) { state.cfg = global.Match.settings(json.cfg); global.Store.set('cfg', state.cfg); }
-            if (json.fsConfig) { state.fsConfig = Object.assign(FX.defaultConfig(), json.fsConfig); persistFsConfig(); }
+            if (json.fsConfig) { state.fsConfig = mergeFsConfig(json.fsConfig); persistFsConfig(); }
             recompute(); render();
             U.toast('Configuration imported.', 'ok');
           } catch (err) {
@@ -6019,7 +6218,7 @@ window.SampleData = {
             if (p.cfg) state.cfg = global.Match.settings(p.cfg);
             if (p.enabledRules) state.enabledRules = p.enabledRules;
             if (p.customViews) state.customViews = p.customViews;
-            if (p.fsConfig) state.fsConfig = Object.assign(FX.defaultConfig(), p.fsConfig);
+            if (p.fsConfig) state.fsConfig = mergeFsConfig(p.fsConfig);
             global.EstateMap.reset();
             recompute();
             setTab('dashboard');

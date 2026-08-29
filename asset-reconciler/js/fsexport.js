@@ -37,6 +37,27 @@
     manual: 'Fixed value'
   };
 
+  /* Columns carried through for identification and context rather than to
+     change anything. They are written with the value Freshservice already
+     holds, so mapping one on import is a no-op, and leaving it unmapped just
+     gives whoever reviews the file something to recognise the asset by. */
+  var REFERENCE = [
+    { field: 'name',        label: 'Device name',        header: 'Display Name' },
+    { field: 'assetTag',    label: 'Asset tag',          header: 'Asset Tag' },
+    { field: 'serial',      label: 'Serial number',      header: 'Serial Number' },
+    { field: 'location',    label: 'Location',           header: 'Location' },
+    { field: 'user',        label: 'Assigned user',      header: 'Used By' },
+    { field: 'state',       label: 'Asset state',        header: 'Asset State' },
+    { field: 'lastCheckIn', label: 'Last Intune check-in', header: 'Last Check-in' }
+  ];
+
+  function referenceValue(row, field) {
+    if (field === 'name') return row.name;
+    if (field === 'assetTag') return row.assetTag;
+    if (field === 'lastCheckIn') return row.lastCheckIn ? U.fmtDate(row.lastCheckIn) : '';
+    return R.currentValue(row, field);
+  }
+
   function defaultConfig() {
     return {
       matchField: 'name',
@@ -52,7 +73,10 @@
       },
       onlyChanged: true,
       requireIntuneMatch: true,
-      skipRetired: true
+      skipRetired: true,
+      reference: { serial: false, assetTag: false, name: false, location: false,
+                   user: false, state: false, lastCheckIn: false },
+      referenceHeaders: REFERENCE.reduce(function (acc, r) { acc[r.field] = r.header; return acc; }, {})
     };
   }
 
@@ -70,7 +94,12 @@
 
     rows.forEach(function (row) {
       if (!row.fs) return;                                   // nothing to update
-      if (cfg.skipRetired && N.isRetiredState(row.state)) return;
+      // Skipping retired assets is about not disturbing genuinely dead kit. An
+      // asset flagged "retired but still in use" is demonstrably not dead, and
+      // correcting that state is the whole point of the row - so the skip must
+      // not remove exactly the assets the rule was written to find.
+      if (cfg.skipRetired && N.isRetiredState(row.state) &&
+          row.issues.indexOf('state-conflict-active') < 0) return;
       if (cfg.requireIntuneMatch && !row.intune && !row.ver) return;
 
       var key = matchValue(row, cfg.matchField);
@@ -141,10 +170,26 @@
     var order = UPDATABLE.map(function (u) { return u.field; });
     fieldsUsed.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
 
-    var headers = [matchHeader].concat(fieldsUsed.map(function (f) { return H[f] || f; }));
+    // Reference columns sit between the match column and the updates. A field
+    // being updated already has a column, so it never doubles up here.
+    var refCfg = cfg.reference || {};
+    var refHeaders = cfg.referenceHeaders || {};
+    var refs = REFERENCE.filter(function (r) {
+      if (!refCfg[r.field]) return false;
+      if (fieldsUsed.indexOf(r.field) >= 0) return false;
+      return (refHeaders[r.field] || r.header) !== matchHeader;
+    });
+
+    var headers = [matchHeader]
+      .concat(refs.map(function (r) { return refHeaders[r.field] || r.header; }))
+      .concat(fieldsUsed.map(function (f) { return H[f] || f; }));
+
     var rows = proposals.map(function (p) {
       var obj = {};
       obj[matchHeader] = p.key;
+      refs.forEach(function (r) {
+        obj[refHeaders[r.field] || r.header] = referenceValue(p.row, r.field);
+      });
       fieldsUsed.forEach(function (f) {
         var ch = p.changes.filter(function (c) { return c.field === f; })[0];
         obj[H[f] || f] = ch ? ch.proposed : '';
@@ -255,6 +300,8 @@
   global.FSExport = {
     DEFAULT_HEADERS: DEFAULT_HEADERS,
     UPDATABLE: UPDATABLE,
+    REFERENCE: REFERENCE,
+    referenceValue: referenceValue,
     SOURCE_LABELS: SOURCE_LABELS,
     defaultConfig: defaultConfig,
     buildProposals: buildProposals,

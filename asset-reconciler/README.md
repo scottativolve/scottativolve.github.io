@@ -183,10 +183,29 @@ correction file.
 
 The **Freshservice import** tab is where corrections become an upload.
 
-For each field, choose whether to update it and where the correct value comes
-from — Intune, a site verification return, or a fixed value. The preview lists
-every proposed change with the current value beside the new one, and the reason
-it is being proposed. Nothing is included unless it would actually change.
+**Which devices.** The file covers either the view you were just looking at
+(including any site or issue filter you had set) or the whole estate. Coming in
+via **Build import file** from the Devices tab selects the current view; the
+choice is at the top of the page, with the device count beside each option.
+
+**What to update.** For each field, choose whether to correct it and where the
+correct value comes from — Intune, a site verification return, or a fixed value.
+The preview lists every proposed change with the current value beside the new
+one, and the reason it is being proposed. Nothing is included unless it would
+actually change, so a field where the two systems already agree produces no
+column.
+
+**Extra columns for reference.** Serial number, asset tag, location and the
+rest can be carried into the file *without* being changed — they are written
+with the value Freshservice already holds. Use these when whoever reviews or
+approves the file needs to recognise the asset, or when your import needs a
+second identifying column. A field already being corrected can't also be a
+reference column; the update takes precedence, and the checkbox says so.
+
+If nothing comes out, the page says which switched-off fields would produce
+changes for those devices, and how many, with a button to turn each one on.
+The most significant field is offered first — a wrong asset state ranks above a
+cosmetic OS difference, however many rows the latter touches.
 
 Two files come out:
 
@@ -203,6 +222,10 @@ Three things worth knowing:
   updating. Device name is the default; asset tag is safer if your names repeat.
 - **Spot-check before you upload.** Read a few rows of the change log. The tool
   is confident about what the two systems say; it cannot know which one is right.
+- **"Skip assets already marked retired or disposed" has one exception.** It
+  leaves alone assets that really are dead, but not the ones flagged *retired
+  but still in use* — correcting those is the entire point of that check, so
+  they stay in.
 
 ---
 
