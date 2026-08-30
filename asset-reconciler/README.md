@@ -81,6 +81,7 @@ One row per site. The location name must match what Freshservice holds.
 | Column | Notes |
 |---|---|
 | `Location` | **Required.** Exactly as it appears in Freshservice |
+| `IP Subnet` | The site's network range(s) — see below |
 | `Address`, `Town`, `Postcode` | Used for geocoding and shown in site packs |
 | `Latitude`, `Longitude` | Used directly if present — no lookup needed |
 | `Expected Devices` | Drives the variance colouring and the "furthest from expected" chart |
@@ -88,6 +89,46 @@ One row per site. The location name must match what Freshservice holds.
 | `Site Type`, `Contact` | Carried through for reference |
 
 A worked example of each file is in [`sample-data/`](sample-data/).
+
+### Locating devices by IP address
+
+If your site list carries an `IP Subnet` column and the exports carry a last-seen
+IP address, the tool can tell you which devices were last seen on a network
+belonging to a *different* site than Freshservice has them assigned to. That is
+the strongest evidence available that kit has physically moved, and it needs
+nobody to walk round a building.
+
+Subnets can be written as CIDR (`10.20.30.0/24`), a dotted mask
+(`10.20.30.0/255.255.255.0`), a wildcard (`10.20.30.*`), a range
+(`10.20.30.10-10.20.30.50`), or a bare network address, which is read as a `/24`.
+A site with more than one range takes them all in the same cell, separated by
+semicolons: `10.20.30.0/24; 10.20.31.0/24`.
+
+Where the two systems disagree on the address, the tool uses whichever system
+saw the device **most recently** — the point is where it is now, not where it
+used to be.
+
+Four outcomes, from an address the device was last seen on:
+
+| Outcome | Meaning |
+|---|---|
+| In the assigned site's range | Nothing to do |
+| In another site's range | **Moved** — high severity, and the location can be corrected from it |
+| Names a site Freshservice doesn't | No location recorded, or one missing from the lookup |
+| Matches no site range | Off the site network |
+
+**Remote workers are handled by not crying wolf.** A device on a home
+`192.168.x.x` range, or any private address matching none of your sites, is
+reported as *off the site network* at low severity — not as having moved. It
+means the machine was last used somewhere that isn't one of your buildings,
+which for a remote worker is simply true and needs no action. Only an address
+inside a *different site's* range raises the high-severity flag, because that is
+the case where the asset register is genuinely wrong.
+
+Sites with no subnet recorded are not checked rather than guessed at. The
+dashboard shows how much of the estate the check actually covers, and a
+device-level list is available by turning on **Assigned site has no subnet
+recorded** in Settings.
 
 If your Freshservice locations are stored as a hierarchy (`North West >
 Ashfield House`), set **Settings → How to read Freshservice locations** to
@@ -381,6 +422,7 @@ asset-reconciler/
 │   ├── csv.js              CSV/TSV parser and writer, optional .xlsx reader
 │   ├── schema.js           canonical fields and the column auto-mapper
 │   ├── normalize.js        name, serial, person and location normalisation
+│   ├── ipnet.js            IPv4 parsing and site-subnet matching
 │   ├── match.js            the reconciliation engine
 │   ├── rules.js            the discrepancy checks
 │   ├── views.js            columns, the filter engine, built-in views

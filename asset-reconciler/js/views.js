@@ -28,6 +28,11 @@
     { key: 'osVersion',   label: 'OS version',    width: 110, get: function (r) { return r.osVersion; } },
     { key: 'compliance',  label: 'Compliance',    width: 110, get: function (r) { return r.compliance; } },
     { key: 'ownership',   label: 'Ownership',     width: 100, get: function (r) { return r.ownership; } },
+    { key: 'ip',          label: 'Last seen IP',  width: 120, get: function (r) { return r.ip; } },
+    { key: 'ipSiteName',  label: 'Site by IP',    width: 150, get: function (r) { return r.ipSiteName; } },
+    { key: 'ipStatus',    label: 'IP vs location',width: 130, get: function (r) { return r.ipStatus; } },
+    { key: 'ipSubnet',    label: 'Matched subnet',width: 170, get: function (r) { return r.ipSubnet; } },
+    { key: 'ipFrom',      label: 'IP reported by',width: 110, get: function (r) { return r.ipFrom; } },
     { key: 'lastCheckIn', label: 'Intune check-in', width: 120, type: 'date', get: function (r) { return r.lastCheckIn; } },
     { key: 'daysSinceCheckIn', label: 'Days since check-in', width: 90, type: 'number', get: function (r) { return r.daysSinceCheckIn; } },
     { key: 'lastAudit',   label: 'FS last audit', width: 120, type: 'date', get: function (r) { return r.lastAudit; } },
@@ -190,6 +195,25 @@
       filter: { match: 'all', conditions: [{ field: '__anyIssue', op: 'is' }] },
       group: 'location',
       pack: true
+    },
+    {
+      id: 'moved-by-ip',
+      name: 'Moved: IP says elsewhere',
+      description: 'The network each device was last seen on belongs to a different site than Freshservice has it ' +
+                   'assigned to. The strongest evidence you have that kit has physically moved.',
+      columns: ['name', 'location', 'ipSiteName', 'ip', 'ipSubnet', 'fsUser', 'lastCheckIn', 'issues'],
+      filter: { match: 'any', conditions: [
+        { field: '__issue', op: 'is', value: 'ip-location-mismatch' },
+        { field: '__issue', op: 'is', value: 'ip-suggests-location' }
+      ] }
+    },
+    {
+      id: 'off-network',
+      name: 'Off the site network',
+      description: 'Last seen on an address matching none of your site ranges — usually remote workers on home ' +
+                   'broadband, but also sites whose subnet is missing from the lookup.',
+      columns: ['name', 'location', 'ip', 'fsUser', 'intuneUser', 'lastCheckIn', 'issues'],
+      filter: { match: 'all', conditions: [{ field: '__issue', op: 'is', value: 'ip-off-network' }] }
     },
     {
       id: 'duplicates',

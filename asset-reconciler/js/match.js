@@ -54,6 +54,7 @@
 
     /* ------------------------------------------------ location lookup */
     var siteByKey = new Map();
+    var subnetIndex = [];          // [{ site, key, net }] - flat, searched linearly
     locRows.forEach(function (l) {
       var k = N.locationKey(l.location, 'full');
       if (!k) return;
@@ -61,7 +62,21 @@
       // Also index the leaf form so "Region > Site" in FS still resolves.
       var leaf = N.locationKey(l.location, 'leaf');
       if (leaf && !siteByKey.has(leaf)) siteByKey.set(leaf, l);
+
+      global.IPNet.parseSubnetList(l.subnet).forEach(function (net) {
+        subnetIndex.push({ site: l, key: k, net: net });
+      });
     });
+
+    /* Which site owns this address, if any. A few hundred subnets against a
+       thousand devices is trivial to scan directly. */
+    function siteForIp(ip) {
+      if (!ip) return null;
+      for (var i = 0; i < subnetIndex.length; i++) {
+        if (global.IPNet.contains(subnetIndex[i].net, ip)) return subnetIndex[i];
+      }
+      return null;
+    }
 
     /* ------------------------------------------------ verification returns */
     var verByName = new Map();
@@ -131,6 +146,43 @@
       var assetType = N.clean(fs && fs.assetType) || (intune ? 'Computer' : '');
       var inScope = fs ? isComputer(assetType, cfg) : true;
 
+      /* Last-seen IP. Both systems record one; the useful one is whichever
+         system saw the device most recently, since that is the address that
+         says where it is now. */
+      var fsIp = global.IPNet.primary(fs && fs.ipAddress);
+      var inIp = global.IPNet.primary(intune && intune.ipAddress);
+      var ip = '', ipFrom = '';
+      if (fsIp && inIp) {
+        var fsNewer = lastAudit && lastCheckIn ? lastAudit > lastCheckIn : !!lastAudit;
+        ip = fsNewer ? fsIp : inIp;
+        ipFrom = fsNewer ? 'Freshservice' : 'Intune';
+      } else if (inIp) { ip = inIp; ipFrom = 'Intune'; }
+      else if (fsIp) { ip = fsIp; ipFrom = 'Freshservice'; }
+
+      var ipClass = ip ? global.IPNet.classify(ip) : '';
+      var ipHit = siteForIp(ip);
+      var ipSite = ipHit ? ipHit.site : null;
+      var ipSiteKey = ipHit ? ipHit.key : '';
+
+      /* ipStatus:
+           ''             no address to judge by
+           'no-subnets'   nothing in the lookup has a subnet, so nothing to check
+           'match'        the address sits in the assigned site's own range
+           'other-site'   it sits in a different site's range
+           'suggests'     Freshservice has no usable location but the IP names one
+           'unassigned'   the assigned site has no subnet recorded
+           'off-network'  a private or home address in none of the known ranges */
+      var ipStatus = '';
+      var assignedHasSubnet = site ? global.IPNet.parseSubnetList(site.subnet).length > 0 : false;
+
+      if (!ip) ipStatus = '';
+      else if (!subnetIndex.length) ipStatus = 'no-subnets';
+      else if (ipSite && site && ipSiteKey === locKey) ipStatus = 'match';
+      else if (ipSite && site) ipStatus = 'other-site';
+      else if (ipSite && !site) ipStatus = 'suggests';
+      else if (site && !assignedHasSubnet) ipStatus = 'unassigned';
+      else ipStatus = 'off-network';
+
       return {
         id: 'r' + i,
         name: name,
@@ -161,6 +213,17 @@
         osVersion: N.clean(intune && intune.osVersion) || N.clean(fs && fs.osVersion),
         compliance: N.clean(intune && intune.compliance),
         ownership: N.clean(intune && intune.ownership),
+
+        ip: ip,
+        ipFrom: ipFrom,
+        ipClass: ipClass,
+        ipSite: ipSite,
+        ipSiteName: ipSite ? N.clean(ipSite.location) : '',
+        ipSiteKey: ipSiteKey,
+        ipSubnet: ipHit ? global.IPNet.describe(ipHit.net) : '',
+        ipStatus: ipStatus,
+        fsIp: fsIp,
+        intuneIp: inIp,
 
         lastCheckIn: lastCheckIn,
         lastAudit: lastAudit,
@@ -197,7 +260,11 @@
         bySerial: pairs.filter(function (p) { return p.matchType === 'serial'; }).length,
         byName: pairs.filter(function (p) { return p.matchType === 'name'; }).length,
         locations: locRows.length,
-        verification: verRows.length
+        verification: verRows.length,
+        sitesWithSubnet: locRows.filter(function (l) {
+          return global.IPNet.parseSubnetList(l.subnet).length > 0;
+        }).length,
+        subnets: subnetIndex.length
       }
     };
   }

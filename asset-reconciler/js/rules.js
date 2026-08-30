@@ -191,6 +191,63 @@
       fix: { field: 'os', from: 'intune' }
     },
     {
+      code: 'ip-location-mismatch',
+      label: 'IP says it is at another site',
+      severity: 'high',
+      help: 'The address this device was last seen on belongs to a different site than the one Freshservice has ' +
+            'it assigned to. Devices move between services and the paperwork rarely follows, so this is usually ' +
+            'the asset register being out of date rather than anything wrong with the device.',
+      test: function (r) { return r.ipStatus === 'other-site'; },
+      detail: function (r) {
+        return 'Last seen on ' + r.ip + ' (' + r.ipSubnet + ') which belongs to ' + r.ipSiteName +
+               ', but Freshservice says ' + (r.location || 'no location');
+      },
+      fix: { field: 'location', from: 'ip' }
+    },
+    {
+      code: 'ip-suggests-location',
+      label: 'IP names a site Freshservice does not',
+      severity: 'medium',
+      help: 'The address this device was last seen on belongs to a known site, but Freshservice either has no ' +
+            'location for it or holds one that is not in your lookup. Either way the network says where it is. ' +
+            'Where the existing location is simply missing from the lookup, check whether the lookup needs the ' +
+            'site adding before you overwrite it.',
+      test: function (r) { return r.ipStatus === 'suggests'; },
+      detail: function (r) {
+        return r.locationRaw
+          ? 'Freshservice says "' + r.locationRaw + '", which is not in the lookup; last seen on ' + r.ip +
+            ' (' + r.ipSubnet + '), which is ' + r.ipSiteName
+          : 'No location in Freshservice; last seen on ' + r.ip + ' (' + r.ipSubnet + '), which is ' + r.ipSiteName;
+      },
+      fix: { field: 'location', from: 'ip' }
+    },
+    {
+      code: 'ip-off-network',
+      label: 'Last seen off the site network',
+      severity: 'low',
+      help: 'The address is a private or home one that matches none of your site ranges — normally a remote ' +
+            'worker on their own broadband, or a site whose subnet is not in the lookup yet. It says nothing ' +
+            'about the device being lost, so it is informational rather than something to chase.',
+      test: function (r) { return r.ipStatus === 'off-network'; },
+      detail: function (r) {
+        return 'Last seen on ' + r.ip +
+               (r.ipClass === 'home' ? ' (a 192.168 home range)'
+                : r.ipClass === 'public' ? ' (a public address)' : ' (no matching site range)');
+      }
+    },
+    {
+      code: 'ip-site-no-subnet',
+      label: 'Assigned site has no subnet recorded',
+      severity: 'low',
+      defaultOff: true,
+      help: 'The device has an address but the site it is assigned to has no IP range in the location lookup, so ' +
+            'there is nothing to check it against. Off by default because it fires once per device at every ' +
+            'such site; use the subnet coverage figure on the dashboard instead, and turn this on when you want ' +
+            'the device-level list.',
+      test: function (r) { return r.ipStatus === 'unassigned'; },
+      detail: function (r) { return 'Last seen on ' + r.ip + '; no range recorded for ' + r.location; }
+    },
+    {
       code: 'duplicate-name',
       label: 'Duplicate device name',
       severity: 'medium',
@@ -289,7 +346,14 @@
       return row.intune ? global.Norm.personDisplay(row.intune.primaryUser, row.intune.primaryUpn) || null : null;
     }
     if (field === 'location') {
-      if (ver && !N.isBlank(ver.confirmedLocation)) return ver.confirmedLocation;
+      // A site's own answer beats an inference from the network, but the IP is
+      // a good deal better than nothing.
+      if (pick !== 'ip' && ver && !N.isBlank(ver.confirmedLocation)) return ver.confirmedLocation;
+      if (pick === 'verification') return null;
+      if (row.ipSite && (row.ipStatus === 'other-site' || row.ipStatus === 'suggests')) {
+        return N.clean(row.ipSite.location) || null;
+      }
+      if (pick === 'ip') return null;
       return null;
     }
     if (field === 'state') {

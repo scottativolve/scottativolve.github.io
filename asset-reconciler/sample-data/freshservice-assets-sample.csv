@@ -1,211 +1,249 @@
-Display Name,Asset Tag,Asset Type,Asset State,Used By,Used By Email,Location,Department,Product,Vendor,Serial Number,OS,OS Version,Last Audit Date,Created Time
-AH-PC-000,IVL-01000,Computer,In Use,Liam Chapman,liam.chapman@example-care.org,Ashfield House,Operations,EliteBook 640 G10,HP,H4J9RJ1000,Windows 11,10.0.22631,28/08/2026 10:51,25/05/2024 02:51
-AH-PC-001,IVL-01001,Computer,In Use,Grace Adeyemi,grace.adeyemi@example-care.org,Ashfield House,Operations,ProDesk 400 G9,HP,HOG011001,Windows 11,10.0.22631,13/08/2026 20:51,14/04/2025 20:51
-AH-PC-002,IVL-01002,Computer,In Use,Rachel Adeyemi,rachel.adeyemi@example-care.org,Ashfield House,Operations,Latitude 5440,Dell Inc.,D4AAY31002,Windows 11,10.0.22631,09/08/2026 03:51,11/12/2024 05:51
-AH-PC-003,IVL-01003,Computer,In Use,Ibrahim Doyle,ibrahim.doyle@example-care.org,Ashfield House,Operations,EliteBook 640 G10,HP,H2ORNK1003,Windows 11,10.0.22631,20/08/2026 22:51,04/10/2024 02:51
-AH-PC-004,IVL-01004,Computer,In Use,Fatima Chapman,fatima.chapman@example-care.org,Ashfield House,Operations,Surface Laptop 5,Microsoft Corporation,L29OK11004,Windows 11,10.0.22631,23/08/2026 16:51,13/11/2025 07:51
-AH-PC-005,IVL-01005,Computer,In Use,Daniel Walsh,daniel.walsh@example-care.org,Ashfield House,Operations,ThinkPad L14 Gen 4,LENOVO,L1E61Z1005,Windows 11,10.0.22631,28/08/2026 01:51,07/02/2026 20:51
-AH-PC-006,IVL-01006,Computer,In Use,Owen Sinclair,owen.sinclair@example-care.org,Ashfield House,Operations,Latitude 3540,Dell Inc.,D44B0B1006,Windows 11,10.0.22631,22/08/2026 14:51,20/09/2024 06:51
-AH-PC-007,IVL-01007,Computer,In Use,Peter Patel,peter.patel@example-care.org,Ashfield House,Operations,ThinkPad L14 Gen 4,LENOVO,L2SPRV1007,Windows 11,10.0.22631,23/08/2026 11:51,01/01/2026 00:51
-AH-PC-008,IVL-01008,Computer,In Use,Ibrahim Doyle,ibrahim.doyle@example-care.org,Ashfield House,Operations,Latitude 5440,Dell Inc.,D3A3L21008,Windows 11,10.0.22631,26/08/2026 09:51,10/09/2024 16:51
-BL-PC-009,IVL-01009,Computer,In Use,Grace Marsh,grace.marsh@example-care.org,Beechwood Lodge,Operations,ThinkPad L14 Gen 4,LENOVO,L1GG1E1009,Windows 11,10.0.22631,28/08/2026 00:51,28/08/2025 15:51
-BL-PC-010,IVL-01010,Computer,In Use,James Ellis,james.ellis@example-care.org,Beechwood Lodge,Operations,OptiPlex 7010,Dell Inc.,D5VCM11010,Windows 11,10.0.22631,14/08/2026 00:51,07/05/2024 04:51
-BL-PC-011,IVL-01011,Computer,In Use,James Nowak,james.nowak@example-care.org,Beechwood Lodge,Operations,Latitude 5440,Dell Inc.,D5P2141011,Windows 11,10.0.22631,19/08/2026 12:51,11/11/2024 04:51
-BL-PC-012,IVL-01012,Computer,In Use,Sarah Patel,sarah.patel@example-care.org,Beechwood Lodge,Operations,EliteBook 640 G10,HP,H4BI2C1012,Windows 11,10.0.22631,28/08/2026 05:51,19/07/2025 00:51
-BL-PC-013,IVL-01013,Computer,In Use,Tomasz Nowak,tomasz.nowak@example-care.org,Beechwood Lodge,Operations,ThinkPad L14 Gen 4,LENOVO,L1R16H1013,Windows 11,10.0.22631,08/08/2026 14:51,26/06/2024 01:51
-CC-PC-014,IVL-01014,Computer,In Use,Leah Adeyemi,leah.adeyemi@example-care.org,Cedar Court,Operations,Latitude 3540,Dell Inc.,D2HC9S1014,Windows 11,10.0.22631,23/08/2026 13:51,17/05/2025 02:51
-CC-PC-015,IVL-01015,Computer,In Use,Fatima Chapman,fatima.chapman@example-care.org,Cedar Court,Operations,ProDesk 400 G9,HP,H4VCAU1015,Windows 11,10.0.22631,19/08/2026 06:51,31/12/2024 06:51
-CC-PC-016,IVL-01016,Computer,In Use,Tomasz Mensah,tomasz.mensah@example-care.org,Cedar Court,Operations,ProDesk 400 G9,HP,H56WOF1016,Windows 11,10.0.22631,14/08/2026 09:51,12/03/2024 11:51
-CC-PC-017,IVL-01017,Computer,In Use,Sarah Thompson,sarah.thompson@example-care.org,Cedar Court,Operations,EliteBook 640 G10,HP,H3BQ0N1017,Windows 11,10.0.22631,21/08/2026 20:51,08/06/2025 21:51
-CC-PC-018,IVL-01018,Computer,In Use,David Robinson,david.robinson@example-care.org,Cedar Court,Operations,Latitude 5440,Dell Inc.,D3EJGA1018,Windows 11,10.0.22631,22/08/2026 22:51,18/12/2025 03:51
-CC-PC-019,IVL-01019,Computer,In Use,Nia Barlow,nia.barlow@example-care.org,Cedar Court,Operations,Latitude 3540,Dell Inc.,D5UQSM1019,Windows 11,10.0.22631,12/08/2026 16:51,27/07/2025 15:51
-CC-PC-020,IVL-01020,Computer,In Use,Daniel Byrne,daniel.byrne@example-care.org,Cedar Court,Operations,OptiPlex 7010,Dell Inc.,D4Y1LK1020,Windows 11,10.0.22631,17/08/2026 16:51,08/07/2024 02:51
-CC-PC-021,IVL-01021,Computer,In Use,Zoe Thompson,zoe.thompson@example-care.org,Cedar Court,Operations,EliteBook 640 G10,HP,H38H9W1021,Windows 11,10.0.22631,20/08/2026 00:51,04/03/2025 06:51
-CC-PC-022,IVL-01022,Computer,In Use,Emma Fletcher,emma.fletcher@example-care.org,Cedar Court,Operations,Latitude 3540,Dell Inc.,D5XY4T1022,Windows 11,10.0.22631,20/08/2026 22:51,13/11/2024 10:51
-CC-PC-023,IVL-01023,Computer,In Use,Priya Kaur,priya.kaur@example-care.org,Cedar Court,Operations,ProDesk 400 G9,HP,H3S4LE1023,Windows 11,10.0.22631,17/08/2026 04:51,17/04/2025 02:51
-CC-PC-024,IVL-01024,Computer,In Use,Tomasz Nowak,tomasz.nowak@example-care.org,Cedar Court,Operations,ProDesk 400 G9,HP,H51X2H1024,Windows 11,10.0.22631,23/08/2026 14:51,01/02/2026 16:51
-CC-PC-025,IVL-01025,Computer,In Use,Callum Fletcher,callum.fletcher@example-care.org,Cedar Court,Operations,ThinkPad L14 Gen 4,LENOVO,L5QGD61025,Windows 11,10.0.22631,20/08/2026 03:51,21/07/2024 04:51
-CC-PC-026,IVL-01026,Computer,In Use,James Quinn,james.quinn@example-care.org,Cedar Court,Operations,ProDesk 400 G9,HP,H59J7O1026,Windows 11,10.0.22631,09/08/2026 14:51,12/04/2024 01:51
-CC-PC-027,IVL-01027,Computer,In Use,Liam Fletcher,liam.fletcher@example-care.org,Cedar Court,Operations,Latitude 5440,Dell Inc.,D4T29K1027,Windows 11,10.0.22631,25/08/2026 10:51,21/01/2025 06:51
-CC-PC-028,IVL-01028,Computer,In Use,Ibrahim Fletcher,ibrahim.fletcher@example-care.org,Cedar Court,Operations,ProDesk 400 G9,HP,H16R911028,Windows 11,10.0.22631,15/08/2026 03:51,25/07/2025 07:51
-CC-PC-029,IVL-01029,Computer,In Use,Peter Bennett,peter.bennett@example-care.org,Cedar Court,Operations,Surface Laptop 5,Microsoft Corporation,LXYO31029,Windows 11,10.0.22631,22/08/2026 20:51,05/11/2024 07:51
-CC-PC-030,IVL-01030,Computer,In Use,Peter Barlow,peter.barlow@example-care.org,Cedar Court,Operations,EliteBook 640 G10,HP,H1MXJY1030,Windows 11,10.0.22631,22/08/2026 05:51,04/04/2025 00:51
-CC-PC-031,IVL-01031,Computer,In Use,Daniel Byrne,daniel.byrne@example-care.org,Cedar Court,Operations,Surface Laptop 5,Microsoft Corporation,L2AODA1031,Windows 11,10.0.22631,18/08/2026 04:51,20/03/2025 21:51
-DM-PC-032,IVL-01032,Computer,In Use,David Frost,david.frost@example-care.org,Dovecote Mews,Operations,ThinkPad L14 Gen 4,LENOVO,L2I6TS1032,Windows 11,10.0.22631,11/08/2026 02:51,21/07/2024 23:51
-DM-PC-033,IVL-01033,Computer,In Use,Rachel Mensah,rachel.mensah@example-care.org,Dovecote Mews,Operations,Latitude 3540,Dell Inc.,D4QHMF1033,Windows 11,10.0.22631,15/08/2026 11:51,03/09/2024 22:51
-DM-PC-034,IVL-01034,Computer,In Use,Aisha Patel,aisha.patel@example-care.org,Dovecote Mews,Operations,EliteBook 640 G10,HP,H4A6RM1034,Windows 11,10.0.22631,26/08/2026 21:51,02/08/2025 02:51
-DM-PC-035,IVL-01035,Computer,In Use,Sarah Thompson,sarah.thompson@example-care.org,Dovecote Mews,Operations,Latitude 3540,Dell Inc.,D43XHK1035,Windows 11,10.0.22631,11/08/2026 08:51,01/02/2026 15:51
-EH-PC-036,IVL-01036,Computer,In Use,Chloe Bennett,chloe.bennett@example-care.org,Elmtree House,Operations,Latitude 5440,Dell Inc.,D4LO1K1036,Windows 11,10.0.22631,19/08/2026 07:51,27/12/2024 03:51
-EH-PC-037,IVL-01037,Computer,In Use,Sarah Thompson,sarah.thompson@example-care.org,Elmtree House,Operations,Latitude 3540,Dell Inc.,D2EPDG1037,Windows 11,10.0.22631,11/08/2026 06:51,23/12/2025 22:51
-EH-PC-038,IVL-01038,Computer,In Use,Priya Kaur,priya.kaur@example-care.org,Elmtree House,Operations,Latitude 3540,Dell Inc.,DVO6O1038,Windows 11,10.0.22631,15/08/2026 16:51,23/11/2024 07:51
-EH-PC-039,IVL-01039,Computer,In Use,Ibrahim Doyle,ibrahim.doyle@example-care.org,Elmtree House,Operations,EliteBook 640 G10,HP,H35LH11039,Windows 11,10.0.22631,26/08/2026 20:51,03/06/2025 02:51
-EH-PC-040,IVL-01040,Computer,In Use,Fatima Chapman,fatima.chapman@example-care.org,Elmtree House,Operations,Surface Laptop 5,Microsoft Corporation,L5BSAM1040,Windows 11,10.0.22631,23/08/2026 06:51,16/03/2024 23:51
-EH-PC-041,IVL-01041,Computer,In Use,David Frost,david.frost@example-care.org,Elmtree House,Operations,OptiPlex 7010,Dell Inc.,D3NULK1041,Windows 11,10.0.22631,26/08/2026 07:51,10/08/2025 20:51
-EH-PC-042,IVL-01042,Computer,In Use,Callum Fletcher,callum.fletcher@example-care.org,Elmtree House,Operations,OptiPlex 7010,Dell Inc.,D3NM7S1042,Windows 11,10.0.22631,26/08/2026 03:51,02/02/2026 04:51
-F-PC-043,IVL-01043,Computer,In Use,Chloe Bennett,chloe.bennett@example-care.org,Fernbank,Operations,Surface Laptop 5,Microsoft Corporation,L5TE861043,Windows 11,10.0.22631,15/08/2026 14:51,23/10/2024 07:51
-F-PC-044,IVL-01044,Computer,In Use,Peter Bennett,peter.bennett@example-care.org,Fernbank,Operations,OptiPlex 7010,Dell Inc.,D57BR21044,Windows 11,10.0.22631,12/08/2026 04:51,09/04/2024 12:51
-F-PC-045,IVL-01045,Computer,In Use,Fatima Marsh,fatima.marsh@example-care.org,Fernbank,Operations,ProDesk 400 G9,HP,H4DHJ21045,Windows 11,10.0.22631,09/08/2026 23:51,16/06/2024 12:51
-F-PC-046,IVL-01046,Computer,In Use,Peter Barlow,peter.barlow@example-care.org,Fernbank,Operations,ProDesk 400 G9,HP,H3U2NR1046,Windows 11,10.0.22631,23/08/2026 13:51,05/03/2025 03:51
-F-PC-047,IVL-01047,Computer,In Use,Fatima Nowak,fatima.nowak@example-care.org,Fernbank,Operations,Surface Laptop 5,Microsoft Corporation,L17JEL1047,Windows 11,10.0.22631,20/08/2026 02:51,20/09/2025 01:51
-G-PC-048,IVL-01048,Computer,In Use,Fatima Marsh,fatima.marsh@example-care.org,Greenacres,Operations,EliteBook 640 G10,HP,H160TG1048,Windows 11,10.0.22631,26/08/2026 12:51,07/05/2025 10:51
-G-PC-049,IVL-01049,Computer,In Use,Nia Barlow,nia.barlow@example-care.org,Greenacres,Operations,ThinkPad L14 Gen 4,LENOVO,LW58E1049,Windows 11,10.0.22631,15/08/2026 11:51,07/06/2024 23:51
-G-PC-050,IVL-01050,Computer,In Use,Ibrahim Fletcher,ibrahim.fletcher@example-care.org,Greenacres,Operations,Surface Laptop 5,Microsoft Corporation,LQAET1050,Windows 11,10.0.22631,27/08/2026 07:51,10/01/2026 01:51
-G-PC-051,IVL-01051,Computer,In Use,Tomasz Nowak,tomasz.nowak@example-care.org,Greenacres,Operations,OptiPlex 7010,Dell Inc.,D1POY41051,Windows 11,10.0.22631,08/08/2026 02:51,07/02/2026 04:51
-G-PC-052,IVL-01052,Computer,In Use,Fatima Marsh,fatima.marsh@example-care.org,Greenacres,Operations,ThinkPad L14 Gen 4,LENOVO,L2X4FH1052,Windows 11,10.0.22631,22/08/2026 04:51,08/05/2025 20:51
-G-PC-053,IVL-01053,Computer,In Use,Fatima Marsh,fatima.marsh@example-care.org,Greenacres,Operations,ThinkPad L14 Gen 4,LENOVO,L3TTE61053,Windows 11,10.0.22631,24/08/2026 23:51,12/07/2024 00:51
-G-PC-054,IVL-01054,Computer,In Use,Sarah Patel,sarah.patel@example-care.org,Greenacres,Operations,Surface Laptop 5,Microsoft Corporation,L2A2VS1054,Windows 11,10.0.22631,24/08/2026 00:51,31/07/2024 16:51
-G-PC-055,IVL-01055,Computer,In Use,Hannah Doyle,hannah.doyle@example-care.org,Greenacres,Operations,Latitude 3540,Dell Inc.,D3935T1055,Windows 11,10.0.22631,09/08/2026 09:51,30/11/2024 21:51
-HGV-PC-056,IVL-01056,Computer,In Use,Leah Adeyemi,leah.adeyemi@example-care.org,Hazel Grove Villas,Operations,Latitude 5440,Dell Inc.,D3DZCW1056,Windows 11,10.0.22631,21/08/2026 16:51,01/01/2026 07:51
-HGV-PC-057,IVL-01057,Computer,In Use,Michael Robinson,michael.robinson@example-care.org,Hazel Grove Villas,Operations,Latitude 3540,Dell Inc.,D16TO21057,Windows 11,10.0.22631,15/08/2026 14:51,04/04/2024 16:51
-HGV-PC-058,IVL-01058,Computer,In Use,Michael Nowak,michael.nowak@example-care.org,Hazel Grove Villas,Operations,Latitude 5440,Dell Inc.,D3XBCY1058,Windows 11,10.0.22631,08/08/2026 03:51,29/09/2024 20:51
-HGV-PC-059,IVL-01059,Computer,In Use,Daniel Byrne,daniel.byrne@example-care.org,Hazel Grove Villas,Operations,Latitude 5440,Dell Inc.,D3K5HA1059,Windows 11,10.0.22631,22/08/2026 21:51,04/12/2024 10:51
-HGV-PC-060,IVL-01060,Computer,In Use,Ibrahim Doyle,ibrahim.doyle@example-care.org,Hazel Grove Villas,Operations,ThinkPad L14 Gen 4,LENOVO,L3MAQM1060,Windows 11,10.0.22631,10/08/2026 08:51,19/12/2025 03:51
-IH-PC-061,IVL-01061,Computer,In Use,Daniel Byrne,daniel.byrne@example-care.org,Ivy House,Operations,ThinkPad L14 Gen 4,LENOVO,L4BEMV1061,Windows 11,10.0.22631,23/08/2026 11:51,20/05/2025 01:51
-IH-PC-062,IVL-01062,Computer,In Use,Callum Fletcher,callum.fletcher@example-care.org,Ivy House,Operations,OptiPlex 7010,Dell Inc.,D2HXWV1062,Windows 11,10.0.22631,25/08/2026 13:51,05/07/2024 03:51
-IH-PC-063,IVL-01063,Computer,In Use,James Nowak,james.nowak@example-care.org,Ivy House,Operations,ThinkPad L14 Gen 4,LENOVO,L4VVSZ1063,Windows 11,10.0.22631,08/08/2026 11:51,30/12/2024 06:51
-IH-PC-064,IVL-01064,Computer,In Use,Tomasz Mensah,tomasz.mensah@example-care.org,Ivy House,Operations,Surface Laptop 5,Microsoft Corporation,L284EB1064,Windows 11,10.0.22631,20/08/2026 06:51,27/01/2026 00:51
-IH-PC-065,IVL-01065,Computer,In Use,James Quinn,james.quinn@example-care.org,Ivy House,Operations,Latitude 5440,Dell Inc.,D2AY2D1065,Windows 11,10.0.22631,24/08/2026 16:51,17/07/2025 04:51
-IH-PC-066,IVL-01066,Computer,In Use,Michael Nowak,michael.nowak@example-care.org,Ivy House,Operations,Surface Laptop 5,Microsoft Corporation,L2DS3C1066,Windows 11,10.0.22631,16/08/2026 15:51,29/06/2024 12:51
-IH-PC-067,IVL-01067,Computer,In Use,Hannah Doyle,hannah.doyle@example-care.org,Ivy House,Operations,ProDesk 400 G9,HP,H5NWFB1067,Windows 11,10.0.22631,14/08/2026 11:51,06/11/2024 23:51
-IH-PC-068,IVL-01068,Computer,In Use,Rachel Mensah,rachel.mensah@example-care.org,Ivy House,Operations,Latitude 5440,Dell Inc.,D4I3KC1068,Windows 11,10.0.22631,25/08/2026 22:51,08/10/2025 03:51
-IH-PC-069,IVL-01069,Computer,In Use,Tomasz Nowak,tomasz.nowak@example-care.org,Ivy House,Operations,EliteBook 640 G10,HP,H2TO6R1069,Windows 11,10.0.22631,20/08/2026 15:51,04/04/2024 02:51
-IH-PC-070,IVL-01070,Computer,In Use,Joseph Okafor,joseph.okafor@example-care.org,Ivy House,Operations,Surface Laptop 5,Microsoft Corporation,L4HRD71070,Windows 11,10.0.22631,14/08/2026 11:51,06/11/2025 00:51
-JC-PC-071,IVL-01071,Computer,In Use,Joseph Okafor,joseph.okafor@example-care.org,Juniper Court,Operations,EliteBook 640 G10,HP,H32R4O1071,Windows 11,10.0.22631,15/08/2026 04:51,12/06/2025 07:51
-JC-PC-072,IVL-01072,Computer,In Use,Liam Chapman,liam.chapman@example-care.org,Juniper Court,Operations,ProDesk 400 G9,HP,H29SDO1072,Windows 11,10.0.22631,16/08/2026 08:51,30/05/2024 11:51
-JC-PC-073,IVL-01073,Computer,In Use,Rachel Adeyemi,rachel.adeyemi@example-care.org,Juniper Court,Operations,OptiPlex 7010,Dell Inc.,D2QERL1073,Windows 11,10.0.22631,28/08/2026 08:51,20/05/2025 13:51
-JC-PC-074,IVL-01074,Computer,In Use,David Robinson,david.robinson@example-care.org,Juniper Court,Operations,OptiPlex 7010,Dell Inc.,D5PIAZ1074,Windows 11,10.0.22631,12/08/2026 07:51,27/10/2024 22:51
-JC-PC-075,IVL-01075,Computer,In Use,Michael Nowak,michael.nowak@example-care.org,Juniper Court,Operations,ThinkPad L14 Gen 4,LENOVO,L3SVG41075,Windows 11,10.0.22631,26/08/2026 21:51,05/09/2024 16:51
-KL-PC-076,IVL-01076,Computer,In Use,Liam Walsh,liam.walsh@example-care.org,Kingsley Lodge,Operations,ThinkPad L14 Gen 4,LENOVO,L4I5B81076,Windows 11,10.0.22631,10/08/2026 12:51,15/11/2025 12:51
-KL-PC-077,IVL-01077,Computer,In Use,Daniel Walsh,daniel.walsh@example-care.org,Kingsley Lodge,Operations,ThinkPad L14 Gen 4,LENOVO,L21E1Z1077,Windows 11,10.0.22631,12/08/2026 02:51,04/10/2024 12:51
-KL-PC-078,IVL-01078,Computer,In Use,Grace Marsh,grace.marsh@example-care.org,Kingsley Lodge,Operations,ThinkPad L14 Gen 4,LENOVO,L4P0OP1078,Windows 11,10.0.22631,27/08/2026 11:51,13/06/2025 06:51
-KL-PC-079,IVL-01079,Computer,In Use,Nia Barlow,nia.barlow@example-care.org,Kingsley Lodge,Operations,Latitude 5440,Dell Inc.,D2C9ND1079,Windows 11,10.0.22631,25/08/2026 16:51,17/08/2025 00:51
-KL-PC-080,IVL-01080,Computer,In Use,Nia Barlow,nia.barlow@example-care.org,Kingsley Lodge,Operations,ProDesk 400 G9,HP,H3NF151080,Windows 11,10.0.22631,19/08/2026 03:51,29/11/2024 10:51
-KL-PC-081,IVL-01081,Computer,In Use,Grace Adeyemi,grace.adeyemi@example-care.org,Kingsley Lodge,Operations,ProDesk 400 G9,HP,H3JZAH1081,Windows 11,10.0.22631,27/08/2026 20:51,31/07/2024 00:51
-HO-PC-082,IVL-01082,Computer,In Use,Tomasz Mensah,tomasz.mensah@example-care.org,Head Office,Corporate Services,ProDesk 400 G9,HP,H5KLSY1082,Windows 11,10.0.22631,08/08/2026 02:51,12/03/2025 02:51
-HO-PC-083,IVL-01083,Computer,In Use,Peter Patel,peter.patel@example-care.org,Head Office,Corporate Services,EliteBook 640 G10,HP,H4CPVT1083,Windows 11,10.0.22631,23/08/2026 15:51,18/10/2025 23:51
-HO-PC-084,IVL-01084,Computer,In Use,Nia Barlow,nia.barlow@example-care.org,Head Office,Corporate Services,OptiPlex 7010,Dell Inc.,DM9P71084,Windows 11,10.0.22631,12/08/2026 04:51,27/03/2024 00:51
-HO-PC-085,IVL-01085,Computer,In Use,Joseph Marsh,joseph.marsh@example-care.org,Head Office,Corporate Services,ThinkPad L14 Gen 4,LENOVO,L5V0IB1085,Windows 11,10.0.22631,26/08/2026 00:51,05/06/2025 02:51
-HO-PC-086,IVL-01086,Computer,In Use,Nia Barlow,nia.barlow@example-care.org,Head Office,Corporate Services,Surface Laptop 5,Microsoft Corporation,L32ZHE1086,Windows 11,10.0.22631,26/08/2026 13:51,15/03/2024 08:51
-HO-PC-087,IVL-01087,Computer,In Use,Sarah Kaur,sarah.kaur@example-care.org,Head Office,Corporate Services,Latitude 5440,Dell Inc.,D5JU151087,Windows 11,10.0.22631,08/08/2026 00:51,14/08/2024 09:51
-HO-PC-088,IVL-01088,Computer,In Use,Joseph Mensah,joseph.mensah@example-care.org,Head Office,Corporate Services,ThinkPad L14 Gen 4,LENOVO,LWGK71088,Windows 11,10.0.22631,19/08/2026 22:51,10/11/2024 11:51
-HO-PC-089,IVL-01089,Computer,In Use,Chloe Bennett,chloe.bennett@example-care.org,Head Office,Corporate Services,Latitude 5440,Dell Inc.,D3RCLU1089,Windows 11,10.0.22631,27/08/2026 11:51,10/08/2025 15:51
-HO-PC-090,IVL-01090,Computer,In Use,Tomasz Nowak,tomasz.nowak@example-care.org,Head Office,Corporate Services,Latitude 5440,Dell Inc.,D244BC1090,Windows 11,10.0.22631,17/08/2026 21:51,03/01/2026 02:51
-HO-PC-091,IVL-01091,Computer,In Use,Chloe Ahmed,chloe.ahmed@example-care.org,Head Office,Corporate Services,OptiPlex 7010,Dell Inc.,DNZ7R1091,Windows 11,10.0.22631,13/08/2026 23:51,08/11/2024 12:51
-HO-PC-092,IVL-01092,Computer,In Use,Fatima Thompson,fatima.thompson@example-care.org,Head Office,Corporate Services,Latitude 3540,Dell Inc.,D4QQAI1092,Windows 11,10.0.22631,22/08/2026 08:51,19/04/2025 08:51
-HO-PC-093,IVL-01093,Computer,In Use,Owen Sinclair,owen.sinclair@example-care.org,Head Office,Corporate Services,Latitude 5440,Dell Inc.,D5F0MG1093,Windows 11,10.0.22631,09/08/2026 00:51,30/09/2025 15:51
-HO-PC-094,IVL-01094,Computer,In Use,Joseph Mensah,joseph.mensah@example-care.org,Head Office,Corporate Services,Surface Laptop 5,Microsoft Corporation,L4SHAE1094,Windows 11,10.0.22631,22/08/2026 15:51,03/06/2025 03:51
-HO-PC-095,IVL-01095,Computer,In Use,Nia Barlow,nia.barlow@example-care.org,Head Office,Corporate Services,EliteBook 640 G10,HP,H34SAV1095,Windows 11,10.0.22631,28/08/2026 05:51,03/06/2024 01:51
-HO-PC-096,IVL-01096,Computer,In Use,Aisha Patel,aisha.patel@example-care.org,Head Office,Corporate Services,OptiPlex 7010,Dell Inc.,D35UHS1096,Windows 11,10.0.22631,22/08/2026 07:51,25/07/2024 06:51
-HO-PC-097,IVL-01097,Computer,In Use,Priya Kaur,priya.kaur@example-care.org,Head Office,Corporate Services,ThinkPad L14 Gen 4,LENOVO,L5R60Y1097,Windows 11,10.0.22631,18/08/2026 23:51,13/01/2025 21:51
-HO-PC-098,IVL-01098,Computer,In Use,Tomasz Walsh,tomasz.walsh@example-care.org,Head Office,Corporate Services,Surface Laptop 5,Microsoft Corporation,L19FG81098,Windows 11,10.0.22631,22/08/2026 07:51,06/11/2025 23:51
-HO-PC-099,IVL-01099,Computer,In Use,Peter Barlow,peter.barlow@example-care.org,Head Office,Corporate Services,Latitude 5440,Dell Inc.,D1CYSY1099,Windows 11,10.0.22631,28/08/2026 01:51,14/07/2025 22:51
-CC-PC-100,IVL-01100,Computer,In Use,Tomasz Walsh,tomasz.walsh@example-care.org,Cedar Court,Operations,OptiPlex 7010,Dell Inc.,D1SD921100,Windows 11,10.0.22631,20/08/2026 01:51,08/09/2024 03:51
-IH-PC-101,IVL-01101,Computer,In Use,Ibrahim Doyle,ibrahim.doyle@example-care.org,Ivy House,Operations,ThinkPad L14 Gen 4,LENOVO,L2AMV51101,Windows 11,10.0.22631,16/08/2026 11:51,18/01/2026 20:51
-G-PC-102,IVL-01102,Computer,In Use,Marcus Ellis,marcus.ellis@example-care.org,Greenacres,Operations,ThinkPad L14 Gen 4,LENOVO,L31LKO1102,Windows 11,10.0.22631,27/08/2026 21:51,05/02/2026 09:51
-EH-PC-103,IVL-01103,Computer,In Use,Emma Fletcher,emma.fletcher@example-care.org,Elmtree House,Operations,OptiPlex 7010,Dell Inc.,D33VOP1103,Windows 11,10.0.22631,17/08/2026 16:51,28/01/2026 04:51
-AH-PC-104,IVL-01104,Computer,In Use,David Frost,david.frost@example-care.org,Ashfield House,Operations,OptiPlex 7010,Dell Inc.,DZ0351104,Windows 11,10.0.22631,08/08/2026 04:51,21/04/2025 22:51
-AH-PC-105,IVL-01105,Computer,In Use,Marcus Kaur,marcus.kaur@example-care.org,Ashfield House,Operations,EliteBook 640 G10,HP,H2Y9K81105,Windows 11,10.0.22631,09/08/2026 10:51,03/10/2025 03:51
-F-PC-106,IVL-01106,Computer,In Use,Hannah Doyle,hannah.doyle@example-care.org,Fernbank,Operations,Latitude 5440,Dell Inc.,D2B72E1106,Windows 11,10.0.22631,24/08/2026 13:51,26/07/2024 23:51
-HGV-PC-107,IVL-01107,Computer,In Use,Grace Marsh,grace.marsh@example-care.org,Hazel Grove Villas,Operations,Latitude 3540,Dell Inc.,D4Y1HO1107,Windows 11,10.0.22631,12/08/2026 14:51,23/04/2025 22:51
-HGV-PC-108,IVL-01108,Computer,In Use,Joseph Mensah,joseph.mensah@example-care.org,Hazel Grove Villas,Operations,Surface Laptop 5,Microsoft Corporation,L248XI1108,Windows 11,10.0.22631,11/08/2026 01:51,25/05/2024 20:51
-JC-PC-109,IVL-01109,Computer,In Use,,,Juniper Court,Operations,Latitude 3540,Dell Inc.,D1FTAR1109,Windows 11,10.0.22631,10/08/2026 09:51,01/10/2024 12:51
-DM-PC-110,IVL-01110,Computer,In Use,,,Dovecote Mews,Operations,ProDesk 400 G9,HP,H2TZT71110,Windows 11,10.0.22631,23/08/2026 11:51,24/04/2024 01:51
-DM-PC-111,IVL-01111,Computer,In Use,,,Dovecote Mews,Operations,ProDesk 400 G9,HP,H515CX1111,Windows 11,10.0.22631,28/08/2026 10:51,25/02/2025 20:51
-KL-PC-112,IVL-01112,Computer,In Use,,,Kingsley Lodge,Operations,Latitude 3540,Dell Inc.,D46F281112,Windows 11,10.0.22631,07/08/2026 20:51,02/05/2024 16:51
-HO-PC-113,IVL-01113,Computer,In Use,,,Head Office,Corporate Services,ProDesk 400 G9,HP,H4SU7K1113,Windows 11,10.0.22631,21/08/2026 10:51,04/04/2024 03:51
-IH-PC-114,IVL-01114,Computer,In Use,,,Ivy House,Operations,Latitude 3540,Dell Inc.,D2FZXG1114,Windows 11,10.0.22631,15/08/2026 08:51,14/04/2025 22:51
-KL-PC-115,IVL-01115,Computer,In Use,,,Kingsley Lodge,Operations,EliteBook 640 G10,HP,H1GZJ91115,Windows 11,10.0.22631,19/08/2026 06:51,06/11/2025 02:51
-KL-PC-116,IVL-01116,Computer,In Use,,,Kingsley Lodge,Operations,Latitude 3540,Dell Inc.,D4S1IB1116,Windows 11,10.0.22631,23/08/2026 04:51,13/12/2024 08:51
-BL-PC-117,IVL-01117,Computer,In Use,,,Beechwood Lodge,Operations,EliteBook 640 G10,HP,H2JOZV1117,Windows 11,10.0.22631,09/08/2026 15:51,11/10/2024 23:51
-BL-PC-118,IVL-01118,Computer,In Use,,,Beechwood Lodge,Operations,Surface Laptop 5,Microsoft Corporation,L4P4R41118,Windows 11,10.0.22631,21/08/2026 08:51,03/06/2025 08:51
-KL-PC-119,IVL-01119,Computer,In Use,,,Kingsley Lodge,Operations,Surface Laptop 5,Microsoft Corporation,L1UREN1119,Windows 11,10.0.22631,17/08/2026 00:51,27/01/2025 20:51
-KL-PC-120,IVL-01120,Computer,In Use,ghughes,grace.hughes@example-care.org,Kingsley Lodge,Operations,Latitude 3540,Dell Inc.,D11OPN1120,Windows 11,10.0.22631,12/08/2026 10:51,22/09/2024 09:51
-HGV-PC-121,IVL-01121,Computer,In Use,pbarlow,peter.barlow@example-care.org,Hazel Grove Villas,Operations,ThinkPad L14 Gen 4,LENOVO,L3S0531121,Windows 11,10.0.22631,15/08/2026 06:51,06/09/2025 16:51
-HO-PC-122,IVL-01122,Computer,In Use,jmarsh,joseph.marsh@example-care.org,Head Office,Corporate Services,ThinkPad L14 Gen 4,LENOVO,L2T2CJ1122,Windows 11,10.0.22631,10/08/2026 01:51,04/02/2025 22:51
-IH-PC-123,IVL-01123,Computer,In Use,jrobinson,joseph.robinson@example-care.org,Ivy House,Operations,Surface Laptop 5,Microsoft Corporation,LNM8P1123,Windows 11,10.0.22631,18/08/2026 16:51,23/01/2025 12:51
-BL-PC-124,IVL-01124,Computer,In Use,Marcus Ellis,marcus.ellis@example-care.org,,Operations,Latitude 3540,Dell Inc.,D54GBO1124,Windows 11,10.0.22631,20/08/2026 13:51,07/05/2025 02:51
-AH-PC-125,IVL-01125,Computer,In Use,Joseph Mensah,joseph.mensah@example-care.org,,Operations,EliteBook 640 G10,HP,H1Z20D1125,Windows 11,10.0.22631,17/08/2026 13:51,16/08/2025 04:51
-HGV-PC-126,IVL-01126,Computer,In Use,Nia Barlow,nia.barlow@example-care.org,,Operations,OptiPlex 7010,Dell Inc.,D2235D1126,Windows 11,10.0.22631,10/08/2026 13:51,15/12/2024 21:51
-G-PC-127,IVL-01127,Computer,In Use,Tomasz Doyle,tomasz.doyle@example-care.org,,Operations,Latitude 5440,Dell Inc.,D3DY6U1127,Windows 11,10.0.22631,27/08/2026 11:51,30/12/2025 22:51
-AH-PC-128,IVL-01128,Computer,In Use,Rachel Mensah,rachel.mensah@example-care.org,,Operations,ProDesk 400 G9,HP,HX1581128,Windows 11,10.0.22631,25/08/2026 02:51,22/05/2024 14:51
-F-PC-129,IVL-01129,Computer,In Use,Ibrahim Fletcher,ibrahim.fletcher@example-care.org,,Operations,Latitude 5440,Dell Inc.,D3QQO31129,Windows 11,10.0.22631,13/08/2026 14:51,06/01/2026 09:51
-KL-PC-130,IVL-01130,Computer,In Use,Tomasz Nowak,tomasz.nowak@example-care.org,,Operations,EliteBook 640 G10,HP,H4GUFZ1130,Windows 11,10.0.22631,12/08/2026 22:51,11/02/2025 16:51
-AH-PC-131,IVL-01131,Computer,In Use,Peter Patel,peter.patel@example-care.org,Oakdene House,Operations,Latitude 5440,Dell Inc.,DO5OP1131,Windows 11,10.0.22631,24/08/2026 01:51,09/02/2026 16:51
-AH-PC-132,IVL-01132,Computer,In Use,Zoe Thompson,zoe.thompson@example-care.org,Oakdene House,Operations,Latitude 5440,Dell Inc.,D3O0JZ1132,Windows 11,10.0.22631,11/08/2026 06:51,20/10/2024 11:51
-AH-PC-133,IVL-01133,Computer,In Use,Zoe Thompson,zoe.thompson@example-care.org,Old Head Office,Operations,ThinkPad L14 Gen 4,LENOVO,L1IN751133,Windows 11,10.0.22631,11/08/2026 21:51,03/08/2025 15:51
-AH-PC-134,IVL-01134,Computer,In Use,Leah Kaur,leah.kaur@example-care.org,Old Head Office,Operations,OptiPlex 7010,Dell Inc.,D5E0IB1134,Windows 11,10.0.22631,20/08/2026 03:51,28/06/2024 08:51
-AH-PC-135,IVL-01135,Computer,In Use,Sarah Patel,sarah.patel@example-care.org,Willow Bank,Operations,OptiPlex 7010,Dell Inc.,D3J7GH1135,Windows 11,10.0.22631,19/08/2026 07:51,08/01/2026 02:51
-AH-PC-136,IVL-01136,Computer,In Use,David Robinson,david.robinson@example-care.org,Willow Bank,Operations,Latitude 3540,Dell Inc.,D3LOE01136,Windows 11,10.0.22631,22/08/2026 01:51,18/09/2025 04:51
-EH-PC-137,IVL-01137,Computer,In Use,Tomasz Mensah,tomasz.mensah@example-care.org,Elmtree House,Operations,ProDesk 400 G9,HP,H56N741137,Windows 11,10.0.22631,19/11/2025 16:51,11/07/2025 21:51
-JC-PC-138,IVL-01138,Computer,In Use,Rachel Mensah,rachel.mensah@example-care.org,Juniper Court,Operations,Latitude 3540,Dell Inc.,D1DYYO1138,Windows 11,10.0.22631,19/08/2025 23:51,02/09/2025 03:51
-F-PC-139,IVL-01139,Computer,In Stock,Ibrahim Doyle,ibrahim.doyle@example-care.org,Fernbank,Operations,Latitude 5440,Dell Inc.,D3RPIU1139,Windows 11,10.0.22631,18/10/2025 08:51,24/07/2025 10:51
-BL-PC-140,IVL-01140,Computer,In Use,Marcus Kaur,marcus.kaur@example-care.org,Beechwood Lodge,Operations,Latitude 5440,Dell Inc.,D4NNCR1140,Windows 11,10.0.22631,17/06/2026 04:51,25/01/2026 14:51
-CC-PC-141,IVL-01141,Computer,In Use,Grace Adeyemi,grace.adeyemi@example-care.org,Cedar Court,Operations,EliteBook 640 G10,HP,H2SSVB1141,Windows 11,10.0.22631,30/04/2026 11:51,21/12/2024 13:51
-AH-PC-142,IVL-01142,Computer,In Use,Nia Fletcher,nia.fletcher@example-care.org,Ashfield House,Operations,Latitude 5440,Dell Inc.,D5BCZP1142,Windows 11,10.0.22631,28/03/2026 16:51,24/05/2024 03:51
-F-PC-143,IVL-01143,Computer,In Stock,Callum Walsh,callum.walsh@example-care.org,Fernbank,Operations,ThinkPad L14 Gen 4,LENOVO,L5SONG1143,Windows 11,10.0.22631,04/04/2026 21:51,10/08/2024 00:51
-AH-PC-144,IVL-01144,Computer,In Use,Peter Barlow,peter.barlow@example-care.org,Ashfield House,Operations,ProDesk 400 G9,HP,H117PE1144,Windows 11,10.0.22631,08/01/2026 21:51,08/01/2025 03:51
-IH-PC-145,IVL-01145,Computer,In Stock,David Robinson,david.robinson@example-care.org,Ivy House,Operations,OptiPlex 7010,Dell Inc.,D32BG01145,Windows 11,10.0.22631,14/08/2025 04:51,27/07/2024 08:51
-CC-PC-146,IVL-01146,Computer,In Use,Fatima Marsh,fatima.marsh@example-care.org,Cedar Court,Operations,Latitude 5440,Dell Inc.,D4O8OP1146,Windows 11,10.0.22631,14/02/2026 20:51,23/12/2025 23:51
-HO-PC-147,IVL-01147,Computer,In Use,Peter Patel,peter.patel@example-care.org,Head Office,Corporate Services,ProDesk 400 G9,HP,H3PRLR1147,Windows 11,10.0.22631,27/05/2026 06:51,15/01/2026 12:51
-HO-PC-148,IVL-01148,Computer,In Use,Rachel Ahmed,rachel.ahmed@example-care.org,Head Office,Corporate Services,EliteBook 640 G10,HP,H47EFK1148,Windows 11,10.0.22631,25/04/2026 01:51,29/12/2025 03:51
-IH-PC-149,IVL-01149,Computer,In Use,Priya Kaur,priya.kaur@example-care.org,Ivy House,Operations,Surface Laptop 5,Microsoft Corporation,L3ZIOU1149,Windows 11,10.0.22631,29/01/2026 15:51,26/05/2025 23:51
-HGV-PC-158,IVL-01158,Computer,In Use,Callum Fletcher,callum.fletcher@example-care.org,Hazel Grove Villas,Operations,Latitude 5440,Dell Inc.,D134SX1158,Windows 11,10.0.22631,11/08/2026 08:51,15/06/2024 16:51
-HO-PC-159,IVL-01159,Computer,In Use,Leah Adeyemi,leah.adeyemi@example-care.org,Head Office,Corporate Services,Latitude 5440,Dell Inc.,D3DW3M1159,Windows 11,10.0.22631,21/08/2026 15:51,02/11/2025 04:51
-HO-PC-160,IVL-01160,Computer,In Use,Peter Barlow,peter.barlow@example-care.org,Head Office,Corporate Services,ProDesk 400 G9,HP,H11G5Y1160,Windows 11,10.0.22631,11/08/2026 11:51,06/08/2024 02:51
-AH-PC-161,IVL-01161,Computer,In Use,Joseph Mensah,joseph.mensah@example-care.org,Ashfield House,Operations,Latitude 3540,Dell Inc.,D1SJ6P1161,Windows 11,10.0.22631,15/08/2026 21:51,22/07/2025 20:51
-HO-PC-162,IVL-01162,Computer,In Use,Liam Chapman,liam.chapman@example-care.org,Head Office,Corporate Services,OptiPlex 7010,Dell Inc.,D4L72P1162,Windows 11,10.0.22631,16/08/2026 22:51,17/02/2025 00:51
-EH-PC-163,IVL-01163,Computer,In Use,Grace Adeyemi,grace.adeyemi@example-care.org,Elmtree House,Operations,EliteBook 640 G10,HP,H4G9YU1163,Windows 11,10.0.22631,12/08/2026 22:51,05/01/2026 04:51
-F-PC-164,IVL-01164,Computer,In Use,Aisha Patel,aisha.patel@example-care.org,Fernbank,Operations,EliteBook 640 G10,HP,H11PFH1164,Windows 11,10.0.22631,24/08/2026 07:51,10/11/2024 20:51
-G-PC-165,IVL-01165,Computer,In Use,Michael Nowak,michael.nowak@example-care.org,Greenacres,Operations,EliteBook 640 G10,HP,H2QEIJ1165,Windows 11,10.0.22631,12/08/2026 08:51,09/04/2025 13:51
-F-PC-166,IVL-01166,Computer,In Use,Aisha Patel,aisha.patel@example-care.org,Fernbank,Operations,Surface Laptop 5,Microsoft Corporation,L10HKS1166,Windows 11,10.0.22631,09/08/2026 21:51,22/07/2025 21:51
-JC-PC-167,IVL-01167,Computer,In Use,Rachel Mensah,rachel.mensah@example-care.org,Juniper Court,Operations,Latitude 5440,Dell Inc.,D22U5M1167,Windows 11,10.0.22631,24/08/2026 15:51,05/02/2025 13:51
-DM-PC-168,IVL-01168,Computer,Disposed,Aisha Ahmed,aisha.ahmed@example-care.org,Dovecote Mews,Operations,ThinkPad L14 Gen 4,LENOVO,L2I03M1168,Windows 11,10.0.22631,17/08/2026 11:51,15/04/2024 01:51
-G-PC-169,IVL-01169,Computer,Retired,Fatima Nowak,fatima.nowak@example-care.org,Greenacres,Operations,Latitude 5440,Dell Inc.,D10VBU1169,Windows 11,10.0.22631,20/08/2026 00:51,27/10/2024 16:51
-HGV-PC-170,IVL-01170,Computer,Disposed,Grace Marsh,grace.marsh@example-care.org,Hazel Grove Villas,Operations,ProDesk 400 G9,HP,HMYRS1170,Windows 11,10.0.22631,19/08/2026 21:51,30/08/2024 10:51
-DM-PC-171,IVL-01171,Computer,In Stock,Peter Patel,peter.patel@example-care.org,Dovecote Mews,Operations,ProDesk 400 G9,HP,H257PC1171,Windows 11,10.0.22631,25/08/2026 11:51,19/03/2025 02:51
-BL-PC-172,IVL-01172,Computer,Retired,Tomasz Doyle,tomasz.doyle@example-care.org,Beechwood Lodge,Operations,EliteBook 640 G10,HP,H43CQR1172,Windows 11,10.0.22631,09/08/2026 00:51,24/11/2024 16:51
-G-PC-173,IVL-01173,Computer,In Stock,Fatima Chapman,fatima.chapman@example-care.org,Greenacres,Operations,Latitude 5440,Dell Inc.,D3YXZ51173,Windows 11,10.0.22631,23/08/2026 08:51,24/12/2025 21:51
-DM-PC-174,IVL-01174,Computer,In Use,Joseph Marsh,joseph.marsh@example-care.org,Dovecote Mews,Operations,ProDesk 400 G9,HP,4711KYKZ4H,Windows 11,10.0.22631,20/08/2026 06:51,29/09/2024 10:51
-JC-PC-175,IVL-01175,Computer,In Use,Rachel Ahmed,rachel.ahmed@example-care.org,Juniper Court,Operations,ThinkPad L14 Gen 4,LENOVO,5711BXN73L,Windows 11,10.0.22631,27/08/2026 22:51,06/05/2024 02:51
-DM-PC-176,IVL-01176,Computer,In Use,Grace Marsh,grace.marsh@example-care.org,Dovecote Mews,Operations,Latitude 3540,Dell Inc.,6711W1PL1D,Windows 11,10.0.22631,11/08/2026 23:51,09/05/2025 00:51
-CC-PC-177,IVL-01177,Computer,In Use,Fatima Nowak,fatima.nowak@example-care.org,Cedar Court,Operations,Latitude 5440,Dell Inc.,7711FMFSD,Windows 11,10.0.22631,17/08/2026 13:51,24/01/2026 16:51
-IH-PC-178,IVL-01178,Computer,In Use,Grace Marsh,grace.marsh@example-care.org,Ivy House,Operations,Latitude 3540,Dell Inc.,,Windows 11,10.0.22631,12/08/2026 13:51,29/01/2026 03:51
-AH-PC-179,IVL-01179,Computer,In Use,Nia Mensah,nia.mensah@example-care.org,Ashfield House,Operations,OptiPlex 7010,Dell Inc.,,Windows 11,10.0.22631,18/08/2026 13:51,17/01/2026 21:51
-KL-PC-180,IVL-01180,Computer,In Use,Chloe Ahmed,chloe.ahmed@example-care.org,Kingsley Lodge,Operations,EliteBook 640 G10,HP,,Windows 11,10.0.22631,17/08/2026 16:51,09/10/2025 07:51
-EH-PC-181,IVL-01181,Computer,In Use,Grace Adeyemi,grace.adeyemi@example-care.org,Elmtree House,Operations,Latitude 3540,Dell Inc.,,Windows 11,10.0.22631,18/08/2026 03:51,03/11/2025 23:51
-AH-PC-182,IVL-01182,Computer,In Use,Grace Marsh,grace.marsh@example-care.org,Ashfield House,Operations,Surface Laptop 5,Microsoft Corporation,,Windows 11,10.0.22631,12/08/2026 14:51,18/01/2026 00:51
-HO-PC-183,IVL-01183,Computer,In Use,Hannah Doyle,hannah.doyle@example-care.org,Head Office,Corporate Services,Surface Laptop 5,Microsoft Corporation,,Windows 11,10.0.22631,24/08/2026 21:51,23/06/2024 01:51
-BL-PC-184,IVL-01184,Computer,In Use,Marcus Ahmed,marcus.ahmed@example-care.org,Beechwood Lodge,Operations,OptiPlex 7010,Dell Inc.,D21RRZ1184,Windows 11,10.0.22631,12/08/2026 20:51,05/09/2024 02:51
-DM-PC-185,IVL-01185,Computer,In Use,Michael Nowak,michael.nowak@example-care.org,Dovecote Mews,Operations,Surface Laptop 5,Microsoft Corporation,L18DVY1185,Windows 11,10.0.22631,19/08/2026 07:51,20/07/2025 02:51
-BL-PC-186,IVL-01186,Computer,In Use,Ibrahim Doyle,ibrahim.doyle@example-care.org,Beechwood Lodge,Operations,OptiPlex 7010,Dell Inc.,D3RK7X1186,Windows 11,10.0.22631,15/08/2026 08:51,02/01/2025 08:51
-BL-PC-187,IVL-01187,Computer,In Use,David Byrne,david.byrne@example-care.org,Beechwood Lodge,Operations,Latitude 3540,Dell Inc.,D3Y3YY1187,Windows 11,10.0.22631,25/08/2026 02:51,07/03/2025 20:51
-EH-PC-188,IVL-01188,Computer,In Use,Grace Adeyemi,grace.adeyemi@example-care.org,Elmtree House,Operations,ThinkPad L14 Gen 4,LENOVO,L110W71188,Windows 11,10.0.22631,25/08/2026 08:51,26/05/2024 01:51
-CC-PC-189,IVL-01189,Computer,In Use,Zoe Thompson,zoe.thompson@example-care.org,Cedar Court,Operations,ThinkPad L14 Gen 4,LENOVO,LZ7N11189,Windows 11,10.0.22631,14/08/2026 09:51,14/04/2025 12:51
-CC-PC-189,IVL-06189,Computer,In Use,Callum Walsh,zoe.thompson@example-care.org,Cedar Court,Operations,ThinkPad L14 Gen 4,LENOVO,LZ7N11189B,Windows 11,10.0.22631,01/11/2025 13:51,29/07/2024 02:51
-KL-PC-190,IVL-01190,Computer,In Use,David Frost,david.frost@example-care.org,Kingsley Lodge,Operations,Dell Laptop,HP,HLQTZ1190,Windows 11,10.0.22631,12/08/2026 16:51,06/10/2024 03:51
-KL-PC-191,IVL-01191,Computer,In Use,Leah Adeyemi,leah.adeyemi@example-care.org,Kingsley Lodge,Operations,Dell Laptop,HP,H3PNIR1191,Windows 11,10.0.22631,14/08/2026 01:51,25/05/2025 06:51
-IH-PC-192,IVL-01192,Computer,In Use,Leah Kaur,leah.kaur@example-care.org,Ivy House,Operations,Dell Laptop,Dell Inc.,D4BWXB1192,Windows 11,10.0.22631,14/08/2026 03:51,20/02/2025 07:51
-NET-1193,IVL-01193,Network switch,In Use,,,Ashfield House,Operations,CBS350-24P,Cisco,K0001193,,,28/07/2026 23:51,19/07/2025 11:51
-NET-1194,IVL-01194,Network switch,In Use,,,Beechwood Lodge,Operations,CBS350-24P,Cisco,K0001194,,,01/08/2026 23:51,03/09/2025 22:51
-NET-1195,IVL-01195,Network switch,In Use,,,Cedar Court,Operations,CBS350-24P,Cisco,K0001195,,,17/08/2026 16:51,13/10/2025 15:51
-NET-1196,IVL-01196,Network switch,In Use,,,Dovecote Mews,Operations,CBS350-24P,Cisco,K0001196,,,23/08/2026 06:51,28/06/2024 10:51
-NET-1197,IVL-01197,Network switch,In Use,,,Elmtree House,Operations,CBS350-24P,Cisco,K0001197,,,21/07/2026 20:51,29/10/2024 02:51
-NET-1198,IVL-01198,Network switch,In Use,,,Fernbank,Operations,CBS350-24P,Cisco,K0001198,,,05/08/2026 02:51,17/04/2025 08:51
-MOB-1199,IVL-01199,Mobile phone,In Use,,,Ashfield House,Operations,iPhone SE,Apple,K0001199,,,14/08/2026 16:51,08/05/2026 13:51
-MOB-1200,IVL-01200,Mobile phone,In Use,,,Beechwood Lodge,Operations,iPhone SE,Apple,K0001200,,,09/08/2026 11:51,01/09/2025 21:51
-MOB-1201,IVL-01201,Mobile phone,In Use,,,Cedar Court,Operations,iPhone SE,Apple,K0001201,,,27/08/2026 01:51,15/09/2025 03:51
-MOB-1202,IVL-01202,Mobile phone,In Use,,,Dovecote Mews,Operations,iPhone SE,Apple,K0001202,,,16/08/2026 05:51,19/07/2024 09:51
-MOB-1203,IVL-01203,Mobile phone,In Use,,,Elmtree House,Operations,iPhone SE,Apple,K0001203,,,23/08/2026 13:51,18/02/2026 08:51
-MOB-1204,IVL-01204,Mobile phone,In Use,,,Fernbank,Operations,iPhone SE,Apple,K0001204,,,22/07/2026 10:51,01/07/2024 22:51
-PRI-1205,IVL-01205,Printer,In Use,,,Ashfield House,Operations,MFC-L3750CDW,Brother,K0001205,,,29/07/2026 14:51,10/03/2026 11:51
-PRI-1206,IVL-01206,Printer,In Use,,,Beechwood Lodge,Operations,MFC-L3750CDW,Brother,K0001206,,,23/07/2026 09:51,13/02/2026 02:51
-PRI-1207,IVL-01207,Printer,In Use,,,Cedar Court,Operations,MFC-L3750CDW,Brother,K0001207,,,28/07/2026 22:51,22/04/2026 04:51
-PRI-1208,IVL-01208,Printer,In Use,,,Dovecote Mews,Operations,MFC-L3750CDW,Brother,K0001208,,,08/08/2026 22:51,28/07/2024 15:51
-PRI-1209,IVL-01209,Printer,In Use,,,Elmtree House,Operations,MFC-L3750CDW,Brother,K0001209,,,26/08/2026 13:51,19/01/2025 03:51
-PRI-1210,IVL-01210,Printer,In Use,,,Fernbank,Operations,MFC-L3750CDW,Brother,K0001210,,,29/07/2026 21:51,12/02/2025 14:51
-MON-1211,IVL-01211,Monitor,In Use,,,Ashfield House,Operations,P2422H,Dell Inc.,K0001211,,,09/08/2026 10:51,29/06/2025 23:51
-MON-1212,IVL-01212,Monitor,In Use,,,Beechwood Lodge,Operations,P2422H,Dell Inc.,K0001212,,,24/07/2026 20:51,14/12/2024 20:51
-MON-1213,IVL-01213,Monitor,In Use,,,Cedar Court,Operations,P2422H,Dell Inc.,K0001213,,,31/07/2026 13:51,23/03/2025 20:51
-MON-1214,IVL-01214,Monitor,In Use,,,Dovecote Mews,Operations,P2422H,Dell Inc.,K0001214,,,20/08/2026 12:51,04/02/2026 00:51
-MON-1215,IVL-01215,Monitor,In Use,,,Elmtree House,Operations,P2422H,Dell Inc.,K0001215,,,20/07/2026 00:51,12/02/2026 01:51
-MON-1216,IVL-01216,Monitor,In Use,,,Fernbank,Operations,P2422H,Dell Inc.,K0001216,,,14/08/2026 16:51,16/02/2026 04:51
+Display Name,Asset Tag,Asset Type,Asset State,Used By,Used By Email,Location,Department,Product,Vendor,Serial Number,OS,OS Version,IP Address,Last Audit Date,Created Time
+AH-PC-000,IVL-01000,Computer,In Use,Liam Chapman,liam.chapman@example-care.org,Ashfield House,Operations,EliteBook 640 G10,HP,H4J9RJ1000,Windows 11,10.0.22631,10.20.10.217,30/08/2026 08:39,28/10/2024 12:39
+AH-PC-001,IVL-01001,Computer,In Use,Ibrahim Fletcher,ibrahim.fletcher@example-care.org,Ashfield House,Operations,Latitude 5440,Dell Inc.,D14Y681001,Windows 11,10.0.22631,10.20.10.235,10/08/2026 06:39,13/01/2026 13:39
+AH-PC-002,IVL-01002,Computer,In Use,Ibrahim Doyle,ibrahim.doyle@example-care.org,Ashfield House,Operations,Surface Laptop 5,Microsoft Corporation,L4B41A1002,Windows 11,10.0.22631,10.20.10.172,18/08/2026 03:39,21/01/2025 06:39
+AH-PC-003,IVL-01003,Computer,In Use,Liam Chapman,liam.chapman@example-care.org,Ashfield House,Operations,EliteBook 640 G10,HP,H2LJZ31003,Windows 11,10.0.22631,10.20.10.232,15/08/2026 20:39,08/07/2025 06:39
+AH-PC-004,IVL-01004,Computer,In Use,Nia Fletcher,nia.fletcher@example-care.org,Ashfield House,Operations,Latitude 3540,Dell Inc.,DQCZR1004,Windows 11,10.0.22631,10.20.10.52,10/08/2026 23:39,21/03/2025 02:39
+AH-PC-005,IVL-01005,Computer,In Use,Rachel Adeyemi,rachel.adeyemi@example-care.org,Ashfield House,Operations,ThinkPad L14 Gen 4,LENOVO,LLQVY1005,Windows 11,10.0.22631,10.20.10.156,27/08/2026 01:39,26/06/2024 08:39
+AH-PC-006,IVL-01006,Computer,In Use,Emma Fletcher,emma.fletcher@example-care.org,Ashfield House,Operations,ThinkPad L14 Gen 4,LENOVO,L3DI2N1006,Windows 11,10.0.22631,10.20.10.172,22/08/2026 13:39,27/07/2025 09:39
+AH-PC-007,IVL-01007,Computer,In Use,Fatima Nowak,fatima.nowak@example-care.org,Ashfield House,Operations,ThinkPad L14 Gen 4,LENOVO,L4BKQZ1007,Windows 11,10.0.22631,10.20.10.42,18/08/2026 01:39,01/06/2025 23:39
+AH-PC-008,IVL-01008,Computer,In Use,Leah Kaur,leah.kaur@example-care.org,Ashfield House,Operations,Latitude 5440,Dell Inc.,D52K481008,Windows 11,10.0.22631,10.20.10.28,26/08/2026 19:39,26/07/2024 10:39
+BL-PC-009,IVL-01009,Computer,In Use,James Ellis,james.ellis@example-care.org,Beechwood Lodge,Operations,OptiPlex 7010,Dell Inc.,D5VCM11009,Windows 11,10.0.22631,10.21.10.222,15/08/2026 22:39,09/12/2024 10:39
+BL-PC-010,IVL-01010,Computer,In Use,Rachel Adeyemi,rachel.adeyemi@example-care.org,Beechwood Lodge,Operations,Surface Laptop 5,Microsoft Corporation,L2VIGK1010,Windows 11,10.0.22631,10.21.10.150,26/08/2026 01:39,20/04/2024 05:39
+BL-PC-011,IVL-01011,Computer,In Use,Ibrahim Doyle,ibrahim.doyle@example-care.org,Beechwood Lodge,Operations,OptiPlex 7010,Dell Inc.,DYIOZ1011,Windows 11,10.0.22631,10.21.10.59,23/08/2026 22:39,10/09/2024 10:39
+BL-PC-012,IVL-01012,Computer,In Use,Tomasz Walsh,tomasz.walsh@example-care.org,Beechwood Lodge,Operations,Surface Laptop 5,Microsoft Corporation,L5TA711012,Windows 11,10.0.22631,10.21.10.107,14/08/2026 18:39,15/10/2025 07:39
+BL-PC-013,IVL-01013,Computer,In Use,Marcus Kaur,marcus.kaur@example-care.org,Beechwood Lodge,Operations,EliteBook 640 G10,HP,H20PGW1013,Windows 11,10.0.22631,10.21.10.162,15/08/2026 20:39,01/08/2024 03:39
+CC-PC-014,IVL-01014,Computer,In Use,Liam Fletcher,liam.fletcher@example-care.org,Cedar Court,Operations,EliteBook 640 G10,HP,H3P3781014,Windows 11,10.0.22631,10.22.10.113,16/08/2026 20:39,20/12/2025 00:39
+CC-PC-015,IVL-01015,Computer,In Use,David Frost,david.frost@example-care.org,Cedar Court,Operations,Surface Laptop 5,Microsoft Corporation,L21K3W1015,Windows 11,10.0.22631,10.22.10.229,19/08/2026 22:39,25/06/2025 18:39
+CC-PC-016,IVL-01016,Computer,In Use,Zoe Quinn,zoe.quinn@example-care.org,Cedar Court,Operations,Surface Laptop 5,Microsoft Corporation,L5DLGY1016,Windows 11,10.0.22631,10.22.10.73,24/08/2026 03:39,19/05/2024 13:39
+CC-PC-017,IVL-01017,Computer,In Use,Nia Mensah,nia.mensah@example-care.org,Cedar Court,Operations,EliteBook 640 G10,HP,H1WB931017,Windows 11,10.0.22631,10.22.10.22,19/08/2026 22:39,29/07/2025 13:39
+CC-PC-018,IVL-01018,Computer,In Use,Daniel Byrne,daniel.byrne@example-care.org,Cedar Court,Operations,OptiPlex 7010,Dell Inc.,D4Y1LK1018,Windows 11,10.0.22631,10.22.10.203,19/08/2026 14:39,11/10/2024 13:39
+CC-PC-019,IVL-01019,Computer,In Use,Liam Fletcher,liam.fletcher@example-care.org,Cedar Court,Operations,EliteBook 640 G10,HP,H2VUZG1019,Windows 11,10.0.22631,10.22.10.130,14/08/2026 04:39,03/12/2025 11:39
+CC-PC-020,IVL-01020,Computer,In Use,Callum Walsh,callum.walsh@example-care.org,Cedar Court,Operations,ProDesk 400 G9,HP,H56OTB1020,Windows 11,10.0.22631,10.22.10.109,17/08/2026 08:39,30/09/2024 02:39
+CC-PC-021,IVL-01021,Computer,In Use,Liam Fletcher,liam.fletcher@example-care.org,Cedar Court,Operations,OptiPlex 7010,Dell Inc.,D3IGUI1021,Windows 11,10.0.22631,10.22.10.158,16/08/2026 11:39,08/07/2024 02:39
+CC-PC-022,IVL-01022,Computer,In Use,Liam Chapman,liam.chapman@example-care.org,Cedar Court,Operations,Latitude 3540,Dell Inc.,D15LE11022,Windows 11,10.0.22631,10.22.10.231,24/08/2026 22:39,19/07/2024 23:39
+CC-PC-023,IVL-01023,Computer,In Use,David Byrne,david.byrne@example-care.org,Cedar Court,Operations,ProDesk 400 G9,HP,H4XQN41023,Windows 11,10.0.22631,10.22.10.147,16/08/2026 20:39,05/04/2024 19:39
+CC-PC-024,IVL-01024,Computer,In Use,Joseph Okafor,joseph.okafor@example-care.org,Cedar Court,Operations,Surface Laptop 5,Microsoft Corporation,L4L5TC1024,Windows 11,10.0.22631,10.22.10.123,14/08/2026 11:39,24/10/2025 08:39
+CC-PC-025,IVL-01025,Computer,In Use,Hannah Doyle,hannah.doyle@example-care.org,Cedar Court,Operations,EliteBook 640 G10,HP,H3RCFP1025,Windows 11,10.0.22631,10.22.10.160,12/08/2026 11:39,26/11/2024 09:39
+DM-PC-026,IVL-01026,Computer,In Use,Peter Bennett,peter.bennett@example-care.org,Dovecote Mews,Operations,Surface Laptop 5,Microsoft Corporation,LXYO31026,Windows 11,10.0.22631,10.23.10.165,24/08/2026 18:39,02/04/2025 09:39
+DM-PC-027,IVL-01027,Computer,In Use,Hannah Doyle,hannah.doyle@example-care.org,Dovecote Mews,Operations,Latitude 3540,Dell Inc.,D1BCOX1027,Windows 11,10.0.22631,10.23.10.190,19/08/2026 05:39,24/06/2025 19:39
+DM-PC-028,IVL-01028,Computer,In Use,Rachel Mensah,rachel.mensah@example-care.org,Dovecote Mews,Operations,ThinkPad L14 Gen 4,LENOVO,L27PNE1028,Windows 11,10.0.22631,10.23.10.52,20/08/2026 19:39,04/06/2025 22:39
+DM-PC-029,IVL-01029,Computer,In Use,Zoe Quinn,zoe.quinn@example-care.org,Dovecote Mews,Operations,OptiPlex 7010,Dell Inc.,D249B21029,Windows 11,10.0.22631,10.23.10.92,12/08/2026 21:39,02/11/2025 22:39
+DM-PC-030,IVL-01030,Computer,In Use,Rachel Ahmed,rachel.ahmed@example-care.org,Dovecote Mews,Operations,EliteBook 640 G10,HP,H42LMK1030,Windows 11,10.0.22631,10.23.10.133,11/08/2026 20:39,17/10/2024 04:39
+EH-PC-031,IVL-01031,Computer,In Use,Zoe Thompson,zoe.thompson@example-care.org,Elmtree House,Operations,Surface Laptop 5,Microsoft Corporation,L2269T1031,Windows 11,10.0.22631,10.24.10.137,27/08/2026 01:39,30/03/2025 21:39
+EH-PC-032,IVL-01032,Computer,In Use,David Byrne,david.byrne@example-care.org,Elmtree House,Operations,Latitude 5440,Dell Inc.,DXKH31032,Windows 11,10.0.22631,10.24.10.171,27/08/2026 23:39,24/12/2025 05:39
+EH-PC-033,IVL-01033,Computer,In Use,Sarah Kaur,sarah.kaur@example-care.org,Elmtree House,Operations,ProDesk 400 G9,HP,H441EG1033,Windows 11,10.0.22631,10.24.10.20,23/08/2026 04:39,17/07/2024 04:39
+EH-PC-034,IVL-01034,Computer,In Use,Zoe Thompson,zoe.thompson@example-care.org,Elmtree House,Operations,Surface Laptop 5,Microsoft Corporation,L2RG5B1034,Windows 11,10.0.22631,10.24.10.158,16/08/2026 21:39,17/01/2026 01:39
+EH-PC-035,IVL-01035,Computer,In Use,Sarah Kaur,sarah.kaur@example-care.org,Elmtree House,Operations,ProDesk 400 G9,HP,H3C4GY1035,Windows 11,10.0.22631,10.24.10.238,16/08/2026 13:39,05/06/2025 00:39
+EH-PC-036,IVL-01036,Computer,In Use,Fatima Chapman,fatima.chapman@example-care.org,Elmtree House,Operations,Surface Laptop 5,Microsoft Corporation,L5BSAM1036,Windows 11,10.0.22631,10.24.10.238,25/08/2026 04:39,12/07/2024 07:39
+EH-PC-037,IVL-01037,Computer,In Use,Grace Hughes,grace.hughes@example-care.org,Elmtree House,Operations,ProDesk 400 G9,HP,H3KZBN1037,Windows 11,10.0.22631,10.24.10.235,21/08/2026 09:39,23/08/2025 06:39
+EH-PC-038,IVL-01038,Computer,In Use,Tomasz Doyle,tomasz.doyle@example-care.org,Elmtree House,Operations,ProDesk 400 G9,HP,H4UXKE1038,Windows 11,10.0.22631,10.24.10.73,30/08/2026 02:39,30/10/2025 19:39
+EH-PC-039,IVL-01039,Computer,In Use,Marcus Ahmed,marcus.ahmed@example-care.org,Elmtree House,Operations,Latitude 5440,Dell Inc.,D2ODHT1039,Windows 11,10.0.22631,10.24.10.153,16/08/2026 05:39,19/06/2025 20:39
+EH-PC-040,IVL-01040,Computer,In Use,Nia Fletcher,nia.fletcher@example-care.org,Elmtree House,Operations,OptiPlex 7010,Dell Inc.,D4X8OH1040,Windows 11,10.0.22631,10.24.10.155,26/08/2026 01:39,05/10/2024 03:39
+F-PC-041,IVL-01041,Computer,In Use,Fatima Chapman,fatima.chapman@example-care.org,Fernbank,Operations,ThinkPad L14 Gen 4,LENOVO,L57FLE1041,Windows 11,10.0.22631,10.25.10.215,17/08/2026 02:39,27/05/2024 09:39
+F-PC-042,IVL-01042,Computer,In Use,Chloe Bennett,chloe.bennett@example-care.org,Fernbank,Operations,EliteBook 640 G10,HP,H43CJH1042,Windows 11,10.0.22631,10.25.10.36,27/08/2026 19:39,04/05/2025 00:39
+F-PC-043,IVL-01043,Computer,In Use,James Nowak,james.nowak@example-care.org,Fernbank,Operations,ThinkPad L14 Gen 4,LENOVO,L3CCU01043,Windows 11,10.0.22631,10.25.10.88,27/08/2026 23:39,23/11/2025 10:39
+F-PC-044,IVL-01044,Computer,In Use,Leah Adeyemi,leah.adeyemi@example-care.org,Fernbank,Operations,OptiPlex 7010,Dell Inc.,D38S4R1044,Windows 11,10.0.22631,10.25.10.162,21/08/2026 21:39,03/08/2025 20:39
+F-PC-045,IVL-01045,Computer,In Use,Hannah Nowak,hannah.nowak@example-care.org,Fernbank,Operations,ProDesk 400 G9,HP,H5IQMN1045,Windows 11,10.0.22631,10.25.10.115,25/08/2026 13:39,11/01/2026 23:39
+G-PC-046,IVL-01046,Computer,In Use,Priya Kaur,priya.kaur@example-care.org,Greenacres,Operations,Latitude 3540,Dell Inc.,D387LY1046,Windows 11,10.0.22631,10.26.10.150,16/08/2026 14:39,19/11/2024 23:39
+G-PC-047,IVL-01047,Computer,In Use,Liam Chapman,liam.chapman@example-care.org,Greenacres,Operations,OptiPlex 7010,Dell Inc.,D4Z9951047,Windows 11,10.0.22631,10.26.10.161,21/08/2026 18:39,02/07/2024 02:39
+G-PC-048,IVL-01048,Computer,In Use,Ibrahim Doyle,ibrahim.doyle@example-care.org,Greenacres,Operations,Latitude 5440,Dell Inc.,D1FJ9I1048,Windows 11,10.0.22631,10.26.10.210,13/08/2026 18:39,06/07/2025 13:39
+G-PC-049,IVL-01049,Computer,In Use,Tomasz Walsh,tomasz.walsh@example-care.org,Greenacres,Operations,Latitude 3540,Dell Inc.,D4SHIA1049,Windows 11,10.0.22631,10.26.10.129,19/08/2026 10:39,10/06/2024 08:39
+G-PC-050,IVL-01050,Computer,In Use,Ibrahim Doyle,ibrahim.doyle@example-care.org,Greenacres,Operations,OptiPlex 7010,Dell Inc.,D3X82J1050,Windows 11,10.0.22631,10.26.10.135,22/08/2026 14:39,04/03/2025 19:39
+G-PC-051,IVL-01051,Computer,In Use,Daniel Byrne,daniel.byrne@example-care.org,Greenacres,Operations,Latitude 5440,Dell Inc.,DW87L1051,Windows 11,10.0.22631,10.26.10.205,26/08/2026 12:39,26/08/2025 01:39
+HGV-PC-052,IVL-01052,Computer,In Use,Tomasz Walsh,tomasz.walsh@example-care.org,Hazel Grove Villas,Operations,Latitude 5440,Dell Inc.,D4ER4N1052,Windows 11,10.0.22631,10.27.10.235,30/08/2026 10:39,19/11/2024 00:39
+HGV-PC-053,IVL-01053,Computer,In Use,Marcus Ahmed,marcus.ahmed@example-care.org,Hazel Grove Villas,Operations,OptiPlex 7010,Dell Inc.,D11WWG1053,Windows 11,10.0.22631,10.27.10.222,12/08/2026 09:39,06/12/2024 08:39
+HGV-PC-054,IVL-01054,Computer,In Use,Ibrahim Doyle,ibrahim.doyle@example-care.org,Hazel Grove Villas,Operations,ThinkPad L14 Gen 4,LENOVO,L3MAQM1054,Windows 11,10.0.22631,10.27.10.36,12/08/2026 06:39,14/11/2024 05:39
+IH-PC-055,IVL-01055,Computer,In Use,James Quinn,james.quinn@example-care.org,Ivy House,Operations,ProDesk 400 G9,HP,H4QX1M1055,Windows 11,10.0.22631,10.28.10.181,25/08/2026 07:39,18/08/2025 08:39
+IH-PC-056,IVL-01056,Computer,In Use,Zoe Quinn,zoe.quinn@example-care.org,Ivy House,Operations,Surface Laptop 5,Microsoft Corporation,L25Y811056,Windows 11,10.0.22631,10.28.10.66,13/08/2026 01:39,17/07/2024 22:39
+IH-PC-057,IVL-01057,Computer,In Use,Rachel Mensah,rachel.mensah@example-care.org,Ivy House,Operations,EliteBook 640 G10,HP,H5PCK41057,Windows 11,10.0.22631,10.28.10.216,20/08/2026 10:39,13/07/2025 11:39
+IH-PC-058,IVL-01058,Computer,In Use,Grace Hughes,grace.hughes@example-care.org,Ivy House,Operations,OptiPlex 7010,Dell Inc.,D37ZEN1058,Windows 11,10.0.22631,10.28.10.90,15/08/2026 14:39,04/09/2025 10:39
+IH-PC-059,IVL-01059,Computer,In Use,Joseph Mensah,joseph.mensah@example-care.org,Ivy House,Operations,Latitude 5440,Dell Inc.,D26JTN1059,Windows 11,10.0.22631,10.28.10.223,11/08/2026 07:39,17/03/2025 02:39
+IH-PC-060,IVL-01060,Computer,In Use,Owen Sinclair,owen.sinclair@example-care.org,Ivy House,Operations,ThinkPad L14 Gen 4,LENOVO,L1SJGC1060,Windows 11,10.0.22631,10.28.10.40,11/08/2026 13:39,16/10/2024 09:39
+IH-PC-061,IVL-01061,Computer,In Use,Nia Mensah,nia.mensah@example-care.org,Ivy House,Operations,ThinkPad L14 Gen 4,LENOVO,L2CFSN1061,Windows 11,10.0.22631,10.28.10.45,12/08/2026 03:39,04/06/2024 11:39
+IH-PC-062,IVL-01062,Computer,In Use,Nia Mensah,nia.mensah@example-care.org,Ivy House,Operations,Latitude 3540,Dell Inc.,D3285U1062,Windows 11,10.0.22631,10.28.10.35,18/08/2026 06:39,06/04/2024 00:39
+IH-PC-063,IVL-01063,Computer,In Use,Joseph Okafor,joseph.okafor@example-care.org,Ivy House,Operations,Surface Laptop 5,Microsoft Corporation,L4HRD71063,Windows 11,10.0.22631,10.28.10.50,16/08/2026 09:39,21/08/2024 14:39
+JC-PC-064,IVL-01064,Computer,In Use,Nia Barlow,nia.barlow@example-care.org,Juniper Court,Operations,EliteBook 640 G10,HP,H2JX7O1064,Windows 11,10.0.22631,10.29.10.115,18/08/2026 07:39,14/04/2025 02:39
+JC-PC-065,IVL-01065,Computer,In Use,Michael Nowak,michael.nowak@example-care.org,Juniper Court,Operations,Surface Laptop 5,Microsoft Corporation,L5L1MW1065,Windows 11,10.0.22631,10.29.10.29,12/08/2026 09:39,05/05/2025 06:39
+JC-PC-066,IVL-01066,Computer,In Use,James Ellis,james.ellis@example-care.org,Juniper Court,Operations,Surface Laptop 5,Microsoft Corporation,LRMPV1066,Windows 11,10.0.22631,10.29.10.85,26/08/2026 20:39,13/04/2024 23:39
+JC-PC-067,IVL-01067,Computer,In Use,Callum Walsh,callum.walsh@example-care.org,Juniper Court,Operations,ThinkPad L14 Gen 4,LENOVO,L33IYK1067,Windows 11,10.0.22631,10.29.10.152,23/08/2026 22:39,30/11/2024 03:39
+JC-PC-068,IVL-01068,Computer,In Use,Owen Sinclair,owen.sinclair@example-care.org,Juniper Court,Operations,Surface Laptop 5,Microsoft Corporation,L4L6J31068,Windows 11,10.0.22631,10.29.10.181,23/08/2026 21:39,16/04/2024 03:39
+KL-PC-069,IVL-01069,Computer,In Use,James Nowak,james.nowak@example-care.org,Kingsley Lodge,Operations,Latitude 5440,Dell Inc.,D1SQFG1069,Windows 11,10.0.22631,192.168.50.195,25/08/2026 08:39,11/10/2024 00:39
+KL-PC-070,IVL-01070,Computer,In Use,Tomasz Mensah,tomasz.mensah@example-care.org,Kingsley Lodge,Operations,ThinkPad L14 Gen 4,LENOVO,L5088U1070,Windows 11,10.0.22631,192.168.0.87,27/08/2026 13:39,13/03/2025 04:39
+KL-PC-071,IVL-01071,Computer,In Use,Zoe Thompson,zoe.thompson@example-care.org,Kingsley Lodge,Operations,OptiPlex 7010,Dell Inc.,D3Y0Z91071,Windows 11,10.0.22631,192.168.50.126,30/08/2026 09:39,22/11/2024 03:39
+KL-PC-072,IVL-01072,Computer,In Use,Grace Adeyemi,grace.adeyemi@example-care.org,Kingsley Lodge,Operations,ThinkPad L14 Gen 4,LENOVO,L2XRF51072,Windows 11,10.0.22631,192.168.8.139,24/08/2026 12:39,17/08/2024 06:39
+KL-PC-073,IVL-01073,Computer,In Use,Fatima Nowak,fatima.nowak@example-care.org,Kingsley Lodge,Operations,Surface Laptop 5,Microsoft Corporation,L4V0VY1073,Windows 11,10.0.22631,192.168.50.103,26/08/2026 00:39,16/03/2025 18:39
+KL-PC-074,IVL-01074,Computer,In Use,Chloe Ahmed,chloe.ahmed@example-care.org,Kingsley Lodge,Operations,EliteBook 640 G10,HP,H49RA81074,Windows 11,10.0.22631,192.168.1.66,15/08/2026 23:39,08/01/2026 11:39
+KL-PC-075,IVL-01075,Computer,In Use,David Doyle,david.doyle@example-care.org,Kingsley Lodge,Operations,EliteBook 640 G10,HP,H2CBDU1075,Windows 11,10.0.22631,192.168.8.245,09/08/2026 22:39,04/08/2024 23:39
+HO-PC-076,IVL-01076,Computer,In Use,Marcus Ahmed,marcus.ahmed@example-care.org,Head Office,Corporate Services,ProDesk 400 G9,HP,H46MKY1076,Windows 11,10.0.22631,192.168.1.227,23/08/2026 00:39,23/03/2025 14:39
+HO-PC-077,IVL-01077,Computer,In Use,James Walsh,james.walsh@example-care.org,Head Office,Corporate Services,Latitude 5440,Dell Inc.,D1F0K91077,Windows 11,10.0.22631,192.168.50.111,21/08/2026 13:39,26/11/2024 18:39
+HO-PC-078,IVL-01078,Computer,In Use,Marcus Ellis,marcus.ellis@example-care.org,Head Office,Corporate Services,ThinkPad L14 Gen 4,LENOVO,L2MQ051078,Windows 11,10.0.22631,192.168.50.105,29/08/2026 14:39,18/06/2024 01:39
+HO-PC-079,IVL-01079,Computer,In Use,Michael Robinson,michael.robinson@example-care.org,Head Office,Corporate Services,Latitude 3540,Dell Inc.,D11U2M1079,Windows 11,10.0.22631,192.168.1.67,17/08/2026 13:39,09/12/2025 11:39
+HO-PC-080,IVL-01080,Computer,In Use,Emma Fletcher,emma.fletcher@example-care.org,Head Office,Corporate Services,Latitude 3540,Dell Inc.,D54BSY1080,Windows 11,10.0.22631,192.168.8.171,11/08/2026 13:39,29/04/2025 14:39
+HO-PC-081,IVL-01081,Computer,In Use,Joseph Okafor,joseph.okafor@example-care.org,Head Office,Corporate Services,Latitude 3540,Dell Inc.,D4BXOX1081,Windows 11,10.0.22631,192.168.0.194,26/08/2026 04:39,31/01/2026 09:39
+HO-PC-082,IVL-01082,Computer,In Use,Michael Nowak,michael.nowak@example-care.org,Head Office,Corporate Services,OptiPlex 7010,Dell Inc.,D2V0RO1082,Windows 11,10.0.22631,192.168.0.131,29/08/2026 20:39,25/04/2024 22:39
+HO-PC-083,IVL-01083,Computer,In Use,Tomasz Mensah,tomasz.mensah@example-care.org,Head Office,Corporate Services,Latitude 5440,Dell Inc.,D1T09B1083,Windows 11,10.0.22631,192.168.1.24,22/08/2026 18:39,05/06/2025 01:39
+HO-PC-084,IVL-01084,Computer,In Use,Nia Barlow,nia.barlow@example-care.org,Head Office,Corporate Services,EliteBook 640 G10,HP,H34SAV1084,Windows 11,10.0.22631,192.168.50.190,30/08/2026 03:39,11/06/2024 07:39
+HO-PC-085,IVL-01085,Computer,In Use,Fatima Thompson,fatima.thompson@example-care.org,Head Office,Corporate Services,Latitude 3540,Dell Inc.,D3I7R61085,Windows 11,10.0.22631,192.168.1.206,14/08/2026 04:39,08/04/2024 04:39
+HO-PC-086,IVL-01086,Computer,In Use,Leah Adeyemi,leah.adeyemi@example-care.org,Head Office,Corporate Services,EliteBook 640 G10,HP,H4ZYQY1086,Windows 11,10.0.22631,192.168.0.150,09/08/2026 18:39,30/09/2024 08:39
+HO-PC-087,IVL-01087,Computer,In Use,Liam Fletcher,liam.fletcher@example-care.org,Head Office,Corporate Services,Latitude 5440,Dell Inc.,D53PNA1087,Windows 11,10.0.22631,192.168.0.3,27/08/2026 21:39,02/09/2024 08:39
+HO-PC-088,IVL-01088,Computer,In Use,David Robinson,david.robinson@example-care.org,Head Office,Corporate Services,Latitude 3540,Dell Inc.,D5QFXV1088,Windows 11,10.0.22631,192.168.1.180,21/08/2026 10:39,14/03/2025 23:39
+HO-PC-089,IVL-01089,Computer,In Use,James Walsh,james.walsh@example-care.org,Head Office,Corporate Services,ProDesk 400 G9,HP,H5KD751089,Windows 11,10.0.22631,192.168.8.66,15/08/2026 12:39,07/04/2025 14:39
+HO-PC-090,IVL-01090,Computer,In Use,Tomasz Walsh,tomasz.walsh@example-care.org,Head Office,Corporate Services,EliteBook 640 G10,HP,H4VP0W1090,Windows 11,10.0.22631,192.168.0.236,15/08/2026 02:39,24/10/2025 14:39
+HO-PC-091,IVL-01091,Computer,In Use,Grace Hughes,grace.hughes@example-care.org,Head Office,Corporate Services,OptiPlex 7010,Dell Inc.,D16HII1091,Windows 11,10.0.22631,192.168.8.3,17/08/2026 22:39,02/07/2024 14:39
+HO-PC-092,IVL-01092,Computer,In Use,Ibrahim Fletcher,ibrahim.fletcher@example-care.org,Head Office,Corporate Services,Latitude 5440,Dell Inc.,D2IOUD1092,Windows 11,10.0.22631,192.168.50.147,28/08/2026 08:39,01/06/2024 06:39
+HO-PC-093,IVL-01093,Computer,In Use,Fatima Chapman,fatima.chapman@example-care.org,Head Office,Corporate Services,Latitude 5440,Dell Inc.,D4RRHE1093,Windows 11,10.0.22631,192.168.50.80,23/08/2026 22:39,18/12/2024 11:39
+HO-PC-094,IVL-01094,Computer,In Use,Fatima Marsh,fatima.marsh@example-care.org,Head Office,Corporate Services,EliteBook 640 G10,HP,H3K71H1094,Windows 11,10.0.22631,192.168.0.47,23/08/2026 21:39,09/01/2025 22:39
+HO-PC-095,IVL-01095,Computer,In Use,Grace Marsh,grace.marsh@example-care.org,Head Office,Corporate Services,ProDesk 400 G9,HP,H53AR61095,Windows 11,10.0.22631,192.168.50.35,28/08/2026 01:39,08/01/2025 06:39
+HO-PC-096,IVL-01096,Computer,In Use,David Robinson,david.robinson@example-care.org,Head Office,Corporate Services,ProDesk 400 G9,HP,H1RKH51096,Windows 11,10.0.22631,192.168.50.186,12/08/2026 01:39,27/01/2026 20:39
+HO-PC-097,IVL-01097,Computer,In Use,Callum Walsh,callum.walsh@example-care.org,Head Office,Corporate Services,ThinkPad L14 Gen 4,LENOVO,L26HVG1097,Windows 11,10.0.22631,192.168.50.90,26/08/2026 07:39,03/10/2024 10:39
+HO-PC-098,IVL-01098,Computer,In Use,Peter Barlow,peter.barlow@example-care.org,Head Office,Corporate Services,ProDesk 400 G9,HP,H3SDX31098,Windows 11,10.0.22631,192.168.1.235,22/08/2026 09:39,22/09/2024 08:39
+HO-PC-099,IVL-01099,Computer,In Use,Grace Adeyemi,grace.adeyemi@example-care.org,Head Office,Corporate Services,ProDesk 400 G9,HP,H515CX1099,Windows 11,10.0.22631,192.168.1.248,30/08/2026 08:39,24/05/2024 21:39
+HO-PC-100,IVL-01100,Computer,In Use,Tomasz Nowak,tomasz.nowak@example-care.org,Head Office,Corporate Services,ProDesk 400 G9,HP,H33J471100,Windows 11,10.0.22631,192.168.0.240,09/08/2026 19:39,17/11/2025 01:39
+HO-PC-101,IVL-01101,Computer,In Use,Marcus Kaur,marcus.kaur@example-care.org,Head Office,Corporate Services,Surface Laptop 5,Microsoft Corporation,L43TGI1101,Windows 11,10.0.22631,192.168.8.182,10/08/2026 01:39,21/09/2025 07:39
+IH-PC-102,IVL-01102,Computer,In Use,Sarah Patel,sarah.patel@example-care.org,Ivy House,Operations,ProDesk 400 G9,HP,H2P9ZH1102,Windows 11,10.0.22631,10.28.10.135,11/08/2026 23:39,26/03/2024 01:39
+F-PC-103,IVL-01103,Computer,In Use,Nia Barlow,nia.barlow@example-care.org,Fernbank,Operations,Latitude 5440,Dell Inc.,D47KJD1103,Windows 11,10.0.22631,10.25.10.185,24/08/2026 22:39,04/08/2025 02:39
+HGV-PC-104,IVL-01104,Computer,In Use,David Byrne,david.byrne@example-care.org,Hazel Grove Villas,Operations,Latitude 5440,Dell Inc.,D3EP441104,Windows 11,10.0.22631,10.27.10.224,26/08/2026 03:39,13/10/2024 21:39
+BL-PC-105,IVL-01105,Computer,In Use,Fatima Marsh,fatima.marsh@example-care.org,Beechwood Lodge,Operations,Surface Laptop 5,Microsoft Corporation,L4P4R41105,Windows 11,10.0.22631,10.21.10.99,23/08/2026 06:39,03/07/2024 12:39
+HO-PC-106,IVL-01106,Computer,In Use,Owen Doyle,owen.doyle@example-care.org,Head Office,Corporate Services,Surface Laptop 5,Microsoft Corporation,L4KHWC1106,Windows 11,10.0.22631,192.168.50.94,18/08/2026 18:39,14/12/2025 13:39
+BL-PC-107,IVL-01107,Computer,In Use,Marcus Ellis,marcus.ellis@example-care.org,Beechwood Lodge,Operations,OptiPlex 7010,Dell Inc.,D4GKHP1107,Windows 11,10.0.22631,10.21.10.151,24/08/2026 23:39,12/09/2025 01:39
+F-PC-108,IVL-01108,Computer,In Use,Joseph Mensah,joseph.mensah@example-care.org,Fernbank,Operations,Latitude 5440,Dell Inc.,D5SH4U1108,Windows 11,10.0.22631,10.25.10.205,21/08/2026 19:39,18/09/2024 03:39
+KL-PC-109,IVL-01109,Computer,In Use,Chloe Ahmed,chloe.ahmed@example-care.org,Kingsley Lodge,Operations,ThinkPad L14 Gen 4,LENOVO,L5DECH1109,Windows 11,10.0.22631,192.168.0.137,21/08/2026 04:39,24/11/2025 22:39
+DM-PC-110,IVL-01110,Computer,In Use,David Doyle,david.doyle@example-care.org,Dovecote Mews,Operations,Latitude 5440,Dell Inc.,D3EQZ81110,Windows 11,10.0.22631,10.23.10.25,22/08/2026 00:39,10/03/2025 09:39
+G-PC-111,IVL-01111,Computer,In Use,,,Greenacres,Operations,EliteBook 640 G10,HP,H1JB6M1111,Windows 11,10.0.22631,10.26.10.89,18/08/2026 04:39,04/08/2025 08:39
+HGV-PC-112,IVL-01112,Computer,In Use,,,Hazel Grove Villas,Operations,Latitude 3540,Dell Inc.,D3T57I1112,Windows 11,10.0.22631,10.27.10.135,19/08/2026 12:39,17/01/2026 19:39
+AH-PC-113,IVL-01113,Computer,In Use,,,Ashfield House,Operations,Latitude 5440,Dell Inc.,D5B23B1113,Windows 11,10.0.22631,10.20.10.149,16/08/2026 13:39,15/08/2024 11:39
+IH-PC-114,IVL-01114,Computer,In Use,,,Ivy House,Operations,Latitude 5440,Dell Inc.,D33JLK1114,Windows 11,10.0.22631,10.28.10.205,18/08/2026 04:39,20/09/2024 12:39
+AH-PC-115,IVL-01115,Computer,In Use,,,Ashfield House,Operations,ThinkPad L14 Gen 4,LENOVO,L1K1VD1115,Windows 11,10.0.22631,10.20.10.184,16/08/2026 01:39,01/06/2024 04:39
+AH-PC-116,IVL-01116,Computer,In Use,,,Ashfield House,Operations,Latitude 5440,Dell Inc.,DO5OP1116,Windows 11,10.0.22631,10.20.10.20,25/08/2026 23:39,03/02/2026 13:39
+BL-PC-117,IVL-01117,Computer,In Use,,,Beechwood Lodge,Operations,EliteBook 640 G10,HP,H4JM3G1117,Windows 11,10.0.22631,10.21.10.35,16/08/2026 09:39,14/09/2024 11:39
+DM-PC-118,IVL-01118,Computer,In Use,,,Dovecote Mews,Operations,ThinkPad L14 Gen 4,LENOVO,L5HRYA1118,Windows 11,10.0.22631,10.23.10.217,30/08/2026 08:39,16/03/2025 10:39
+F-PC-119,IVL-01119,Computer,In Use,,,Fernbank,Operations,ThinkPad L14 Gen 4,LENOVO,L2RB1W1119,Windows 11,10.0.22631,10.25.10.52,19/08/2026 09:39,13/04/2025 05:39
+AH-PC-120,IVL-01120,Computer,In Use,,,Ashfield House,Operations,Surface Laptop 5,Microsoft Corporation,L1XXVX1120,Windows 11,10.0.22631,10.20.10.185,22/08/2026 08:39,20/09/2025 02:39
+EH-PC-121,IVL-01121,Computer,In Use,,,Elmtree House,Operations,Latitude 3540,Dell Inc.,D45IVS1121,Windows 11,10.0.22631,10.24.10.121,27/08/2026 14:39,13/07/2025 19:39
+JC-PC-122,IVL-01122,Computer,In Use,idoyle,ibrahim.doyle@example-care.org,Juniper Court,Operations,OptiPlex 7010,Dell Inc.,D1N7S11122,Windows 11,10.0.22631,10.29.10.162,09/08/2026 21:39,04/09/2025 01:39
+F-PC-123,IVL-01123,Computer,In Use,pbarlow,peter.barlow@example-care.org,Fernbank,Operations,ProDesk 400 G9,HP,HP84M1123,Windows 11,10.0.22631,10.25.10.225,18/08/2026 06:39,26/07/2025 08:39
+BL-PC-124,IVL-01124,Computer,In Use,radeyemi,rachel.adeyemi@example-care.org,Beechwood Lodge,Operations,ThinkPad L14 Gen 4,LENOVO,L19BTD1124,Windows 11,10.0.22631,10.21.10.108,11/08/2026 02:39,27/01/2026 12:39
+CC-PC-125,IVL-01125,Computer,In Use,tnowak,tomasz.nowak@example-care.org,Cedar Court,Operations,Latitude 5440,Dell Inc.,D3FP8N1125,Windows 11,10.0.22631,10.22.10.166,15/08/2026 09:39,23/12/2024 11:39
+AH-PC-126,IVL-01126,Computer,In Use,Peter Barlow,peter.barlow@example-care.org,,Operations,EliteBook 640 G10,HP,H100AU1126,Windows 11,10.0.22631,10.20.10.29,13/08/2026 14:39,26/05/2024 01:39
+F-PC-127,IVL-01127,Computer,In Use,Callum Fletcher,callum.fletcher@example-care.org,,Operations,Surface Laptop 5,Microsoft Corporation,L4S2WD1127,Windows 11,10.0.22631,10.25.10.184,17/08/2026 19:39,11/08/2024 22:39
+AH-PC-128,IVL-01128,Computer,In Use,Nia Fletcher,nia.fletcher@example-care.org,,Operations,Latitude 3540,Dell Inc.,D3V4471128,Windows 11,10.0.22631,10.20.10.52,24/08/2026 19:39,10/01/2025 01:39
+IH-PC-129,IVL-01129,Computer,In Use,James Ellis,james.ellis@example-care.org,,Operations,Surface Laptop 5,Microsoft Corporation,L2BNE01129,Windows 11,10.0.22631,10.28.10.233,17/08/2026 02:39,29/07/2024 06:39
+CC-PC-130,IVL-01130,Computer,In Use,Leah Adeyemi,leah.adeyemi@example-care.org,,Operations,ProDesk 400 G9,HP,HU5IX1130,Windows 11,10.0.22631,10.22.10.158,09/08/2026 18:39,25/12/2025 21:39
+HO-PC-131,IVL-01131,Computer,In Use,Peter Robinson,peter.robinson@example-care.org,,Corporate Services,EliteBook 640 G10,HP,H41YM21131,Windows 11,10.0.22631,192.168.0.10,21/08/2026 04:39,17/09/2025 18:39
+CC-PC-132,IVL-01132,Computer,In Use,Rachel Ahmed,rachel.ahmed@example-care.org,,Operations,EliteBook 640 G10,HP,H47EFK1132,Windows 11,10.0.22631,10.22.10.33,15/08/2026 01:39,16/11/2024 00:39
+AH-PC-133,IVL-01133,Computer,In Use,Sarah Kaur,sarah.kaur@example-care.org,Oakdene House,Operations,OptiPlex 7010,Dell Inc.,D5HS3Y1133,Windows 11,10.0.22631,10.20.10.65,17/08/2026 13:39,28/05/2025 21:39
+AH-PC-134,IVL-01134,Computer,In Use,Liam Fletcher,liam.fletcher@example-care.org,Oakdene House,Operations,Latitude 5440,Dell Inc.,D3TWFV1134,Windows 11,10.0.22631,10.20.10.127,10/08/2026 21:39,28/08/2025 08:39
+AH-PC-135,IVL-01135,Computer,In Use,David Doyle,david.doyle@example-care.org,Old Head Office,Operations,ProDesk 400 G9,HP,H3G6DX1135,Windows 11,10.0.22631,10.20.10.150,16/08/2026 23:39,19/01/2025 05:39
+AH-PC-136,IVL-01136,Computer,In Use,Owen Sinclair,owen.sinclair@example-care.org,Old Head Office,Operations,Surface Laptop 5,Microsoft Corporation,L2H0VK1136,Windows 11,10.0.22631,10.20.10.102,19/08/2026 10:39,10/08/2024 03:39
+AH-PC-137,IVL-01137,Computer,In Use,Tomasz Doyle,tomasz.doyle@example-care.org,Willow Bank,Operations,OptiPlex 7010,Dell Inc.,D3DK2I1137,Windows 11,10.0.22631,10.20.10.150,14/08/2026 05:39,16/08/2024 09:39
+AH-PC-138,IVL-01138,Computer,In Use,Liam Walsh,liam.walsh@example-care.org,Willow Bank,Operations,Latitude 5440,Dell Inc.,D2KD5B1138,Windows 11,10.0.22631,10.20.10.225,26/08/2026 14:39,24/06/2025 14:39
+KL-PC-139,IVL-01139,Computer,In Use,Hannah Nowak,hannah.nowak@example-care.org,Kingsley Lodge,Operations,Surface Laptop 5,Microsoft Corporation,L2XO3Z1139,Windows 11,10.0.22631,192.168.8.178,25/11/2025 20:39,07/10/2025 21:39
+F-PC-140,IVL-01140,Computer,In Stock,James Walsh,james.walsh@example-care.org,Fernbank,Operations,Latitude 3540,Dell Inc.,D169CD1140,Windows 11,10.0.22631,10.25.10.104,28/11/2025 21:39,18/01/2026 19:39
+F-PC-141,IVL-01141,Computer,In Stock,Owen Frost,owen.frost@example-care.org,Fernbank,Operations,EliteBook 640 G10,HP,H11LSH1141,Windows 11,10.0.22631,10.25.10.150,16/02/2026 12:39,15/09/2024 09:39
+IH-PC-142,IVL-01142,Computer,In Use,Hannah Doyle,hannah.doyle@example-care.org,Ivy House,Operations,ThinkPad L14 Gen 4,LENOVO,L24HHN1142,Windows 11,10.0.22631,10.28.10.125,03/06/2026 13:39,31/08/2025 10:39
+EH-PC-143,IVL-01143,Computer,In Stock,James Ellis,james.ellis@example-care.org,Elmtree House,Operations,OptiPlex 7010,Dell Inc.,D5SE3A1143,Windows 11,10.0.22631,10.24.10.84,03/12/2025 05:39,06/04/2025 03:39
+KL-PC-144,IVL-01144,Computer,In Stock,Marcus Kaur,marcus.kaur@example-care.org,Kingsley Lodge,Operations,OptiPlex 7010,Dell Inc.,D1J4XT1144,Windows 11,10.0.22631,192.168.1.182,08/01/2026 23:39,07/01/2026 02:39
+F-PC-145,IVL-01145,Computer,In Stock,Aisha Patel,aisha.patel@example-care.org,Fernbank,Operations,EliteBook 640 G10,HP,H11PFH1145,Windows 11,10.0.22631,10.25.10.163,29/09/2025 05:39,02/01/2025 07:39
+DM-PC-146,IVL-01146,Computer,In Use,Leah Adeyemi,leah.adeyemi@example-care.org,Dovecote Mews,Operations,Surface Laptop 5,Microsoft Corporation,L4UG041146,Windows 11,10.0.22631,10.23.10.117,18/01/2026 11:39,14/06/2024 19:39
+AH-PC-147,IVL-01147,Computer,In Use,David Robinson,david.robinson@example-care.org,Ashfield House,Operations,Surface Laptop 5,Microsoft Corporation,L24W491147,Windows 11,10.0.22631,10.20.10.92,22/12/2025 00:39,31/07/2025 18:39
+CC-PC-148,IVL-01148,Computer,In Use,Aisha Ahmed,aisha.ahmed@example-care.org,Cedar Court,Operations,Latitude 3540,Dell Inc.,D2AQGG1148,Windows 11,10.0.22631,10.22.10.98,03/06/2026 21:39,09/02/2025 09:39
+HO-PC-149,IVL-01149,Computer,In Stock,Peter Barlow,peter.barlow@example-care.org,Head Office,Corporate Services,EliteBook 640 G10,HP,H128HT1149,Windows 11,10.0.22631,192.168.0.106,12/08/2025 13:39,14/11/2025 00:39
+AH-PC-150,IVL-01150,Computer,In Stock,Ibrahim Doyle,ibrahim.doyle@example-care.org,Ashfield House,Operations,ThinkPad L14 Gen 4,LENOVO,L3Y00J1150,Windows 11,10.0.22631,10.20.10.228,05/12/2025 06:39,01/09/2024 08:39
+DM-PC-151,IVL-01151,Computer,In Use,Peter Patel,peter.patel@example-care.org,Dovecote Mews,Operations,ProDesk 400 G9,HP,H257PC1151,Windows 11,10.0.22631,10.23.10.130,16/06/2026 09:39,20/10/2024 12:39
+HGV-PC-160,IVL-01160,Computer,In Use,Zoe Thompson,zoe.thompson@example-care.org,Hazel Grove Villas,Operations,Surface Laptop 5,Microsoft Corporation,LSAQW1160,Windows 11,10.0.22631,10.27.10.226,27/08/2026 14:39,14/06/2024 00:39
+G-PC-161,IVL-01161,Computer,In Use,Liam Chapman,liam.chapman@example-care.org,Greenacres,Operations,EliteBook 640 G10,HP,H3NCJK1161,Windows 11,10.0.22631,10.26.10.98,27/08/2026 05:39,17/11/2025 10:39
+EH-PC-162,IVL-01162,Computer,In Use,Tomasz Mensah,tomasz.mensah@example-care.org,Elmtree House,Operations,EliteBook 640 G10,HP,H3Z79B1162,Windows 11,10.0.22631,10.24.10.205,13/08/2026 14:39,25/03/2024 09:39
+JC-PC-163,IVL-01163,Computer,In Use,Marcus Kaur,marcus.kaur@example-care.org,Juniper Court,Operations,Latitude 5440,Dell Inc.,DRIKQ1163,Windows 11,10.0.22631,10.29.10.218,11/08/2026 03:39,07/07/2024 05:39
+CC-PC-164,IVL-01164,Computer,In Use,James Ellis,james.ellis@example-care.org,Cedar Court,Operations,ThinkPad L14 Gen 4,LENOVO,L4HAW41164,Windows 11,10.0.22631,10.22.10.79,10/08/2026 07:39,15/03/2024 18:39
+IH-PC-165,IVL-01165,Computer,In Use,Peter Barlow,peter.barlow@example-care.org,Ivy House,Operations,ProDesk 400 G9,HP,H2CB5J1165,Windows 11,10.0.22631,10.28.10.140,11/08/2026 12:39,22/10/2025 05:39
+F-PC-166,IVL-01166,Computer,In Use,James Walsh,james.walsh@example-care.org,Fernbank,Operations,Latitude 5440,Dell Inc.,D4AZ661166,Windows 11,10.0.22631,10.25.10.40,18/08/2026 06:39,25/11/2024 06:39
+G-PC-167,IVL-01167,Computer,In Use,Emma Fletcher,emma.fletcher@example-care.org,Greenacres,Operations,OptiPlex 7010,Dell Inc.,D2468V1167,Windows 11,10.0.22631,10.26.10.53,10/08/2026 11:39,28/10/2024 04:39
+HO-PC-168,IVL-01168,Computer,In Use,Grace Adeyemi,grace.adeyemi@example-care.org,Head Office,Corporate Services,ThinkPad L14 Gen 4,LENOVO,L110W71168,Windows 11,10.0.22631,192.168.1.223,11/08/2026 11:39,16/09/2024 13:39
+JC-PC-169,IVL-01169,Computer,In Use,Emma Fletcher,emma.fletcher@example-care.org,Juniper Court,Operations,ProDesk 400 G9,HP,H4BF771169,Windows 11,10.0.22631,10.29.10.240,21/08/2026 10:39,16/10/2025 22:39
+IH-PC-170,IVL-01170,Computer,Disposed,David Frost,david.frost@example-care.org,Ivy House,Operations,EliteBook 640 G10,HP,HLQTZ1170,Windows 11,10.0.22631,10.28.10.28,24/08/2026 22:39,03/11/2024 21:39
+EH-PC-171,IVL-01171,Computer,Disposed,Sarah Thompson,sarah.thompson@example-care.org,Elmtree House,Operations,ThinkPad L14 Gen 4,LENOVO,L5CGGJ1171,Windows 11,10.0.22631,10.24.10.127,15/08/2026 07:39,31/01/2026 12:39
+IH-PC-172,IVL-01172,Computer,Disposed,Rachel Ahmed,rachel.ahmed@example-care.org,Ivy House,Operations,ProDesk 400 G9,HP,H460PW1172,Windows 11,10.0.22631,10.28.10.220,21/08/2026 07:39,20/08/2024 22:39
+DM-PC-173,IVL-01173,Computer,Disposed,Peter Barlow,peter.barlow@example-care.org,Dovecote Mews,Operations,ThinkPad L14 Gen 4,LENOVO,L2XEQT1173,Windows 11,10.0.22631,10.23.10.63,25/08/2026 20:39,09/01/2025 23:39
+AH-PC-174,IVL-01174,Computer,In Stock,Hannah Nowak,hannah.nowak@example-care.org,Ashfield House,Operations,OptiPlex 7010,Dell Inc.,D57USR1174,Windows 11,10.0.22631,10.20.10.181,23/08/2026 19:39,26/08/2024 04:39
+DM-PC-175,IVL-01175,Computer,Disposed,Michael Nowak,michael.nowak@example-care.org,Dovecote Mews,Operations,Latitude 5440,Dell Inc.,D2YXCT1175,Windows 11,10.0.22631,10.23.10.200,24/08/2026 23:39,16/08/2024 12:39
+G-PC-176,IVL-01176,Computer,In Use,Callum Walsh,callum.walsh@example-care.org,Greenacres,Operations,OptiPlex 7010,Dell Inc.,6711SJ723D,Windows 11,10.0.22631,10.26.10.97,17/08/2026 02:39,11/07/2024 19:39
+HO-PC-177,IVL-01177,Computer,In Use,Grace Marsh,grace.marsh@example-care.org,Head Office,Corporate Services,ProDesk 400 G9,HP,771168HE4H,Windows 11,10.0.22631,192.168.8.67,19/08/2026 05:39,20/01/2025 00:39
+G-PC-178,IVL-01178,Computer,In Use,Priya Kaur,priya.kaur@example-care.org,Greenacres,Operations,OptiPlex 7010,Dell Inc.,8711KWU75D,Windows 11,10.0.22631,10.26.10.177,13/08/2026 22:39,19/06/2025 14:39
+AH-PC-179,IVL-01179,Computer,In Use,Tomasz Nowak,tomasz.nowak@example-care.org,Ashfield House,Operations,Latitude 3540,Dell Inc.,9711V6W42D,Windows 11,10.0.22631,10.20.10.154,27/08/2026 23:39,18/03/2025 09:39
+EH-PC-180,IVL-01180,Computer,In Use,Ibrahim Doyle,ibrahim.doyle@example-care.org,Elmtree House,Operations,Latitude 3540,Dell Inc.,,Windows 11,10.0.22631,10.24.10.237,14/08/2026 06:39,06/02/2026 23:39
+EH-PC-181,IVL-01181,Computer,In Use,Nia Mensah,nia.mensah@example-care.org,Elmtree House,Operations,Latitude 5440,Dell Inc.,,Windows 11,10.0.22631,10.24.10.188,26/08/2026 11:39,31/07/2025 03:39
+HO-PC-182,IVL-01182,Computer,In Use,Daniel Byrne,daniel.byrne@example-care.org,Head Office,Corporate Services,Surface Laptop 5,Microsoft Corporation,,Windows 11,10.0.22631,192.168.1.29,25/08/2026 21:39,21/10/2025 12:39
+EH-PC-183,IVL-01183,Computer,In Use,Aisha Patel,aisha.patel@example-care.org,Elmtree House,Operations,Latitude 3540,Dell Inc.,,Windows 11,10.0.22631,10.24.10.223,28/08/2026 14:39,10/07/2025 18:39
+KL-PC-184,IVL-01184,Computer,In Use,Michael Nowak,michael.nowak@example-care.org,Kingsley Lodge,Operations,ThinkPad L14 Gen 4,LENOVO,,Windows 11,10.0.22631,192.168.8.35,23/08/2026 08:39,02/12/2025 09:39
+AH-PC-185,IVL-01185,Computer,In Use,Joseph Okafor,joseph.okafor@example-care.org,Ashfield House,Operations,ThinkPad L14 Gen 4,LENOVO,,Windows 11,10.0.22631,10.20.10.103,27/08/2026 20:39,07/11/2025 00:39
+BL-PC-186,IVL-01186,Computer,In Use,Fatima Chapman,fatima.chapman@example-care.org,Beechwood Lodge,Operations,OptiPlex 7010,Dell Inc.,D1WP4W1186,Windows 11,10.0.22631,10.21.10.217,29/08/2026 23:39,14/01/2026 02:39
+DM-PC-187,IVL-01187,Computer,In Use,Hannah Doyle,hannah.doyle@example-care.org,Dovecote Mews,Operations,OptiPlex 7010,Dell Inc.,D5FF3O1187,Windows 11,10.0.22631,10.23.10.212,30/08/2026 05:39,21/04/2024 13:39
+CC-PC-188,IVL-01188,Computer,In Use,Chloe Bennett,chloe.bennett@example-care.org,Cedar Court,Operations,Latitude 5440,Dell Inc.,D1CJ7I1188,Windows 11,10.0.22631,10.22.10.58,16/08/2026 14:39,13/10/2024 01:39
+KL-PC-189,IVL-01189,Computer,In Use,Joseph Robinson,joseph.robinson@example-care.org,Kingsley Lodge,Operations,Latitude 5440,Dell Inc.,D4ZVKQ1189,Windows 11,10.0.22631,192.168.50.166,13/08/2026 23:39,18/11/2025 08:39
+DM-PC-190,IVL-01190,Computer,In Use,Fatima Chapman,fatima.chapman@example-care.org,Dovecote Mews,Operations,EliteBook 640 G10,HP,H1HR6N1190,Windows 11,10.0.22631,10.23.10.122,21/08/2026 08:39,15/07/2024 01:39
+CC-PC-191,IVL-01191,Computer,In Use,Nia Mensah,nia.mensah@example-care.org,Cedar Court,Operations,ProDesk 400 G9,HP,H464A71191,Windows 11,10.0.22631,10.22.10.233,27/08/2026 21:39,07/09/2024 18:39
+CC-PC-191,IVL-06191,Computer,In Use,Zoe Quinn,nia.mensah@example-care.org,Cedar Court,Operations,ProDesk 400 G9,HP,H464A71191B,Windows 11,10.0.22631,10.22.10.233,03/11/2025 05:39,27/06/2025 14:39
+HO-PC-192,IVL-01192,Computer,In Use,Marcus Kaur,marcus.kaur@example-care.org,Head Office,Corporate Services,Dell Laptop,Dell Inc.,D4BWDY1192,Windows 11,10.0.22631,192.168.1.34,09/08/2026 19:39,03/04/2025 09:39
+AH-PC-193,IVL-01193,Computer,In Use,Peter Barlow,peter.barlow@example-care.org,Ashfield House,Operations,Dell Laptop,Dell Inc.,D1V6FD1193,Windows 11,10.0.22631,10.20.10.164,13/08/2026 12:39,10/01/2026 20:39
+EH-PC-194,IVL-01194,Computer,In Use,Sarah Kaur,sarah.kaur@example-care.org,Elmtree House,Operations,Dell Laptop,Microsoft Corporation,L4ULID1194,Windows 11,10.0.22631,10.24.10.204,21/08/2026 04:39,04/10/2025 12:39
+CC-PC-195,IVL-01195,Computer,In Use,Owen Frost,owen.frost@example-care.org,Cedar Court,Operations,Latitude 5440,Dell Inc.,D3V9BT1195,Windows 11,10.0.22631,10.29.10.94,28/08/2026 14:39,12/05/2024 21:39
+F-PC-196,IVL-01196,Computer,In Use,Zoe Quinn,zoe.quinn@example-care.org,Fernbank,Operations,Latitude 5440,Dell Inc.,D59VV71196,Windows 11,10.0.22631,10.20.10.115,22/08/2026 07:39,26/10/2025 06:39
+HGV-PC-197,IVL-01197,Computer,In Use,James Ellis,james.ellis@example-care.org,Hazel Grove Villas,Operations,Latitude 3540,Dell Inc.,D4557X1197,Windows 11,10.0.22631,10.28.10.163,11/08/2026 03:39,29/04/2024 08:39
+JC-PC-198,IVL-01198,Computer,In Use,Emma Fletcher,emma.fletcher@example-care.org,Juniper Court,Operations,Latitude 3540,Dell Inc.,D38SEX1198,Windows 11,10.0.22631,10.28.10.232,20/08/2026 00:39,01/08/2025 12:39
+IH-PC-199,IVL-01199,Computer,In Use,Rachel Ahmed,rachel.ahmed@example-care.org,Ivy House,Operations,Latitude 3540,Dell Inc.,D4G0GN1199,Windows 11,10.0.22631,10.23.10.234,11/08/2026 03:39,26/07/2025 19:39
+DM-PC-200,IVL-01200,Computer,In Use,Marcus Ellis,marcus.ellis@example-care.org,Dovecote Mews,Operations,EliteBook 640 G10,HP,H1CZ491200,Windows 11,10.0.22631,10.20.10.169,15/08/2026 14:39,03/04/2025 20:39
+BL-PC-201,IVL-01201,Computer,In Use,Leah Kaur,leah.kaur@example-care.org,Beechwood Lodge,Operations,ThinkPad L14 Gen 4,LENOVO,L5MHEJ1201,Windows 11,10.0.22631,10.28.10.156,23/08/2026 14:39,18/04/2024 04:39
+DM-PC-202,IVL-01202,Computer,In Use,Chloe Ahmed,chloe.ahmed@example-care.org,Dovecote Mews,Operations,EliteBook 640 G10,HP,H3MHKO1202,Windows 11,10.0.22631,10.21.10.76,28/08/2026 18:39,15/09/2024 14:39
+DM-PC-203,IVL-01203,Computer,In Use,Joseph Marsh,joseph.marsh@example-care.org,Dovecote Mews,Operations,ProDesk 400 G9,HP,H1HAMJ1203,Windows 11,10.0.22631,10.20.10.127,29/08/2026 11:39,05/03/2025 20:39
+CC-PC-204,IVL-01204,Computer,In Use,Joseph Marsh,joseph.marsh@example-care.org,Cedar Court,Operations,ThinkPad L14 Gen 4,LENOVO,L32J9Z1204,Windows 11,10.0.22631,192.168.8.73,24/08/2026 11:39,15/12/2025 04:39
+CC-PC-205,IVL-01205,Computer,In Use,Nia Barlow,nia.barlow@example-care.org,Cedar Court,Operations,Latitude 5440,Dell Inc.,D3QS3V1205,Windows 11,10.0.22631,192.168.1.20,30/08/2026 08:39,16/03/2025 08:39
+DM-PC-206,IVL-01206,Computer,In Use,Sarah Patel,sarah.patel@example-care.org,Dovecote Mews,Operations,Latitude 3540,Dell Inc.,D27MA21206,Windows 11,10.0.22631,192.168.50.233,22/08/2026 19:39,23/12/2024 23:39
+HO-PC-207,IVL-01207,Computer,In Use,Michael Robinson,michael.robinson@example-care.org,Head Office,Corporate Services,Surface Laptop 5,Microsoft Corporation,L57D7E1207,Windows 11,10.0.22631,192.168.50.159,18/08/2026 21:39,03/01/2025 05:39
+G-PC-208,IVL-01208,Computer,In Use,James Ellis,james.ellis@example-care.org,Greenacres,Operations,Surface Laptop 5,Microsoft Corporation,L4Z7LJ1208,Windows 11,10.0.22631,192.168.1.143,16/08/2026 21:39,04/08/2025 05:39
+G-PC-209,IVL-01209,Computer,In Use,James Quinn,james.quinn@example-care.org,Greenacres,Operations,ThinkPad L14 Gen 4,LENOVO,LV7B91209,Windows 11,10.0.22631,192.168.8.128,14/08/2026 03:39,05/02/2025 03:39
+CC-PC-210,IVL-01210,Computer,In Use,Rachel Mensah,rachel.mensah@example-care.org,Cedar Court,Operations,ThinkPad L14 Gen 4,LENOVO,L4CNNM1210,Windows 11,10.0.22631,192.168.0.37,13/08/2026 05:39,29/03/2025 02:39
+CC-PC-211,IVL-01211,Computer,In Use,Marcus Ellis,marcus.ellis@example-care.org,Cedar Court,Operations,EliteBook 640 G10,HP,H155N31211,Windows 11,10.0.22631,192.168.1.226,11/08/2026 20:39,06/08/2025 20:39
+HO-PC-212,IVL-01212,Computer,In Use,Nia Fletcher,nia.fletcher@example-care.org,Head Office,Corporate Services,OptiPlex 7010,Dell Inc.,D5958E1212,Windows 11,10.0.22631,192.168.50.6,23/08/2026 04:39,30/03/2024 23:39
+JC-PC-213,IVL-01213,Computer,In Use,Rachel Adeyemi,rachel.adeyemi@example-care.org,Juniper Court,Operations,Latitude 5440,Dell Inc.,D59UII1213,Windows 11,10.0.22631,192.168.50.130,19/08/2026 14:39,25/09/2024 07:39
+F-PC-214,IVL-01214,Computer,In Use,Peter Patel,peter.patel@example-care.org,Fernbank,Operations,OptiPlex 7010,Dell Inc.,D3BA4A1214,Windows 11,10.0.22631,192.168.0.174,15/08/2026 04:39,17/02/2025 06:39
+G-PC-215,IVL-01215,Computer,In Use,James Quinn,james.quinn@example-care.org,Greenacres,Operations,Latitude 5440,Dell Inc.,D41OP51215,Windows 11,10.0.22631,192.168.1.211,28/08/2026 07:39,25/10/2025 21:39
+JC-PC-216,IVL-01216,Computer,In Use,Marcus Ahmed,marcus.ahmed@example-care.org,,Operations,Latitude 3540,Dell Inc.,D3QQJW1216,Windows 11,10.0.22631,10.29.10.79,09/08/2026 20:39,16/11/2024 08:39
+CC-PC-217,IVL-01217,Computer,In Use,Priya Kaur,priya.kaur@example-care.org,,Operations,ProDesk 400 G9,HP,H5NACR1217,Windows 11,10.0.22631,10.22.10.66,11/08/2026 01:39,13/01/2026 11:39
+AH-PC-218,IVL-01218,Computer,In Use,David Doyle,david.doyle@example-care.org,,Operations,ProDesk 400 G9,HP,H19ZKP1218,Windows 11,10.0.22631,10.20.10.121,19/08/2026 10:39,30/05/2024 13:39
+IH-PC-219,IVL-01219,Computer,In Use,Peter Robinson,peter.robinson@example-care.org,,Operations,Latitude 5440,Dell Inc.,D57DAD1219,Windows 11,10.0.22631,10.28.10.238,30/08/2026 00:39,13/11/2024 05:39
+DM-PC-220,IVL-01220,Computer,In Use,Emma Mensah,emma.mensah@example-care.org,,Operations,EliteBook 640 G10,HP,H446951220,Windows 11,10.0.22631,10.23.10.154,16/08/2026 12:39,06/08/2024 21:39
+JC-PC-221,IVL-01221,Computer,In Use,Joseph Okafor,joseph.okafor@example-care.org,Juniper Court,Operations,EliteBook 640 G10,HP,H4DLXR1221,Windows 11,10.0.22631,10.22.10.216,30/07/2026 20:39,05/11/2024 06:39
+G-PC-222,IVL-01222,Computer,In Use,Nia Barlow,nia.barlow@example-care.org,Greenacres,Operations,ThinkPad L14 Gen 4,LENOVO,L2I2RB1222,Windows 11,10.0.22631,10.29.10.177,31/07/2026 02:39,10/09/2025 21:39
+IH-PC-223,IVL-01223,Computer,In Use,Hannah Doyle,hannah.doyle@example-care.org,Ivy House,Operations,EliteBook 640 G10,HP,H40B3Z1223,Windows 11,10.0.22631,10.21.10.48,31/07/2026 02:39,20/12/2024 14:39
+G-PC-224,IVL-01224,Computer,In Use,Priya Kaur,priya.kaur@example-care.org,Greenacres,Operations,ThinkPad L14 Gen 4,LENOVO,L2DRPY1224,Windows 11,10.0.22631,10.29.10.140,31/07/2026 13:39,08/10/2025 03:39
+CC-PC-225,IVL-01225,Computer,In Use,Michael Robinson,michael.robinson@example-care.org,Cedar Court,Operations,Latitude 5440,Dell Inc.,D5FEUR1225,Windows 11,10.0.22631,,28/08/2026 09:39,16/12/2024 12:39
+G-PC-226,IVL-01226,Computer,In Use,Hannah Nowak,hannah.nowak@example-care.org,Greenacres,Operations,EliteBook 640 G10,HP,H16PFK1226,Windows 11,10.0.22631,,24/08/2026 20:39,11/12/2025 22:39
+F-PC-227,IVL-01227,Computer,In Use,Peter Barlow,peter.barlow@example-care.org,Fernbank,Operations,Latitude 5440,Dell Inc.,D1F0TF1227,Windows 11,10.0.22631,,21/08/2026 07:39,21/08/2024 18:39
+KL-PC-228,IVL-01228,Computer,In Use,Fatima Thompson,fatima.thompson@example-care.org,Kingsley Lodge,Operations,OptiPlex 7010,Dell Inc.,D4IZNG1228,Windows 11,10.0.22631,,12/08/2026 05:39,13/07/2024 13:39
+KL-PC-229,IVL-01229,Computer,In Use,Zoe Quinn,zoe.quinn@example-care.org,Kingsley Lodge,Operations,OptiPlex 7010,Dell Inc.,D5QFSG1229,Windows 11,10.0.22631,,17/08/2026 22:39,23/01/2026 18:39
+JC-PC-230,IVL-01230,Computer,In Use,Joseph Robinson,joseph.robinson@example-care.org,Juniper Court,Operations,ThinkPad L14 Gen 4,LENOVO,L1FYHX1230,Windows 11,10.0.22631,,13/08/2026 03:39,18/03/2024 01:39
+NET-1231,IVL-01231,Network switch,In Use,,,Ashfield House,Operations,CBS350-24P,Cisco,K0001231,,,10.20.10.107,29/07/2026 11:39,23/03/2026 07:39
+NET-1232,IVL-01232,Network switch,In Use,,,Beechwood Lodge,Operations,CBS350-24P,Cisco,K0001232,,,10.21.10.137,29/08/2026 14:39,13/09/2025 02:39
+NET-1233,IVL-01233,Network switch,In Use,,,Cedar Court,Operations,CBS350-24P,Cisco,K0001233,,,10.22.10.111,03/08/2026 22:39,06/08/2024 02:39
+NET-1234,IVL-01234,Network switch,In Use,,,Dovecote Mews,Operations,CBS350-24P,Cisco,K0001234,,,10.23.10.188,20/07/2026 23:39,09/12/2024 23:39
+NET-1235,IVL-01235,Network switch,In Use,,,Elmtree House,Operations,CBS350-24P,Cisco,K0001235,,,10.24.10.128,03/08/2026 01:39,26/07/2024 00:39
+NET-1236,IVL-01236,Network switch,In Use,,,Fernbank,Operations,CBS350-24P,Cisco,K0001236,,,10.25.10.133,21/07/2026 02:39,26/02/2025 11:39
+MOB-1237,IVL-01237,Mobile phone,In Use,,,Ashfield House,Operations,iPhone SE,Apple,K0001237,,,10.20.10.38,17/08/2026 05:39,24/07/2024 05:39
+MOB-1238,IVL-01238,Mobile phone,In Use,,,Beechwood Lodge,Operations,iPhone SE,Apple,K0001238,,,10.21.10.20,26/08/2026 23:39,02/07/2024 13:39
+MOB-1239,IVL-01239,Mobile phone,In Use,,,Cedar Court,Operations,iPhone SE,Apple,K0001239,,,10.22.10.207,24/07/2026 07:39,01/03/2026 09:39
+MOB-1240,IVL-01240,Mobile phone,In Use,,,Dovecote Mews,Operations,iPhone SE,Apple,K0001240,,,10.23.10.167,21/07/2026 13:39,30/12/2025 05:39
+MOB-1241,IVL-01241,Mobile phone,In Use,,,Elmtree House,Operations,iPhone SE,Apple,K0001241,,,10.24.10.44,31/07/2026 19:39,21/10/2024 03:39
+MOB-1242,IVL-01242,Mobile phone,In Use,,,Fernbank,Operations,iPhone SE,Apple,K0001242,,,10.25.10.216,23/08/2026 14:39,25/12/2024 22:39
+PRI-1243,IVL-01243,Printer,In Use,,,Ashfield House,Operations,MFC-L3750CDW,Brother,K0001243,,,10.20.10.230,17/08/2026 10:39,18/07/2024 12:39
+PRI-1244,IVL-01244,Printer,In Use,,,Beechwood Lodge,Operations,MFC-L3750CDW,Brother,K0001244,,,10.21.10.136,03/08/2026 22:39,27/10/2025 01:39
+PRI-1245,IVL-01245,Printer,In Use,,,Cedar Court,Operations,MFC-L3750CDW,Brother,K0001245,,,10.22.10.82,09/08/2026 07:39,01/05/2026 06:39
+PRI-1246,IVL-01246,Printer,In Use,,,Dovecote Mews,Operations,MFC-L3750CDW,Brother,K0001246,,,10.23.10.166,13/08/2026 22:39,28/11/2024 22:39
+PRI-1247,IVL-01247,Printer,In Use,,,Elmtree House,Operations,MFC-L3750CDW,Brother,K0001247,,,10.24.10.34,29/08/2026 00:39,31/01/2026 10:39
+PRI-1248,IVL-01248,Printer,In Use,,,Fernbank,Operations,MFC-L3750CDW,Brother,K0001248,,,10.25.10.233,10/08/2026 21:39,15/03/2026 18:39
+MON-1249,IVL-01249,Monitor,In Use,,,Ashfield House,Operations,P2422H,Dell Inc.,K0001249,,,10.20.10.47,21/07/2026 13:39,06/04/2026 02:39
+MON-1250,IVL-01250,Monitor,In Use,,,Beechwood Lodge,Operations,P2422H,Dell Inc.,K0001250,,,10.21.10.215,02/08/2026 00:39,22/03/2025 19:39
+MON-1251,IVL-01251,Monitor,In Use,,,Cedar Court,Operations,P2422H,Dell Inc.,K0001251,,,10.22.10.74,16/08/2026 02:39,20/04/2026 19:39
+MON-1252,IVL-01252,Monitor,In Use,,,Dovecote Mews,Operations,P2422H,Dell Inc.,K0001252,,,10.23.10.79,24/08/2026 18:39,07/04/2025 07:39
+MON-1253,IVL-01253,Monitor,In Use,,,Elmtree House,Operations,P2422H,Dell Inc.,K0001253,,,10.24.10.231,24/08/2026 12:39,03/09/2024 13:39
+MON-1254,IVL-01254,Monitor,In Use,,,Fernbank,Operations,P2422H,Dell Inc.,K0001254,,,10.25.10.78,28/07/2026 10:39,17/07/2024 00:39

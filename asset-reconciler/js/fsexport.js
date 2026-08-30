@@ -23,7 +23,7 @@
 
   var UPDATABLE = [
     { field: 'user',      label: 'Assigned user (Used By)', sources: ['intune', 'verification'], defaultSource: 'intune' },
-    { field: 'location',  label: 'Location',                sources: ['verification'],           defaultSource: 'verification' },
+    { field: 'location',  label: 'Location',                sources: ['verification', 'ip'],     defaultSource: 'verification' },
     { field: 'state',     label: 'Asset state',             sources: ['verification', 'manual'], defaultSource: 'verification' },
     { field: 'serial',    label: 'Serial number',           sources: ['intune'],                 defaultSource: 'intune' },
     { field: 'model',     label: 'Model',                   sources: ['intune'],                 defaultSource: 'intune' },
@@ -34,6 +34,7 @@
   var SOURCE_LABELS = {
     intune: 'Intune',
     verification: 'Site verification return',
+    ip: 'Site matching the last-seen IP',
     manual: 'Fixed value'
   };
 
@@ -66,7 +67,8 @@
       { field: 'assetType',   label: 'Asset type' },
       { field: 'department',  label: 'Department' },
       { field: 'os',          label: 'Operating system' },
-      { field: 'osVersion',   label: 'OS version' }
+      { field: 'osVersion',   label: 'OS version' },
+      { field: 'ipAddress',   label: 'Last seen IP address' }
     ],
     intune: [
       { field: 'name',        label: 'Device name' },
@@ -79,12 +81,14 @@
       { field: 'lastCheckIn', label: 'Last check-in' },
       { field: 'compliance',  label: 'Compliance' },
       { field: 'ownership',   label: 'Ownership' },
-      { field: 'category',    label: 'Category' }
+      { field: 'category',    label: 'Category' },
+      { field: 'ipAddress',   label: 'Last seen IP address' }
     ]
   };
 
   function fsFieldValue(row, field) {
     if (field === 'name') return row.name;
+    if (field === 'ipAddress') return row.fsIp || '';
     if (field === 'assetTag') return row.assetTag;
     if (field === 'assetType') return row.assetType;
     if (field === 'department') return row.department;
@@ -96,6 +100,7 @@
     if (!i) return '';
     if (field === 'user') return N.personDisplay(i.primaryUser, i.primaryUpn);
     if (field === 'lastCheckIn') return row.lastCheckIn ? U.fmtDate(row.lastCheckIn) : '';
+    if (field === 'ipAddress') return row.intuneIp || '';
     return N.clean(i[field]);
   }
 

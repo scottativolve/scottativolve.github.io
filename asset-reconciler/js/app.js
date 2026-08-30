@@ -683,8 +683,34 @@
       C.tile('Location needs fixing', (res.tally['location-missing'] || 0) + (res.tally['location-unknown'] || 0),
         'ask the service', function () { setView('fix-location'); }),
       C.tile('Not checked in', res.tally['stale-intune'] || 0,
-        'over ' + state.cfg.staleDays + ' days', function () { setView('stale'); })
+        'over ' + state.cfg.staleDays + ' days', function () { setView('stale'); }),
+      C.tile('Moved, by IP address', (res.tally['ip-location-mismatch'] || 0) + (res.tally['ip-suggests-location'] || 0),
+        c.subnets ? 'last seen on another site\u2019s network' : 'add IP subnets to the lookup',
+        function () { setView('moved-by-ip'); })
     ]));
+
+    if (c.locations && !c.sitesWithSubnet) {
+      main.appendChild(U.el('div', { class: 'card' }, [
+        U.el('h2', {}, 'No IP subnets in the location lookup'),
+        U.el('p', { class: 'hint' },
+          'Add an IP subnet column to your location file — one or more ranges per site, as ' +
+          '10.20.30.0/24, 10.20.30.*, a range, or several separated by semicolons — and the tool can tell you ' +
+          'which devices were last seen on a network belonging to a different site. That is the strongest ' +
+          'evidence available that a device has physically moved.')
+      ]));
+    } else if (c.sitesWithSubnet) {
+      var covered = res.rows.filter(function (r) { return r.ip; }).length;
+      main.appendChild(U.el('div', { class: 'card' }, [
+        U.el('h2', {}, 'IP location checking'),
+        U.el('p', { class: 'hint' },
+          U.num(c.sitesWithSubnet) + ' of ' + U.num(c.locations) + ' sites have a subnet recorded (' +
+          U.num(c.subnets) + ' ranges in total), and ' + U.num(covered) + ' of ' + U.num(res.rows.length) +
+          ' devices have a last-seen address to check. ' +
+          (res.tally['ip-site-no-subnet']
+            ? U.num(res.tally['ip-site-no-subnet']) + ' devices sit at sites with no range recorded.'
+            : 'Sites without a range are simply not checked.'))
+      ]));
+    }
 
     /* issues by type */
     var issueData = R.RULES

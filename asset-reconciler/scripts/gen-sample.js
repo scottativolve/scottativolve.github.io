@@ -8,6 +8,10 @@ function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 
 function pick(a) { return a[Math.floor(rnd() * a.length)]; }
 function int(a, b) { return a + Math.floor(rnd() * (b - a + 1)); }
 
+/* Each site gets a /24. Two are deliberately left without one so the tool has
+   something to report as unchecked. */
+function subnetFor(i) { return i >= 10 ? '' : '10.' + (20 + i) + '.10.0/24'; }
+
 const SITES = [
   ['Ashfield House',      '14 Ashfield Road',    'Manchester', 'M14 6JN', 53.4457, -2.2270, 12, 'North West',  'Supported living'],
   ['Beechwood Lodge',     '2 Beech Grove',       'Leeds',      'LS6 2AN', 53.8175, -1.5720, 8,  'Yorkshire',   'Residential'],
@@ -33,6 +37,13 @@ const MODELS = [
 ];
 
 function pad(n, w) { return String(n).padStart(w, '0'); }
+
+function siteIp(i) {                       // an address inside site i's range
+  return '10.' + (20 + i) + '.10.' + int(20, 240);
+}
+function homeIp() {                        // a remote worker's own broadband
+  return '192.168.' + pick([0, 1, 8, 50]) + '.' + int(2, 250);
+}
 function ukDate(d) { return `${pad(d.getDate(),2)}/${pad(d.getMonth()+1,2)}/${d.getFullYear()} ${pad(d.getHours(),2)}:${pad(d.getMinutes(),2)}`; }
 function isoDate(d) { return d.toISOString().replace(/\.\d{3}Z$/, 'Z'); }
 function daysAgo(n) { return new Date(Date.now() - n * 86400000 - int(0, 20) * 3600000); }
@@ -57,7 +68,10 @@ function newDevice(site, opts = {}) {
                  Math.floor(rnd() * 9e6 + 1e6).toString(36).toUpperCase() + pad(id, 4);
   const checkIn = daysAgo(opts.staleDays !== undefined ? opts.staleDays : int(0, 12));
   const audit = daysAgo(opts.fsAuditDays !== undefined ? opts.fsAuditDays : int(0, 20));
-  return { id, name, site, person, model, vendor, serial, checkIn, audit, opts };
+  const siteIdx = SITES.indexOf(site);
+  const ip = opts.ip !== undefined ? opts.ip
+           : (subnetFor(siteIdx) ? siteIp(siteIdx) : homeIp());
+  return { id, name, site, person, model, vendor, serial, checkIn, audit, ip, siteIdx, opts };
 }
 
 function pushFs(d, over = {}) {
@@ -75,6 +89,7 @@ function pushFs(d, over = {}) {
     'Serial Number': d.serial,
     'OS': 'Windows 11',
     'OS Version': '10.0.22631',
+    'IP Address': d.ip,
     'Last Audit Date': ukDate(d.audit),
     'Created Time': ukDate(daysAgo(int(200, 900)))
   }, over));
@@ -90,6 +105,7 @@ function pushIntune(d, over = {}) {
     'OS version': '10.0.26100.1742',
     'Primary user UPN': d.person.upn,
     'Primary user display name': d.person.name,
+    'IP Address': d.ip,
     'Last check-in': isoDate(d.checkIn),
     'Serial number': d.serial,
     'Manufacturer': d.vendor,
@@ -211,6 +227,46 @@ for (let i = 0; i < 3; i++) {
   pushIntune(d);
 }
 
+// Last seen on another site's network: the device has physically moved.
+for (let i = 0; i < 9; i++) {
+  const home = SITES[int(0, 9)];
+  let elsewhere = SITES[int(0, 9)];
+  while (elsewhere === home) elsewhere = SITES[int(0, 9)];
+  const d = newDevice(home, { ip: siteIp(SITES.indexOf(elsewhere)) });
+  pushFs(d);
+  pushIntune(d);
+}
+
+// Remote workers on their own broadband.
+for (let i = 0; i < 12; i++) {
+  const d = newDevice(pick(SITES), { ip: homeIp() });
+  pushFs(d);
+  pushIntune(d);
+}
+
+// No location in Freshservice, but the address names a site.
+for (let i = 0; i < 5; i++) {
+  const idx = int(0, 9);
+  const d = newDevice(SITES[idx], { ip: siteIp(idx) });
+  pushFs(d, { 'Location': '' });
+  pushIntune(d);
+}
+
+// Freshservice holds an older address than Intune - the newer one should win.
+for (let i = 0; i < 4; i++) {
+  const idx = int(0, 9);
+  const d = newDevice(SITES[idx], { ip: siteIp(idx), fsAuditDays: 30, staleDays: 1 });
+  pushFs(d, { 'IP Address': siteIp((idx + 3) % 10) });
+  pushIntune(d);
+}
+
+// No address recorded at all.
+for (let i = 0; i < 6; i++) {
+  const d = newDevice(pick(SITES), { ip: '' });
+  pushFs(d, { 'IP Address': '' });
+  pushIntune(d, { 'IP Address': '' });
+}
+
 // Assets that are not computers - these stay out of the Intune comparison.
 [['Network switch', 'Cisco', 'CBS350-24P'], ['Mobile phone', 'Apple', 'iPhone SE'],
  ['Printer', 'Brother', 'MFC-L3750CDW'], ['Monitor', 'Dell Inc.', 'P2422H']].forEach(kit => {
@@ -228,6 +284,7 @@ for (let i = 0; i < 3; i++) {
       'Product': kit[2],
       'Vendor': kit[1],
       'Serial Number': 'K' + pad(d.id, 7),
+      'IP Address': d.ip,
       'OS': '',
       'OS Version': '',
       'Last Audit Date': ukDate(daysAgo(int(1, 40))),
@@ -237,13 +294,15 @@ for (let i = 0; i < 3; i++) {
 });
 
 /* ---- location lookup -------------------------------------------------- */
-const locRows = SITES.map(s => ({
+const locRows = SITES.map((s, i) => ({
   'Location': s[0], 'Address': s[1], 'Town': s[2], 'Postcode': s[3],
+  'IP Subnet': subnetFor(i),
   'Latitude': s[4], 'Longitude': s[5], 'Expected Devices': s[6],
   'Region': s[7], 'Site Type': s[8]
 }));
 // One site in the lookup with no coordinates, to exercise the geocoding path.
 locRows.push({ 'Location': 'Larchfield House', 'Address': '18 Larch Road', 'Town': 'Wigan',
+               'IP Subnet': '10.90.10.0/24',
                'Postcode': 'WN1 1XX', 'Latitude': '', 'Longitude': '', 'Expected Devices': 6,
                'Region': 'North West', 'Site Type': 'Residential' });
 
