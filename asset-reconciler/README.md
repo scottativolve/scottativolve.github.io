@@ -63,8 +63,43 @@ future export with the same columns.
 Assets → filter to what you want → Export → CSV.
 
 Useful columns: `Display Name`, `Asset Tag`, `Serial Number`, `Asset Type`,
-`Asset State`, `Used By`, `Location`, `Department`, `Product`, `Vendor`, `OS`,
-`Last Audit Date`. Only the device name is strictly required.
+`Asset State`, `Used By`, `Last Login By`, `Location`, `Department`, `Product`,
+`Vendor`, `OS`, `IP Address`, `Last Audit Date`. Only the device name is
+strictly required.
+
+#### About "Last Login By"
+
+This is **not** a Freshservice requester record. The Discovery Agent reads the
+Windows logon name off the machine and stores it as the `sAMAccountName` — so it
+tells you who actually signs in, but it is not an email address and there is no
+UPN behind it in Freshservice to export. Adding UPN to the agent is an open
+feature request with Freshworks, not a setting you can switch on.
+
+On Entra-joined machines there is no on-premises `sAMAccountName`, so Windows
+derives a local account name from the identity, strips the punctuation, and caps
+it at 20 characters with a short random suffix for uniqueness. That is why
+`patience.osemwegie@…` arrives as `PatienceOsem_yb1wybb` — twelve characters of
+name, then `_` and seven random ones, twenty in total.
+
+The tool handles all of these forms when comparing people:
+
+| In the export | Matches |
+|---|---|
+| `PatienceOsemwegie` | Patience Osemwegie |
+| `PatienceOsem_yb1wybb` | Patience Osemwegie (truncated, suffix stripped) |
+| `tmensah` | Tomasz Mensah, and `TomaszMensah` |
+| `patience.osemwegie@ivolve.care` | Patience Osemwegie |
+| `john_smith` | John Smith (a real underscore, left alone) |
+
+A suffix is only stripped when it looks random — it contains a digit, or the
+whole string sits on the 20-character cap — so a genuine underscored name is not
+mangled. A truncation only matches when the whole forename is present, and a
+short stem is reported as *similar* rather than *equal* so you can eyeball it.
+
+Because the value is an account name rather than an address, use it as
+**evidence** that an assignment is wrong and take the corrected value from the
+Intune primary user, which is a proper UPN. That is what the *Someone else logs
+into it* check does.
 
 ### 2. Intune devices
 
@@ -168,6 +203,7 @@ Each check can be switched off in Settings, and every threshold is adjustable.
 | Not in Freshservice | High | Intune manages it, no asset record exists |
 | Assigned user differs | High | The two systems name different people |
 | No user in Freshservice | Medium | Intune knows the user, the asset is unassigned |
+| Someone else logs into it | Medium | The account signing in is not the assigned person |
 | No user anywhere | Medium | Marked in use, but nobody is recorded |
 | No location set | High | The asset has no location at all |
 | Location not in lookup | Medium | The location is not a site the lookup knows |

@@ -27,8 +27,8 @@ const SITES = [
   ['Head Office',         'Unit 4 Waterside',    'Derby',      'DE1 3QT', 52.9270, -1.4820, 24, 'Corporate',   'Office']
 ];
 
-const FIRST = ['Sarah','James','Aisha','Michael','Priya','David','Emma','Tomasz','Grace','Daniel','Chloe','Ibrahim','Rachel','Liam','Nia','Peter','Zoe','Callum','Fatima','Owen','Hannah','Marcus','Leah','Joseph'];
-const LAST  = ['Bennett','Okafor','Kaur','Thompson','Patel','Walsh','Nowak','Ahmed','Robinson','Fletcher','Mensah','Doyle','Hughes','Sinclair','Byrne','Marsh','Ellis','Quinn','Adeyemi','Barlow','Chapman','Frost'];
+const FIRST = ['Sarah','James','Aisha','Michael','Priya','David','Emma','Tomasz','Grace','Daniel','Chloe','Ibrahim','Rachel','Liam','Nia','Peter','Zoe','Callum','Fatima','Owen','Hannah','Marcus','Leah','Joseph','Christopher','Alexandra','Bartholomew'];
+const LAST  = ['Bennett','Okafor','Kaur','Thompson','Patel','Walsh','Nowak','Ahmed','Robinson','Fletcher','Mensah','Doyle','Hughes','Sinclair','Byrne','Marsh','Ellis','Quinn','Adeyemi','Barlow','Chapman','Frost','Osemwegie','Featherstonehaugh','Abernathy'];
 
 const MODELS = [
   ['Latitude 5440', 'Dell Inc.'], ['Latitude 3540', 'Dell Inc.'], ['OptiPlex 7010', 'Dell Inc.'],
@@ -37,6 +37,17 @@ const MODELS = [
 ];
 
 function pad(n, w) { return String(n).padStart(w, '0'); }
+
+/* The Windows logon name the discovery agent reads off the machine. Entra-joined
+   devices cap it at 20 characters and add a random uniqueness suffix, so long
+   names arrive truncated and mangled - which is what the matcher has to cope
+   with. */
+function logonName(person) {
+  const joined = person.first + person.last;
+  if (joined.length <= 20) return joined;
+  const suffix = '_' + Math.floor(rnd() * 1e10).toString(36).slice(0, 7);
+  return joined.slice(0, 20 - suffix.length) + suffix;
+}
 
 function siteIp(i) {                       // an address inside site i's range
   return '10.' + (20 + i) + '.10.' + int(20, 240);
@@ -82,6 +93,7 @@ function pushFs(d, over = {}) {
     'Asset State': 'In Use',
     'Used By': d.person.name,
     'Used By Email': d.person.upn,
+    'Last Login By': d.opts.logon !== undefined ? d.opts.logon : logonName(d.person),
     'Location': d.site[0],
     'Department': d.site[8] === 'Office' ? 'Corporate Services' : 'Operations',
     'Product': d.model,
@@ -225,6 +237,15 @@ for (let i = 0; i < 3; i++) {
   const d = newDevice(pick(SITES));
   pushFs(d, { 'Product': 'Dell Laptop' });
   pushIntune(d);
+}
+
+// Assigned to one person, but somebody else signs in - the account name is the
+// only clue, and it arrives in Windows' mangled form.
+for (let i = 0; i < 8; i++) {
+  const d = newDevice(pick(SITES));
+  const other = pick(people);
+  pushFs(d, { 'Last Login By': logonName(other) });
+  pushIntune(d, { 'Primary user UPN': other.upn, 'Primary user display name': other.name });
 }
 
 // Last seen on another site's network: the device has physically moved.

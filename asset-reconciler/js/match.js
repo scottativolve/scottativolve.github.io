@@ -133,8 +133,19 @@
       var locKey = N.locationKey(locRaw, cfg.locationStrategy);
       var site = locKey ? siteByKey.get(locKey) || siteByKey.get(N.locationKey(locRaw, 'full')) || null : null;
 
+      /* "Last login by" is the Windows logon name the discovery agent read off
+         the machine, not a Freshservice identity - so it is the best evidence
+         of who actually uses the device, but a poor value to write back. */
+      var lastLoginBy = N.clean(fs && fs.lastLoginBy);
       var fsUser = N.personDisplay(fs && fs.user, fs && fs.userEmail);
       var inUser = N.personDisplay(intune && intune.primaryUser, intune && intune.primaryUpn);
+      var loginVsAssigned = lastLoginBy
+        ? N.comparePeople(lastLoginBy, N.clean(fs && fs.user) || N.clean(fs && fs.userEmail))
+        : 'unknown';
+      var loginVsIntune = lastLoginBy && intune
+        ? N.comparePeople(lastLoginBy, N.clean(intune.primaryUser) || N.clean(intune.primaryUpn))
+        : 'unknown';
+
       var userStatus = N.comparePeople(
         N.clean(fs && fs.user) || N.clean(fs && fs.userEmail),
         N.clean(intune && intune.primaryUser) || N.clean(intune && intune.primaryUpn)
@@ -204,6 +215,9 @@
 
         fsUser: fsUser,
         intuneUser: inUser,
+        lastLoginBy: lastLoginBy,
+        loginVsAssigned: loginVsAssigned,
+        loginVsIntune: loginVsIntune,
         userStatus: userStatus,
         user: fsUser || inUser,
 

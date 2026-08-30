@@ -22,6 +22,7 @@
         { key: 'state',        label: 'Asset state',      aliases: ['asset state', 'state', 'status', 'usage type', 'asset status'] },
         { key: 'user',         label: 'Assigned user',    aliases: ['used by', 'assigned to', 'assigned user', 'user', 'owner', 'used by name', 'end user'] },
         { key: 'userEmail',    label: 'User email',       aliases: ['used by email', 'user email', 'email', 'assigned to email', 'primary email'] },
+        { key: 'lastLoginBy',  label: 'Last login by',    aliases: ['last login by', 'last logged in user', 'last logon user', 'logged in user', 'last login', 'windows logon name', 'last login user'] },
         { key: 'location',     label: 'Location',         aliases: ['location', 'location name', 'site', 'site name', 'service'] },
         { key: 'department',   label: 'Department',       aliases: ['department', 'department name', 'business unit'] },
         { key: 'model',        label: 'Model',            aliases: ['product', 'model', 'product name', 'asset model'] },

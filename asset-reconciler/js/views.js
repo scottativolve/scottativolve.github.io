@@ -19,6 +19,8 @@
     { key: 'fsUser',      label: 'FS user',       width: 150, get: function (r) { return r.fsUser; } },
     { key: 'intuneUser',  label: 'Intune user',   width: 150, get: function (r) { return r.intuneUser; } },
     { key: 'userStatus',  label: 'User agrees?',  width: 100, get: function (r) { return r.userStatus; } },
+    { key: 'lastLoginBy', label: 'Last login by', width: 150, get: function (r) { return r.lastLoginBy; } },
+    { key: 'loginVsAssigned', label: 'Login vs assigned', width: 120, get: function (r) { return r.loginVsAssigned; } },
     { key: 'state',       label: 'FS state',      width: 110, get: function (r) { return r.state; } },
     { key: 'assetType',   label: 'Asset type',    width: 120, get: function (r) { return r.assetType; } },
     { key: 'serial',      label: 'Serial',        width: 130, get: function (r) { return r.serial; } },
@@ -138,9 +140,10 @@
       id: 'fix-user',
       name: 'Fix: assigned user',
       description: 'Freshservice disagrees with Intune about who has the device, or has nobody recorded at all. These are the rows the import file can correct automatically.',
-      columns: ['name', 'location', 'fsUser', 'intuneUser', 'userStatus', 'lastCheckIn', 'issues'],
+      columns: ['name', 'location', 'fsUser', 'intuneUser', 'lastLoginBy', 'userStatus', 'lastCheckIn', 'issues'],
       filter: { match: 'any', conditions: [
         { field: '__issue', op: 'is', value: 'user-mismatch' },
+        { field: '__issue', op: 'is', value: 'login-differs-from-assigned' },
         { field: '__issue', op: 'is', value: 'user-missing-fs' },
         { field: '__issue', op: 'is', value: 'user-similar' }
       ] }

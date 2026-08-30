@@ -61,6 +61,21 @@
       fix: { field: 'user', from: 'intune' }
     },
     {
+      code: 'login-differs-from-assigned',
+      label: 'Someone else logs into it',
+      severity: 'medium',
+      help: 'The account that last signed in to this machine is not the person the asset is assigned to. ' +
+            'Freshservice reads this straight off the device, so it reflects who actually uses it. Note that ' +
+            'the value is a Windows account name rather than an email address, so correct the assignment using ' +
+            'the Intune primary user rather than writing this string back.',
+      test: function (r) { return r.loginVsAssigned === 'mismatch'; },
+      detail: function (r) {
+        return 'Last signed in as "' + r.lastLoginBy + '", assigned to ' + (r.fsUser || 'nobody') +
+               (r.loginVsIntune === 'match' ? ' — and Intune agrees with the sign-in, so Freshservice is the odd one out' : '');
+      },
+      fix: { field: 'user', from: 'intune' }
+    },
+    {
       code: 'user-missing-both',
       label: 'No user anywhere',
       severity: 'medium',

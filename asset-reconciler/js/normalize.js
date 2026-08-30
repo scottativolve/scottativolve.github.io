@@ -49,6 +49,7 @@
     var s = clean(v);
     if (!s) return [];
     if (s.indexOf('@') >= 0) s = s.split('@')[0];
+    s = dropAccountSuffix(s);
     s = s.replace(/[._\-]+/g, ' ');
     if (s.indexOf(',') >= 0) {                     // "Smith, John" -> "John Smith"
       var parts = s.split(',');
@@ -65,6 +66,37 @@
 
   function personKey(v) {
     return personTokens(v).slice().sort().join(' ');
+  }
+
+  /* Windows caps a local account name at 20 characters, so an Entra-joined
+     machine turns a long UPN into a truncated name plus a short uniqueness
+     suffix: patience.osemwegie@... arrives as PatienceOsem_yb1wybb.
+
+     The suffix has to be told apart from a legitimate underscore-separated
+     name like john_smith. Two things distinguish it: it is random, so it
+     almost always carries a digit, and the whole string lands on the 20
+     character cap. Requiring one of those leaves real names alone - the cost
+     of missing an all-letter suffix is a name that fails to match, which is
+     recoverable; wrongly stripping "smith" off "john_smith" is not. */
+  function dropAccountSuffix(s) {
+    var m = /^([A-Za-z0-9]{4,})_([A-Za-z0-9]{3,})$/.exec(String(s).trim());
+    if (!m) return s;
+    var looksRandom = /\d/.test(m[2]);
+    var atTheCap = s.length === 20;
+    return (looksRandom || atTheCap) ? m[1] : s;
+  }
+
+  function stripAccountSuffix(token) { return dropAccountSuffix(token); }
+
+  /* Is `stem` a truncation of this person's name? Requires the whole forename
+     to be present, so "patienceosem" matches "Patience Osemwegie" while a
+     short common prefix does not match half the organisation. */
+  function truncationOf(stem, tokens) {
+    if (!stem || tokens.length < 2) return false;
+    var full = tokens.join('');
+    if (stem.length < 6 || stem.length >= full.length) return false;
+    if (full.indexOf(stem) !== 0) return false;
+    return stem.length >= tokens[0].length;
   }
 
   /* Compare two person references.
@@ -88,6 +120,32 @@
     // Account-name forms: "jsmith" / "smithj" / "john.s" against "John Smith".
     var single = ta.length === 1 ? ta[0] : tb.length === 1 ? tb[0] : null;
     var multi  = ta.length === 1 ? tb : tb.length === 1 ? ta : null;
+
+    /* Two account names rather than an account name against a display name:
+       "TomaszMensah" from the device against "tmensah" in the asset record.
+       Same initial and same surname tail is the same person. */
+    if (ta.length === 1 && tb.length === 1) {
+      var x = ta[0], y = tb[0];
+      var shortT = x.length <= y.length ? x : y;
+      var longT = x.length <= y.length ? y : x;
+      var tail = shortT.slice(1);
+      if (shortT !== longT && tail.length >= 3 &&
+          longT.charAt(0) === shortT.charAt(0) &&
+          longT.slice(-tail.length) === tail) {
+        return tail.length >= 4 ? 'match' : 'partial';
+      }
+    }
+
+    // A Windows account name, whole or truncated, against a display name.
+    if (single && multi && multi.length >= 2) {
+      var stem = single;
+      if (stem === multi.join('')) return 'match';
+      if (truncationOf(stem, multi)) {
+        // A long stem is conclusive; a short one is worth a human glance.
+        return stem.length >= 10 ? 'match' : 'partial';
+      }
+    }
+
     if (single && multi && multi.length >= 2) {
       var first = multi[0], last = multi[multi.length - 1];
       var forms = [
@@ -178,6 +236,7 @@
     personTokens: personTokens,
     personKey: personKey,
     comparePeople: comparePeople,
+    stripAccountSuffix: stripAccountSuffix,
     personDisplay: personDisplay,
     location: location,
     locationKey: locationKey,
