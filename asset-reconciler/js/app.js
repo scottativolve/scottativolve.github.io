@@ -61,6 +61,7 @@
     viewColumnsById: global.Store.get('viewColumns', {}),   // per-view column choices
     selectedIds: [],            // rows ticked on the Devices tab
     persist: global.Store.get('persist', true),   // keep the working set between visits
+    author: global.Store.get('author', ''),       // name attached to notes you write
     restoredAt: null
   };
 
@@ -147,6 +148,7 @@
     var payload = {
       version: 1,
       savedAt: new Date().toISOString(),
+      savedBy: state.author || '',
       cfg: state.cfg,
       enabledRules: state.enabledRules,
       customViews: state.customViews,
@@ -1024,7 +1026,8 @@
             marginBottom: '8px'
           }
         }, [
-          U.el('div', { class: 'hint' }, new Date(e.ts).toLocaleString('en-GB')),
+          U.el('div', { class: 'hint' },
+            new Date(e.ts).toLocaleString('en-GB') + (e.by ? ' · ' + e.by : '')),
           U.el('div', { style: { whiteSpace: 'pre-wrap', fontSize: '13px' } }, e.text),
           U.el('button', {
             class: 'btn sm ghost', style: { marginTop: '2px', fontSize: '11px' },
@@ -1054,6 +1057,23 @@
         (rows.length > 6 ? ' and ' + U.num(rows.length - 6) + ' more' : '')));
     }
 
+    // Asked once, then remembered: without it a shared trail cannot say who
+    // did what, which is most of the value when several people work the list.
+    var nameBox = null;
+    if (!state.author) {
+      nameBox = U.el('input', {
+        type: 'text', style: { width: '100%' }, placeholder: 'e.g. Scott P',
+        value: ''
+      });
+      body.appendChild(U.el('div', { class: 'field', style: { marginBottom: '12px' } }, [
+        U.el('label', {}, 'Your name'),
+        nameBox,
+        U.el('div', { class: 'hint' },
+          'Recorded against the notes you write, so a trail shared with the team says who did what. ' +
+          'Asked once; change it in Settings.')
+      ]));
+    }
+
     var box = U.el('textarea', {
       rows: 4, style: { width: '100%' },
       placeholder: 'What did you do, or what needs doing? e.g. "Rang Ashfield House, confirmed laptop is with Sarah B, awaiting Freshservice update"'
@@ -1075,7 +1095,11 @@
         action: function () {
           var text = box.value.trim();
           if (!text) { U.toast('Type the note first.', 'err'); return false; }
-          var res = global.Notes.add(rows, text);
+          if (nameBox && nameBox.value.trim()) {
+            state.author = nameBox.value.trim();
+            global.Store.set('author', state.author);
+          }
+          var res = global.Notes.add(rows, text, state.author);
           if (res.stored === false) {
             U.toast('Note saved for this session, but this browser would not store it — check Settings.', 'err', 9000);
           } else {
@@ -1862,6 +1886,26 @@
       'tag — so they stay attached when you load next month\u2019s exports, and survive a machine being renamed. ' +
       'They are kept separately from the loaded data, so turning off the working-set setting above does not ' +
       'remove them. They travel inside "Save project".'));
+    notesCard.appendChild(U.el('div', { class: 'field', style: { maxWidth: '320px', marginBottom: '12px' } }, [
+      U.el('label', {}, 'Your name, recorded against notes you write'),
+      U.el('input', {
+        type: 'text', value: state.author, placeholder: 'e.g. Scott P',
+        onchange: function (e) {
+          state.author = e.target.value.trim();
+          global.Store.set('author', state.author);
+          U.toast(state.author ? 'Notes will be signed ' + state.author + '.' : 'Notes will be unsigned.', 'ok');
+        }
+      })
+    ]));
+
+    var whoWrote = global.Notes.authors();
+    var authorNames = Object.keys(whoWrote);
+    if (authorNames.length) {
+      notesCard.appendChild(U.el('div', { class: 'hint', style: { marginBottom: '10px' } },
+        'Notes here were written by: ' +
+        authorNames.map(function (a) { return a + ' (' + U.num(whoWrote[a]) + ')'; }).join(', ') + '.'));
+    }
+
     notesCard.appendChild(U.el('div', { class: 'row' }, [
       U.el('button', {
         class: 'btn sm', disabled: !ns.entries,
@@ -1941,7 +1985,7 @@
         class: 'btn sm', onclick: function () {
           U.download('asset-reconciler-views.json',
             JSON.stringify({ views: state.customViews, fsConfig: state.fsConfig, cfg: state.cfg }, null, 2),
-            'application/json');
+            'application/json', { bom: false });
         }
       }, 'Export configuration'),
       U.el('button', { class: 'btn sm', onclick: importConfig }, 'Import configuration')
@@ -2108,7 +2152,7 @@
         var fr = new FileReader();
         fr.onload = function () {
           try {
-            var json = JSON.parse(String(fr.result));
+            var json = JSON.parse(String(fr.result).replace(/^\uFEFF/, ''));
             if (json.views) {
               state.customViews = json.views;
               global.Store.set('customViews', state.customViews);
@@ -2139,6 +2183,7 @@
       format: 'asset-reconciler-project',
       version: 1,
       savedAt: new Date().toISOString(),
+      savedBy: state.author || '',
       cfg: state.cfg,
       enabledRules: state.enabledRules,
       customViews: state.customViews,
@@ -2151,7 +2196,8 @@
       if (!s) return;
       payload.sources[id] = { fileName: s.fileName, headers: s.headers, mapping: s.mapping, raw: s.raw };
     });
-    U.download('asset-reconciler-' + U.todayStamp() + '.json', JSON.stringify(payload), 'application/json');
+    U.download('asset-reconciler-' + U.todayStamp() + '.json', JSON.stringify(payload, null, 1),
+      'application/json', { bom: false });
     U.toast('Project saved. It contains your device data, so keep it somewhere appropriate.', 'ok', 7000);
   }
 
@@ -2164,7 +2210,9 @@
         var fr = new FileReader();
         fr.onload = function () {
           try {
-            var p = JSON.parse(String(fr.result));
+            // Strip a leading BOM: files written by an earlier build carry one,
+            // and JSON.parse treats it as a syntax error.
+            var p = JSON.parse(String(fr.result).replace(/^\uFEFF/, ''));
             if (p.format !== 'asset-reconciler-project') throw new Error('not a project file');
             state.sources = {};
             Object.keys(p.sources || {}).forEach(function (id) {
@@ -2178,11 +2226,18 @@
             if (p.fsConfig) state.fsConfig = mergeFsConfig(p.fsConfig);
             // Merge rather than replace: notes already written in this browser
             // are somebody's work and must not be dropped by opening a file.
-            if (p.notes) global.Notes.merge(p.notes);
+            var mergeReport = p.notes ? global.Notes.merge(p.notes) : null;
             global.EstateMap.reset();
             recompute();
             setTab('dashboard');
-            U.toast('Project loaded from ' + f.name, 'ok');
+            var who = p.savedBy ? ' saved by ' + p.savedBy : '';
+            var when = p.savedAt ? ' on ' + new Date(p.savedAt).toLocaleString('en-GB') : '';
+            U.toast('Loaded ' + f.name + who + when + '.', 'ok', 7000);
+            if (mergeReport && (mergeReport.added || mergeReport.skipped)) {
+              U.toast('Notes merged: ' + U.num(mergeReport.added) + ' added' +
+                (mergeReport.newDevices ? ' (' + U.num(mergeReport.newDevices) + ' devices new to this browser)' : '') +
+                ', ' + U.num(mergeReport.skipped) + ' already here. Nothing of yours was replaced.', 'ok', 10000);
+            }
           } catch (err) {
             U.toast('That is not an Asset Reconciler project file.', 'err');
           }

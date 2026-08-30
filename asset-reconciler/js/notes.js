@@ -168,6 +168,7 @@
           'Serial number': row.serial,
           'Location': row.location,
           'Note added': new Date(e.ts).toLocaleString('en-GB'),
+          'Added by': e.by || '',
           'Note': e.text
         });
       });
@@ -187,26 +188,66 @@
   }
 
   /* Merge another set in without losing either side - used when a project file
-     is opened alongside notes already held in this browser. */
+     is opened alongside notes already held in this browser. Two people working
+     the same estate from a shared file must both keep their work, so this is
+     a union: an entry is only skipped when the same author wrote the same text
+     at the same instant, which is the same entry rather than a coincidence. */
   function merge(payload) {
-    if (!payload || !payload.devices) return;
+    var added = 0, skipped = 0, newDevices = 0;
+    if (!payload || !payload.devices) return { added: 0, skipped: 0, newDevices: 0 };
+
     Object.keys(payload.devices).forEach(function (k) {
       var incoming = payload.devices[k];
-      var existing = data.devices[k];
-      if (!existing) { data.devices[k] = incoming; return; }
-      incoming.entries.forEach(function (e) {
-        var dup = existing.entries.some(function (x) { return x.ts === e.ts && x.text === e.text; });
-        if (!dup) existing.entries.push(e);
+      if (!incoming || !incoming.entries) return;
+
+      // Match on any identifier the incoming record carries, not just its own
+      // primary key - the other person's file may key the same machine on its
+      // name where this browser keys it on the serial.
+      var target = null;
+      (incoming.keys || [k]).forEach(function (key) {
+        if (target) return;
+        var primary = alias[key];
+        if (primary && data.devices[primary]) target = data.devices[primary];
       });
-      existing.entries.sort(function (a, b) { return a.ts < b.ts ? -1 : 1; });
+
+      if (!target) {
+        data.devices[k] = incoming;
+        newDevices++;
+        added += incoming.entries.length;
+        return;
+      }
+      (incoming.keys || []).forEach(function (key) {
+        if (target.keys.indexOf(key) < 0) target.keys.push(key);
+      });
+      incoming.entries.forEach(function (e) {
+        var dup = target.entries.some(function (x) {
+          return x.ts === e.ts && x.text === e.text && (x.by || '') === (e.by || '');
+        });
+        if (dup) { skipped++; return; }
+        target.entries.push(e);
+        added++;
+      });
+      target.entries.sort(function (a, b) { return a.ts < b.ts ? -1 : 1; });
     });
+
     persist();
+    return { added: added, skipped: skipped, newDevices: newDevices };
+  }
+
+  function authors() {
+    var seen = {};
+    Object.keys(data.devices).forEach(function (k) {
+      data.devices[k].entries.forEach(function (e) {
+        if (e.by) seen[e.by] = (seen[e.by] || 0) + 1;
+      });
+    });
+    return seen;
   }
 
   global.Notes = {
     entriesFor: entriesFor, countFor: countFor, add: add,
     removeEntry: removeEntry, clearDevice: clearDevice, clearAll: clearAll,
-    stats: stats, exportRows: exportRows,
+    stats: stats, exportRows: exportRows, authors: authors,
     snapshot: snapshot, restore: restore, merge: merge
   };
 })(window);

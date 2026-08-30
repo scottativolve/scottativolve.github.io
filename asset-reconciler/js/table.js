@@ -411,7 +411,8 @@
           notesCard.appendChild(U.el('div', {
             style: { borderLeft: '2px solid var(--accent)', padding: '3px 0 5px 10px', marginBottom: '7px' }
           }, [
-            U.el('div', { class: 'hint' }, new Date(e.ts).toLocaleString('en-GB')),
+            U.el('div', { class: 'hint' },
+              new Date(e.ts).toLocaleString('en-GB') + (e.by ? ' · ' + e.by : '')),
             U.el('div', { style: { whiteSpace: 'pre-wrap', fontSize: '12.5px' } }, e.text)
           ]));
         });

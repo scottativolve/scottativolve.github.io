@@ -475,9 +475,51 @@ person using the same browser profile opens the tool and sees your estate. Turn
 the setting off there, or clear it when you finish.
 
 **Save project** is the separate, deliberate export: it writes everything
-currently loaded to a `.json` file you choose, for handing work to a colleague
-or moving between machines. Treat that file the way you would treat the original
-exports.
+currently loaded — sources, settings and notes — to a `.json` file you choose,
+for handing work to a colleague or moving between machines. See
+[Working as a team](#working-as-a-team). Treat that file the way you would treat
+the original exports: it contains the device and user data in full.
+
+---
+
+## Working as a team
+
+Everything the tool holds lives in the browser profile of the person using it —
+there is no server, so nothing is shared automatically. Two people running it
+see two separate sets of data and two separate sets of notes.
+
+The supported way to work together is a **project file on a shared drive**.
+
+**Set your name once.** Settings → *Your name, recorded against notes you
+write*, or answer the prompt the first time you add a note. Every note you write
+is then signed, so a shared trail says who did what.
+
+**The routine.**
+
+1. One person loads the exports and saves a project file to the shared drive
+   (`Save project`). The file records who saved it and when.
+2. Anyone else opens it (`Open`). Their own notes are **merged, never
+   replaced** — the tool reports how many arrived and how many were already
+   there, and says explicitly that nothing of theirs was overwritten.
+3. Work the list, add notes.
+4. Save back to the shared drive when finished, keeping the file name and
+   letting it overwrite.
+
+**What merging guarantees.** Notes are a union of both sides. An entry is only
+treated as a duplicate when the same author wrote the same text at the same
+instant, which is the same entry rather than a coincidence — so re-opening the
+same file twice adds nothing, and two people who noted the same device both keep
+their entry. Notes on a device match on serial number, then name, then asset
+tag, so the two files agreeing about a machine is enough; they do not have to
+have keyed it the same way.
+
+**What it does not do.** There is no locking and no live sync. If two people
+save over each other within the same session, the last save wins for the *data
+and settings* — though notes survive, because whoever opens next merges rather
+than replaces. Treat it like a shared spreadsheet: agree who is holding it, or
+have each person save to their own file and merge them in when you regroup.
+That is the honest limit of a tool with no server behind it; if you need
+concurrent editing, it needs a backend, which is a different piece of work.
 
 ---
 
