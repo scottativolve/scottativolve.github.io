@@ -118,9 +118,36 @@
       });
     }
 
-    // Leftovers on each side.
-    fsRows.forEach(function (r) { if (!usedFs.has(r)) pairs.push({ fs: r, intune: null, matchType: 'fs-only' }); });
-    inRows.forEach(function (r) { if (!usedIn.has(r)) pairs.push({ fs: null, intune: r, matchType: 'intune-only' }); });
+    /* Leftovers. A record left over because another row in its own export
+       already matched on the same serial or name is a duplicate, not a device
+       the other system has never heard of - reporting it as "missing from
+       Freshservice" sends someone looking for a record that is right there. */
+    var matchedSerials = new Set();
+    var matchedNames = new Set();
+    pairs.forEach(function (p) {
+      [p.fs, p.intune].forEach(function (rec) {
+        if (!rec) return;
+        var sk = N.serial(rec.serial);
+        var nk = N.deviceName(rec.name);
+        if (sk) matchedSerials.add(sk);
+        if (nk) matchedNames.add(nk);
+      });
+    });
+
+    function shadowed(rec) {
+      var sk = N.serial(rec.serial);
+      var nk = N.deviceName(rec.name);
+      return (!!sk && matchedSerials.has(sk)) || (!!nk && matchedNames.has(nk));
+    }
+
+    fsRows.forEach(function (r) {
+      if (usedFs.has(r)) return;
+      pairs.push({ fs: r, intune: null, matchType: 'fs-only', shadowed: shadowed(r) });
+    });
+    inRows.forEach(function (r) {
+      if (usedIn.has(r)) return;
+      pairs.push({ fs: null, intune: r, matchType: 'intune-only', shadowed: shadowed(r) });
+    });
 
     /* ------------------------------------------------ build rows */
     var rows = pairs.map(function (p, i) {
@@ -204,6 +231,7 @@
         intune: intune,
         ver: verByName.get(nameKey) || null,
         matchType: p.matchType,
+        shadowed: !!p.shadowed,
         inScope: inScope,
         assetType: assetType,
 

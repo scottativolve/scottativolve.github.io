@@ -15,7 +15,7 @@
       severity: 'high',
       help: 'Freshservice holds this asset but Intune has no matching device. Either it was never enrolled, it has been disposed of without updating Freshservice, or it is sitting switched off somewhere.',
       test: function (r, cfg) {
-        return r.inScope && r.fs && !r.intune && !N.isRetiredState(r.state);
+        return r.inScope && r.fs && !r.intune && !r.shadowed && !N.isRetiredState(r.state);
       },
       detail: function (r) {
         return 'Freshservice state "' + (r.state || 'not set') + '", last audit ' + global.U.ageLabel(r.lastAudit) + ' ago';
@@ -26,7 +26,7 @@
       label: 'Not in Freshservice',
       severity: 'high',
       help: 'Intune manages this device but Freshservice has no asset record. The Freshservice agent is probably not installed, or the asset was never created.',
-      test: function (r) { return r.intune && !r.fs; },
+      test: function (r) { return r.intune && !r.fs && !r.shadowed; },
       detail: function (r) {
         return 'Enrolled to ' + (r.intuneUser || 'nobody') + ', last check-in ' + global.U.ageLabel(r.lastCheckIn) + ' ago';
       }
@@ -261,6 +261,21 @@
             'the device-level list.',
       test: function (r) { return r.ipStatus === 'unassigned'; },
       detail: function (r) { return 'Last seen on ' + r.ip + '; no range recorded for ' + r.location; }
+    },
+    {
+      code: 'duplicate-record',
+      label: 'Duplicate row in one export',
+      severity: 'medium',
+      help: 'Another row in the same export already matched this device on its serial number or name, so this ' +
+            'one is a second record for hardware that is accounted for — typically a machine re-enrolled after ' +
+            'a rebuild, or an asset raised twice. It is not missing from the other system; tidy the duplicate ' +
+            'rather than chasing the device.',
+      test: function (r) { return !!r.shadowed; },
+      detail: function (r) {
+        return 'A row in ' + (r.fs ? 'Freshservice' : 'Intune') + ' with the same ' +
+               (r.serial ? 'serial number (' + r.serial + ')' : 'device name') +
+               ' has already been matched to the other system';
+      }
     },
     {
       code: 'duplicate-name',
