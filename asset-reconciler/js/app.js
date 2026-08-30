@@ -61,6 +61,7 @@
   };
 
   var grid = null;
+  var renderNoteBar = function () {};
 
   /* ==================================================================== */
   /*  data loading                                                        */
@@ -880,14 +881,64 @@
     }, 'Build import file'));
     main.appendChild(controls);
 
+    var noteBar = U.el('div', { id: 'notebar', class: 'row no-print', style: { marginBottom: '10px' } });
+    main.appendChild(noteBar);
+
     var gridHost = U.el('div');
     main.appendChild(gridHost);
 
+    renderNoteBar = function () {
+      U.clear(noteBar);
+      var chosen = grid ? grid.selected() : [];
+      var visible = grid ? grid.visibleRows() : [];
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm' + (chosen.length ? ' primary' : ''),
+        disabled: !chosen.length,
+        onclick: function () { openNotes(chosen); }
+      }, chosen.length ? 'Add note to ' + U.num(chosen.length) + ' selected' : 'Add note to selected'));
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm',
+        onclick: function () {
+          if (!visible.length) return;
+          if (visible.length > 50 &&
+              !confirm('Add the same note to all ' + visible.length + ' devices in this view?')) return;
+          openNotes(visible);
+        }
+      }, 'Add note to all ' + U.num(visible.length) + ' in view'));
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm ghost',
+        onclick: function () {
+          visible.forEach(function (r) { grid.state.selection.add(r.id); });
+          grid.render(); renderNoteBar();
+        }
+      }, 'Select all in view'));
+      var withNotes = visible.filter(function (r) { return global.Notes.countFor(r); }).length;
+      noteBar.appendChild(U.el('span', { class: 'hint' },
+        withNotes ? U.num(withNotes) + ' of these have notes' : 'None of these have notes yet'));
+      noteBar.appendChild(U.el('div', { class: 'spacer' }));
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm ghost',
+        title: 'Every note on the devices in this view, one row per note',
+        onclick: function () {
+          var rows = global.Notes.exportRows(visible);
+          if (!rows.length) { U.toast('No notes to export in this view.', 'err'); return; }
+          U.download('device-notes-' + U.todayStamp() + '.csv',
+            global.CSV.stringify(rows, Object.keys(rows[0])));
+        }
+      }, 'Export notes'));
+    };
+
     grid = T.create(gridHost, {
-      selectable: false,
+      selectable: true,
       pageSize: 150,
-      onRowClick: function (r) { T.openDrawer(r); },
+      onRowClick: function (r) {
+        T.openDrawer(r, null, {
+          onAddNote: function (row) { openNotes([row]); }
+        });
+      },
       onChipClick: function (code) { state.issueFilter = code; render(); },
+      onNotesClick: function (r) { openNotes([r]); },
+      onSelectionChange: function () { renderNoteBar(); },
       onGroupExport: function (name, members) {
         U.download('site-check-' + slug(name) + '-' + U.todayStamp() + '.csv', FX.sitePackCsv(members, name));
         U.toast('Exported ' + members.length + ' devices for ' + name, 'ok');
@@ -895,10 +946,109 @@
       emptyText: 'Nothing in this view. That is good news — or loosen the thresholds in Settings.'
     });
     grid.setRows(rows);
-    grid.setColumns(view.columns || V.BASE_COLS);
+    // The flag has to be present wherever devices are listed, so it is added
+    // to whatever columns the view asks for rather than declared per view.
+    var cols = (view.columns || V.BASE_COLS).slice();
+    if (cols.indexOf('notes') < 0) cols.unshift('notes');
+    grid.setColumns(cols);
     if (view.sort) grid.setSort(view.sort);
     if (view.group) grid.setGroup(view.group);
     grid.render();
+    renderNoteBar();
+  }
+
+  /* Read and add notes. One device shows its history; several share one entry,
+     written to each with the same timestamp. */
+  function openNotes(rows) {
+    if (!rows || !rows.length) return;
+    var single = rows.length === 1 ? rows[0] : null;
+
+    var body = U.el('div', { class: 'body' });
+
+    var history = U.el('div', { style: { marginBottom: '14px' } });
+
+    function drawHistory() {
+      if (!single) return;
+      U.clear(history);
+      var entries = global.Notes.entriesFor(single);
+      if (!entries.length) {
+        history.appendChild(U.el('div', { class: 'hint' }, 'No notes on this device yet.'));
+        return;
+      }
+      // Newest first to read, though they are stored in the order written.
+      entries.slice().reverse().forEach(function (e) {
+        history.appendChild(U.el('div', {
+          style: {
+            borderLeft: '2px solid var(--accent)', padding: '4px 0 6px 10px',
+            marginBottom: '8px'
+          }
+        }, [
+          U.el('div', { class: 'hint' }, new Date(e.ts).toLocaleString('en-GB')),
+          U.el('div', { style: { whiteSpace: 'pre-wrap', fontSize: '13px' } }, e.text),
+          U.el('button', {
+            class: 'btn sm ghost', style: { marginTop: '2px', fontSize: '11px' },
+            onclick: function () {
+              if (!confirm('Remove this note? The rest of the trail is kept.')) return;
+              global.Notes.removeEntry(single, e.ts, e.text);
+              drawHistory();
+              if (grid) grid.render();
+              renderNoteBar();
+            }
+          }, 'Remove')
+        ]));
+      });
+    }
+
+    if (single) {
+      body.appendChild(U.el('div', { class: 'hint', style: { marginBottom: '10px' } },
+        single.name + (single.serial ? ' · ' + single.serial : '') +
+        (single.location ? ' · ' + single.location : '')));
+      drawHistory();
+      body.appendChild(history);
+    } else {
+      body.appendChild(U.el('p', {},
+        'This note will be added to ' + U.num(rows.length) + ' devices, each with the same timestamp.'));
+      body.appendChild(U.el('div', { class: 'hint', style: { marginBottom: '10px' } },
+        rows.slice(0, 6).map(function (r) { return r.name; }).join(', ') +
+        (rows.length > 6 ? ' and ' + U.num(rows.length - 6) + ' more' : '')));
+    }
+
+    var box = U.el('textarea', {
+      rows: 4, style: { width: '100%' },
+      placeholder: 'What did you do, or what needs doing? e.g. "Rang Ashfield House, confirmed laptop is with Sarah B, awaiting Freshservice update"'
+    });
+    body.appendChild(U.el('div', { class: 'field' }, [
+      U.el('label', {}, 'Add a note'),
+      box
+    ]));
+    body.appendChild(U.el('div', { class: 'hint', style: { marginTop: '4px' } },
+      'Notes are stamped with the date and time and appended to whatever is already there — nothing is ' +
+      'overwritten. They are kept in this browser and follow the device by serial number, so they survive ' +
+      'loading next month\u2019s exports.'));
+
+    modal(single ? 'Notes — ' + single.name : 'Add a note to ' + U.num(rows.length) + ' devices', body, [
+      { label: 'Close', ghost: true },
+      {
+        label: single ? 'Add note' : 'Add to all ' + U.num(rows.length), primary: true,
+        keepOpen: !!single,
+        action: function () {
+          var text = box.value.trim();
+          if (!text) { U.toast('Type the note first.', 'err'); return false; }
+          var res = global.Notes.add(rows, text);
+          if (res.stored === false) {
+            U.toast('Note saved for this session, but this browser would not store it — check Settings.', 'err', 9000);
+          } else {
+            U.toast('Note added to ' + U.num(res.added) + ' device' + (res.added === 1 ? '' : 's') + '.', 'ok');
+          }
+          if (grid) grid.render();
+          renderNoteBar();
+          // For one device the dialog stays put and shows the entry appended,
+          // which is the point of a running trail; a bulk add just closes.
+          if (single) { drawHistory(); box.value = ''; box.focus(); }
+        }
+      }
+    ]);
+    setTimeout(function () { box.focus(); }, 60);
   }
 
   function openColumnPicker(view) {
@@ -1621,6 +1771,42 @@
     });
     main.appendChild(rulesCard);
 
+    var notesCard = U.el('div', { class: 'card' });
+    var ns = global.Notes.stats();
+    notesCard.appendChild(U.el('h2', {}, 'Device notes'));
+    notesCard.appendChild(U.el('p', { class: 'hint' },
+      ns.entries
+        ? U.num(ns.entries) + ' note' + (ns.entries === 1 ? '' : 's') + ' across ' + U.num(ns.devices) +
+          ' device' + (ns.devices === 1 ? '' : 's') + ', using about ' + Math.max(1, Math.round(ns.bytes / 1024)) + ' KB.'
+        : 'No notes yet. Add them from the Devices tab — the flag column, or the buttons above the list.'));
+    notesCard.appendChild(U.el('p', { class: 'hint' },
+      'Notes live in this browser and are matched to a device by serial number, then device name, then asset ' +
+      'tag — so they stay attached when you load next month\u2019s exports, and survive a machine being renamed. ' +
+      'They are kept separately from the loaded data, so turning off the working-set setting above does not ' +
+      'remove them. They travel inside "Save project".'));
+    notesCard.appendChild(U.el('div', { class: 'row' }, [
+      U.el('button', {
+        class: 'btn sm', disabled: !ns.entries,
+        onclick: function () {
+          var rows = state.result ? global.Notes.exportRows(state.result.rows) : [];
+          if (!rows.length) { U.toast('Nothing to export.', 'err'); return; }
+          U.download('device-notes-all-' + U.todayStamp() + '.csv',
+            global.CSV.stringify(rows, Object.keys(rows[0])));
+        }
+      }, 'Export every note'),
+      U.el('button', {
+        class: 'btn sm', disabled: !ns.entries,
+        onclick: function () {
+          if (!confirm('Delete all ' + ns.entries + ' notes? This cannot be undone — export them first if you ' +
+                       'need the audit trail.')) return;
+          global.Notes.clearAll();
+          U.toast('All notes deleted.', 'ok');
+          render();
+        }
+      }, 'Delete all notes')
+    ]));
+    main.appendChild(notesCard);
+
     var housekeeping = U.el('div', { class: 'card' });
     housekeeping.appendChild(U.el('h2', {}, 'Stored on this computer'));
     housekeeping.appendChild(U.el('p', { class: 'hint' },
@@ -1879,6 +2065,7 @@
       enabledRules: state.enabledRules,
       customViews: state.customViews,
       fsConfig: state.fsConfig,
+      notes: global.Notes.snapshot(),
       sources: {}
     };
     SOURCE_IDS.forEach(function (id) {
@@ -1911,6 +2098,9 @@
             if (p.enabledRules) state.enabledRules = p.enabledRules;
             if (p.customViews) state.customViews = p.customViews;
             if (p.fsConfig) state.fsConfig = mergeFsConfig(p.fsConfig);
+            // Merge rather than replace: notes already written in this browser
+            // are somebody's work and must not be dropped by opening a file.
+            if (p.notes) global.Notes.merge(p.notes);
             global.EstateMap.reset();
             recompute();
             setTab('dashboard');

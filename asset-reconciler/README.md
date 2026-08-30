@@ -249,6 +249,44 @@ view is also the way you hand a list to somebody who does not use the tool.
 
 ---
 
+## Notes and the audit trail
+
+Every device carries a running, timestamped set of notes recording what you did
+about it. They are append-only: adding a note never overwrites what was there,
+so the entries read as a history rather than a status field.
+
+**Adding them.** On the Devices tab, click the flag in the Notes column to open
+one device's trail and add to it — the dialog stays open so you see the entry
+land. For several devices at once, tick the rows and use **Add note to N
+selected**, or **Add note to all N in view** to cover the whole filtered list.
+A bulk note goes to every chosen device with the same timestamp, so a round of
+phone calls or a batch email is recorded once and shows up on each machine.
+
+**Seeing them.** The Notes column carries a flag and a count, and it is added to
+every view whether or not the view asks for it, so you always know which devices
+have history behind them. Clicking a row opens the detail drawer, which shows
+the full trail alongside the reconciliation detail. The column sorts and filters
+like any other, so a custom view can be built for "devices I have already
+actioned" or the reverse.
+
+**Keeping them.** Notes are matched to a device by serial number, then device
+name, then asset tag, and every note records all three. That is what makes them
+survive loading next month's exports, when every row is rebuilt from scratch:
+a machine that gets renamed keeps its notes through the serial, and one whose
+serial is filled in later keeps them through the name.
+
+They are stored separately from the loaded data, so turning off the working-set
+setting does not remove them, and they travel inside **Save project**. Opening a
+project file merges its notes with what is already in the browser rather than
+replacing them, so nobody's work is lost by opening someone else's file.
+
+**Exporting them.** *Export notes* on the Devices tab writes one row per note
+for the devices in view — device, serial, location, timestamp, note — which is
+the audit trail in a form you can hand to somebody. Settings has the same for
+every note held.
+
+---
+
 ## The site verification loop
 
 This is the workflow for "go and check where these actually are":
@@ -469,6 +507,7 @@ asset-reconciler/
 │   ├── fsexport.js         import file, change log and site packs
 │   ├── store.js            local storage for settings
 │   ├── db.js               IndexedDB store for the loaded working set
+│   ├── notes.js            per-device notes, keyed so they survive re-imports
 │   └── sampledata.js       generated — do not edit by hand
 ├── lib/leaflet/            Leaflet 1.9.4, vendored so there is no CDN dependency
 ├── sample-data/            example input files

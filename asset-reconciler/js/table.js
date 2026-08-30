@@ -45,6 +45,17 @@
       td.appendChild(issueChips(row, ctx.onChipClick));
       return;
     }
+    if (col.key === 'notes') {
+      var n = v || 0;
+      var flag = U.el('button', {
+        class: 'btn sm ghost',
+        style: { padding: '0 5px', lineHeight: '1.2', color: n ? 'var(--accent)' : 'var(--text-muted)' },
+        title: n ? n + ' note' + (n === 1 ? '' : 's') + ' — click to read' : 'No notes yet — click to add one',
+        onclick: function (e) { e.stopPropagation(); if (ctx.onNotesClick) ctx.onNotesClick(row); }
+      }, n ? '\u2691 ' + n : '\u2690');
+      td.appendChild(flag);
+      return;
+    }
     if (col.key === 'severity') {
       td.appendChild(severityBadge(row.severity));
       return;
@@ -171,7 +182,7 @@
 
       /* --------------------------------------------------------- body */
       var tbody = U.el('tbody');
-      var ctx = { onChipClick: opts.onChipClick };
+      var ctx = { onChipClick: opts.onChipClick, onNotesClick: opts.onNotesClick };
 
       function addRow(r) {
         var tr = U.el('tr', {
@@ -301,7 +312,8 @@
     ];
   }
 
-  function openDrawer(row, onClose) {
+  function openDrawer(row, onClose, opts) {
+    opts = opts || {};
     var back = U.el('div', { class: 'drawer-back', onclick: close });
     var drawer = U.el('div', { class: 'drawer', role: 'dialog', 'aria-label': 'Device detail' });
 
@@ -383,6 +395,40 @@
       });
       body.appendChild(v);
     }
+
+    /* The running trail for this device, so the drawer answers "what have we
+       already done about this?" without a second trip. */
+    var notesCard = U.el('div', { class: 'card' });
+    function drawNotes() {
+      U.clear(notesCard);
+      var entries = global.Notes.entriesFor(row);
+      notesCard.appendChild(U.el('header', {}, [
+        U.el('h3', {}, 'Notes'),
+        U.el('span', { class: 'sub' }, entries.length ? U.num(entries.length) + ' entries' : 'none yet'),
+        U.el('div', { class: 'spacer' }),
+        U.el('button', {
+          class: 'btn sm',
+          onclick: function () {
+            if (opts.onAddNote) opts.onAddNote(row, drawNotes);
+          }
+        }, 'Add note')
+      ]));
+      if (!entries.length) {
+        notesCard.appendChild(U.el('div', { class: 'hint' },
+          'Nothing recorded against this device yet.'));
+      } else {
+        entries.slice().reverse().forEach(function (e) {
+          notesCard.appendChild(U.el('div', {
+            style: { borderLeft: '2px solid var(--accent)', padding: '3px 0 5px 10px', marginBottom: '7px' }
+          }, [
+            U.el('div', { class: 'hint' }, new Date(e.ts).toLocaleString('en-GB')),
+            U.el('div', { style: { whiteSpace: 'pre-wrap', fontSize: '12.5px' } }, e.text)
+          ]));
+        });
+      }
+    }
+    drawNotes();
+    body.appendChild(notesCard);
 
     if (row.site) {
       var st = U.el('div', { class: 'card' });

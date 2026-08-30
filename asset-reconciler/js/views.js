@@ -7,6 +7,9 @@
   /* ------------------------------------------------------------ columns */
 
   var COLUMNS = [
+    { key: 'notes',       label: 'Notes',         width: 64, type: 'notes',
+      get: function (r) { return global.Notes.countFor(r); },
+      sortKey: function (r) { return -global.Notes.countFor(r); } },
     { key: 'name',        label: 'Device name',   width: 150, get: function (r) { return r.name; }, strong: true },
     { key: 'severity',    label: 'Severity',      width: 90,  get: function (r) { return r.severity || ''; },
       sortKey: function (r) { return r.severity ? -global.Rules.SEVERITY_ORDER[r.severity] : 9; } },
