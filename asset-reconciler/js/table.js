@@ -108,7 +108,7 @@
 
     function visibleRows() {
       var rows = state.rows;
-      rows = V.searchRows(rows, state.search, state.columns);
+      rows = V.searchRows(rows, state.search);
       if (state.sort) {
         var col = V.COL_BY_KEY[state.sort.key];
         var keyFn = col && col.sortKey ? col.sortKey : function (r) { return V.colValue(r, state.sort.key); };

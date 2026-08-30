@@ -320,6 +320,11 @@ against each:
   including the quick-search box as well as the view's own filter and any site
   or issue filter. The line beneath spells out what narrowed it, so a view of
   106 filtered to 56 reads as "56 of 106" rather than quietly exporting 106.
+
+  The search box looks at **every field**, not only the columns on screen, so
+  you can search a serial number or an asset type without adding its column
+  first — and the export always covers the same rows the table showed. Column
+  choices you make in the picker are remembered per view.
 - **Every device** — the whole reconciled estate, ignoring the view.
 
 The results header repeats the number of devices in scope, so the file is never

@@ -246,20 +246,28 @@
     }
   ];
 
-  /* The quick-search box over a list of rows. Shared so that the export can
-     reproduce exactly what the table was showing rather than approximating it. */
-  function searchRows(rows, q, columns) {
+  /* The quick-search box over a list of rows.
+
+     It searches every field, not only the columns currently on screen. Tying
+     it to the visible columns made the result depend on the column picker,
+     which meant the table and the export could disagree about what "shown"
+     meant - and typing a value whose column you had not added found nothing.
+     Searching everything is both more useful (a serial number is findable
+     without adding the column) and impossible to get out of step. */
+  var SEARCHABLE = null;
+  function searchRows(rows, q) {
     q = String(q || '').toLowerCase().trim();
     if (!q) return rows;
-    var cols = columns && columns.length ? columns : BASE_COLS;
+    if (!SEARCHABLE) SEARCHABLE = COLUMNS.map(function (c) { return c.key; });
     return rows.filter(function (r) {
-      var hit = cols.some(function (k) {
-        var v = colValue(r, k);
+      for (var i = 0; i < SEARCHABLE.length; i++) {
+        var v = colValue(r, SEARCHABLE[i]);
+        if (v === null || v === undefined || v === '') continue;
         if (Array.isArray(v)) v = v.join(' ');
-        if (v instanceof Date) v = global.U.fmtDate(v);
-        return String(v === null || v === undefined ? '' : v).toLowerCase().indexOf(q) >= 0;
-      });
-      return hit || String(r.name).toLowerCase().indexOf(q) >= 0;
+        else if (v instanceof Date) v = global.U.fmtDate(v);
+        if (String(v).toLowerCase().indexOf(q) >= 0) return true;
+      }
+      return false;
     });
   }
 

@@ -57,7 +57,8 @@
     includeOtherOnMap: false,
     exportScope: 'all',         // 'all' | 'view' | 'selection'
     viewSearch: '',             // the quick-search box on the Devices tab
-    viewColumns: null,          // the columns it searched across
+    viewColumns: null,          // the columns the current view is showing
+    viewColumnsById: global.Store.get('viewColumns', {}),   // per-view column choices
     selectedIds: [],            // rows ticked on the Devices tab
     persist: global.Store.get('persist', true),   // keep the working set between visits
     restoredAt: null
@@ -251,7 +252,7 @@
       rows = rows.filter(function (r) { return r.issues.indexOf(state.issueFilter) >= 0; });
     }
     if (withSearch && state.viewSearch) {
-      rows = V.searchRows(rows, state.viewSearch, state.viewColumns);
+      rows = V.searchRows(rows, state.viewSearch);
     }
     return rows;
   }
@@ -982,7 +983,10 @@
     grid.setRows(rows);
     // The flag has to be present wherever devices are listed, so it is added
     // to whatever columns the view asks for rather than declared per view.
-    var cols = (view.columns || V.BASE_COLS).slice();
+    // A column set the user chose for this view outlives leaving the tab, and
+    // the browser session - losing it on every tab switch made the picker feel
+    // broken.
+    var cols = (state.viewColumnsById[view.id] || view.columns || V.BASE_COLS).slice();
     if (cols.indexOf('notes') < 0) cols.unshift('notes');
     grid.setColumns(cols);
     state.viewColumns = cols;
@@ -1109,12 +1113,25 @@
     });
     body.appendChild(wrap);
     modal('Columns', body, [
+      {
+        label: 'Reset to this view\u2019s columns', ghost: true,
+        action: function () {
+          delete state.viewColumnsById[view.id];
+          global.Store.set('viewColumns', state.viewColumnsById);
+          render();
+        }
+      },
       { label: 'Cancel', ghost: true },
       { label: 'Apply', primary: true, action: function () {
         // Preserve the canonical column order rather than click order.
         var ordered = V.COLUMNS.map(function (c) { return c.key; })
           .filter(function (k) { return chosen.indexOf(k) >= 0; });
-        grid.setColumns(ordered.length ? ordered : V.BASE_COLS);
+        var next = ordered.length ? ordered : V.BASE_COLS.slice();
+        if (next.indexOf('notes') < 0) next.unshift('notes');
+        grid.setColumns(next);
+        state.viewColumns = next;
+        state.viewColumnsById[view.id] = next;
+        global.Store.set('viewColumns', state.viewColumnsById);
         grid.render();
       } }
     ]);

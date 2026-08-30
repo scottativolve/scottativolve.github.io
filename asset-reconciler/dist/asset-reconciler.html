@@ -4017,20 +4017,28 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
     }
   ];
 
-  /* The quick-search box over a list of rows. Shared so that the export can
-     reproduce exactly what the table was showing rather than approximating it. */
-  function searchRows(rows, q, columns) {
+  /* The quick-search box over a list of rows.
+
+     It searches every field, not only the columns currently on screen. Tying
+     it to the visible columns made the result depend on the column picker,
+     which meant the table and the export could disagree about what "shown"
+     meant - and typing a value whose column you had not added found nothing.
+     Searching everything is both more useful (a serial number is findable
+     without adding the column) and impossible to get out of step. */
+  var SEARCHABLE = null;
+  function searchRows(rows, q) {
     q = String(q || '').toLowerCase().trim();
     if (!q) return rows;
-    var cols = columns && columns.length ? columns : BASE_COLS;
+    if (!SEARCHABLE) SEARCHABLE = COLUMNS.map(function (c) { return c.key; });
     return rows.filter(function (r) {
-      var hit = cols.some(function (k) {
-        var v = colValue(r, k);
+      for (var i = 0; i < SEARCHABLE.length; i++) {
+        var v = colValue(r, SEARCHABLE[i]);
+        if (v === null || v === undefined || v === '') continue;
         if (Array.isArray(v)) v = v.join(' ');
-        if (v instanceof Date) v = global.U.fmtDate(v);
-        return String(v === null || v === undefined ? '' : v).toLowerCase().indexOf(q) >= 0;
-      });
-      return hit || String(r.name).toLowerCase().indexOf(q) >= 0;
+        else if (v instanceof Date) v = global.U.fmtDate(v);
+        if (String(v).toLowerCase().indexOf(q) >= 0) return true;
+      }
+      return false;
     });
   }
 
@@ -4476,7 +4484,7 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
 
     function visibleRows() {
       var rows = state.rows;
-      rows = V.searchRows(rows, state.search, state.columns);
+      rows = V.searchRows(rows, state.search);
       if (state.sort) {
         var col = V.COL_BY_KEY[state.sort.key];
         var keyFn = col && col.sortKey ? col.sortKey : function (r) { return V.colValue(r, state.sort.key); };
@@ -5649,7 +5657,8 @@ window.SampleData = {
     includeOtherOnMap: false,
     exportScope: 'all',         // 'all' | 'view' | 'selection'
     viewSearch: '',             // the quick-search box on the Devices tab
-    viewColumns: null,          // the columns it searched across
+    viewColumns: null,          // the columns the current view is showing
+    viewColumnsById: global.Store.get('viewColumns', {}),   // per-view column choices
     selectedIds: [],            // rows ticked on the Devices tab
     persist: global.Store.get('persist', true),   // keep the working set between visits
     restoredAt: null
@@ -5843,7 +5852,7 @@ window.SampleData = {
       rows = rows.filter(function (r) { return r.issues.indexOf(state.issueFilter) >= 0; });
     }
     if (withSearch && state.viewSearch) {
-      rows = V.searchRows(rows, state.viewSearch, state.viewColumns);
+      rows = V.searchRows(rows, state.viewSearch);
     }
     return rows;
   }
@@ -6574,7 +6583,10 @@ window.SampleData = {
     grid.setRows(rows);
     // The flag has to be present wherever devices are listed, so it is added
     // to whatever columns the view asks for rather than declared per view.
-    var cols = (view.columns || V.BASE_COLS).slice();
+    // A column set the user chose for this view outlives leaving the tab, and
+    // the browser session - losing it on every tab switch made the picker feel
+    // broken.
+    var cols = (state.viewColumnsById[view.id] || view.columns || V.BASE_COLS).slice();
     if (cols.indexOf('notes') < 0) cols.unshift('notes');
     grid.setColumns(cols);
     state.viewColumns = cols;
@@ -6701,12 +6713,25 @@ window.SampleData = {
     });
     body.appendChild(wrap);
     modal('Columns', body, [
+      {
+        label: 'Reset to this view\u2019s columns', ghost: true,
+        action: function () {
+          delete state.viewColumnsById[view.id];
+          global.Store.set('viewColumns', state.viewColumnsById);
+          render();
+        }
+      },
       { label: 'Cancel', ghost: true },
       { label: 'Apply', primary: true, action: function () {
         // Preserve the canonical column order rather than click order.
         var ordered = V.COLUMNS.map(function (c) { return c.key; })
           .filter(function (k) { return chosen.indexOf(k) >= 0; });
-        grid.setColumns(ordered.length ? ordered : V.BASE_COLS);
+        var next = ordered.length ? ordered : V.BASE_COLS.slice();
+        if (next.indexOf('notes') < 0) next.unshift('notes');
+        grid.setColumns(next);
+        state.viewColumns = next;
+        state.viewColumnsById[view.id] = next;
+        global.Store.set('viewColumns', state.viewColumnsById);
         grid.render();
       } }
     ]);
