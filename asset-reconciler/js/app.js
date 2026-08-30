@@ -55,7 +55,10 @@
     siteFilter: null,
     issueFilter: null,
     includeOtherOnMap: false,
-    exportScope: 'all',         // 'all' | 'view'
+    exportScope: 'all',         // 'all' | 'view' | 'selection'
+    viewSearch: '',             // the quick-search box on the Devices tab
+    viewColumns: null,          // the columns it searched across
+    selectedIds: [],            // rows ticked on the Devices tab
     persist: global.Store.get('persist', true),   // keep the working set between visits
     restoredAt: null
   };
@@ -235,7 +238,10 @@
     return allViews().filter(function (v) { return v.id === id; })[0] || V.BUILT_IN[1];
   }
 
-  function rowsForView(view) {
+  /* withSearch reproduces the quick-search box as well as the view's own
+     filter, so "what the export covers" can be made to equal "what I was
+     looking at". */
+  function rowsForView(view, withSearch) {
     if (!state.result) return [];
     var rows = V.applyView(view, state.result.rows);
     if (state.siteFilter) {
@@ -244,7 +250,17 @@
     if (state.issueFilter) {
       rows = rows.filter(function (r) { return r.issues.indexOf(state.issueFilter) >= 0; });
     }
+    if (withSearch && state.viewSearch) {
+      rows = V.searchRows(rows, state.viewSearch, state.viewColumns);
+    }
     return rows;
+  }
+
+  function selectedRows() {
+    if (!state.result || !state.selectedIds.length) return [];
+    var wanted = {};
+    state.selectedIds.forEach(function (id) { wanted[id] = true; });
+    return state.result.rows.filter(function (r) { return wanted[r.id]; });
   }
 
   function viewCount(view) {
@@ -263,6 +279,12 @@
   }
 
   function setView(id) {
+    if (id !== state.viewId) {
+      // A search typed against one view rarely means the same thing in
+      // another, and silently carrying it over would hide rows.
+      state.viewSearch = '';
+      state.selectedIds = [];
+    }
     state.viewId = id;
     state.issueFilter = null;
     setTab('devices');
@@ -843,7 +865,13 @@
     var controls = U.el('div', { class: 'row no-print', style: { marginBottom: '12px' } });
     var search = U.el('input', {
       type: 'search', placeholder: 'Search these devices…', style: { minWidth: '220px' },
-      oninput: U.debounce(function (e) { grid.setSearch(e.target.value); grid.render(); }, 180)
+      value: state.viewSearch,
+      oninput: U.debounce(function (e) {
+        state.viewSearch = e.target.value;
+        grid.setSearch(state.viewSearch);
+        grid.render();
+        renderNoteBar();
+      }, 180)
     });
     controls.appendChild(search);
 
@@ -876,8 +904,11 @@
     }, 'Site check sheet'));
     controls.appendChild(U.el('button', {
       class: 'btn sm primary',
-      title: 'Build the correction file from the devices in this view',
-      onclick: function () { state.exportScope = 'view'; setTab('export'); }
+      title: 'Build the correction file from the devices you are looking at',
+      onclick: function () {
+        state.exportScope = state.selectedIds.length ? 'selection' : 'view';
+        setTab('export');
+      }
     }, 'Build import file'));
     main.appendChild(controls);
 
@@ -938,7 +969,10 @@
       },
       onChipClick: function (code) { state.issueFilter = code; render(); },
       onNotesClick: function (r) { openNotes([r]); },
-      onSelectionChange: function () { renderNoteBar(); },
+      onSelectionChange: function (sel) {
+        state.selectedIds = Array.from(sel);
+        renderNoteBar();
+      },
       onGroupExport: function (name, members) {
         U.download('site-check-' + slug(name) + '-' + U.todayStamp() + '.csv', FX.sitePackCsv(members, name));
         U.toast('Exported ' + members.length + ' devices for ' + name, 'ok');
@@ -951,6 +985,9 @@
     var cols = (view.columns || V.BASE_COLS).slice();
     if (cols.indexOf('notes') < 0) cols.unshift('notes');
     grid.setColumns(cols);
+    state.viewColumns = cols;
+    grid.setSearch(state.viewSearch);
+    state.selectedIds.forEach(function (id) { grid.state.selection.add(id); });
     if (view.sort) grid.setSort(view.sort);
     if (view.group) grid.setGroup(view.group);
     grid.render();
@@ -1287,40 +1324,63 @@
     ]));
 
     var view = viewById(state.viewId);
-    var viewRows = rowsForView(view);
-    var scopedRows = state.exportScope === 'view' ? viewRows : state.result.rows;
+    var shownRows = rowsForView(view, true);      // exactly what the table showed
+    var viewAllRows = rowsForView(view, false);   // the view before the search box
+    var picked = selectedRows();
+
+    // A selection that no longer exists (view changed, data reloaded) must not
+    // silently export nothing.
+    if (state.exportScope === 'selection' && !picked.length) state.exportScope = 'view';
+
+    var scopedRows = state.exportScope === 'selection' ? picked
+                   : state.exportScope === 'view' ? shownRows
+                   : state.result.rows;
 
     var proposals = FX.buildProposals(scopedRows, cfg);
     var changeCount = proposals.reduce(function (a, p) { return a + p.changes.length; }, 0);
 
     /* Which devices the file covers. Getting this wrong is expensive - it is
-       the difference between correcting 16 assets and correcting 1,000 - so it
-       is stated at the top rather than left implicit. */
+       the difference between correcting 56 assets and correcting 1,000 - so it
+       is stated at the top rather than left implicit, and the view option means
+       what was actually on screen, search box included. */
     var scopeCard = U.el('div', { class: 'card' });
     scopeCard.appendChild(U.el('h2', {}, 'Which devices'));
-    scopeCard.appendChild(U.el('div', { class: 'row', style: { marginTop: '10px' } }, [
-      U.el('label', { class: 'check' }, [
-        U.el('input', {
-          type: 'radio', name: 'exportscope', checked: state.exportScope === 'view',
-          onchange: function () { state.exportScope = 'view'; render(); }
-        }),
-        'Just the current view — ' + view.name + ' (' + U.num(viewRows.length) + ' devices)'
-      ]),
-      U.el('label', { class: 'check' }, [
-        U.el('input', {
-          type: 'radio', name: 'exportscope', checked: state.exportScope === 'all',
-          onchange: function () { state.exportScope = 'all'; render(); }
-        }),
-        'Every device (' + U.num(state.result.rows.length) + ')'
-      ])
-    ]));
-    if (state.exportScope === 'view' && (state.siteFilter || state.issueFilter)) {
-      scopeCard.appendChild(U.el('div', { class: 'hint', style: { marginTop: '6px' } },
-        'The filters you set on the Devices tab apply too: ' +
-        [state.siteFilter ? 'site ' + state.siteFilter.name : null,
-         state.issueFilter ? 'issue ' + ((R.BY_CODE[state.issueFilter] || {}).label || '') : null]
-          .filter(Boolean).join(', ') + '.'));
+
+    var narrowed = [];
+    if (state.viewSearch) narrowed.push('search "' + state.viewSearch + '"');
+    if (state.siteFilter) narrowed.push('site ' + state.siteFilter.name);
+    if (state.issueFilter) narrowed.push('issue ' + ((R.BY_CODE[state.issueFilter] || {}).label || ''));
+
+    function scopeOption(value, label, sub) {
+      return U.el('div', { style: { marginBottom: '6px' } }, [
+        U.el('label', { class: 'check' }, [
+          U.el('input', {
+            type: 'radio', name: 'exportscope', checked: state.exportScope === value,
+            onchange: function () { state.exportScope = value; render(); }
+          }),
+          label
+        ]),
+        sub ? U.el('div', { class: 'hint', style: { marginLeft: '24px' } }, sub) : null
+      ]);
     }
+
+    if (picked.length) {
+      scopeCard.appendChild(scopeOption('selection',
+        'The ' + U.num(picked.length) + ' devices you ticked',
+        'Just the rows you selected on the Devices tab.'));
+    }
+
+    scopeCard.appendChild(scopeOption('view',
+      'The ' + U.num(shownRows.length) + ' devices shown in ' + view.name,
+      narrowed.length
+        ? 'Exactly what the table was showing — ' + view.name + ' narrowed by ' + narrowed.join(' and ') +
+          ' (' + U.num(shownRows.length) + ' of ' + U.num(viewAllRows.length) + ').'
+        : 'The whole of the ' + view.name + ' view; nothing is filtering it further.'));
+
+    scopeCard.appendChild(scopeOption('all',
+      'Every device (' + U.num(state.result.rows.length) + ')',
+      'The entire reconciled estate, ignoring the view.'));
+
     main.appendChild(scopeCard);
 
     /* ------------------------------------------------------ what to fix */
@@ -1544,7 +1604,8 @@
     out.appendChild(U.el('header', {}, [
       U.el('h2', {}, 'Proposed changes'),
       U.el('span', { class: 'sub' }, U.num(changeCount) + ' change' + (changeCount === 1 ? '' : 's') +
-        ' across ' + U.num(proposals.length) + ' asset' + (proposals.length === 1 ? '' : 's'))
+        ' across ' + U.num(proposals.length) + ' asset' + (proposals.length === 1 ? '' : 's') +
+        ', from ' + U.num(scopedRows.length) + ' device' + (scopedRows.length === 1 ? '' : 's') + ' in scope')
     ]));
 
     out.appendChild(U.el('div', { class: 'row', style: { marginBottom: '12px' } }, [

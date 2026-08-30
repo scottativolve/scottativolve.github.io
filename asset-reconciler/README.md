@@ -311,10 +311,19 @@ correction file.
 
 The **Freshservice import** tab is where corrections become an upload.
 
-**Which devices.** The file covers either the view you were just looking at
-(including any site or issue filter you had set) or the whole estate. Coming in
-via **Build import file** from the Devices tab selects the current view; the
-choice is at the top of the page, with the device count beside each option.
+**Which devices.** Three options at the top of the page, with a live count
+against each:
+
+- **The devices you ticked** — appears when you have rows selected, and is
+  chosen automatically when you arrive with a selection.
+- **The devices shown in \<view\>** — *exactly* what the table was displaying,
+  including the quick-search box as well as the view's own filter and any site
+  or issue filter. The line beneath spells out what narrowed it, so a view of
+  106 filtered to 56 reads as "56 of 106" rather than quietly exporting 106.
+- **Every device** — the whole reconciled estate, ignoring the view.
+
+The results header repeats the number of devices in scope, so the file is never
+ambiguous about what it covers.
 
 **What to update.** For each field, choose whether to correct it and where the
 correct value comes from — Intune, a site verification return, or a fixed value.

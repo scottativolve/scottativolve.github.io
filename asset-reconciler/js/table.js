@@ -108,17 +108,7 @@
 
     function visibleRows() {
       var rows = state.rows;
-      if (state.search) {
-        var q = state.search.toLowerCase();
-        rows = rows.filter(function (r) {
-          return state.columns.some(function (k) {
-            var v = V.colValue(r, k);
-            if (Array.isArray(v)) v = v.join(' ');
-            if (v instanceof Date) v = U.fmtDate(v);
-            return String(v === null || v === undefined ? '' : v).toLowerCase().indexOf(q) >= 0;
-          }) || String(r.name).toLowerCase().indexOf(q) >= 0;
-        });
-      }
+      rows = V.searchRows(rows, state.search, state.columns);
       if (state.sort) {
         var col = V.COL_BY_KEY[state.sort.key];
         var keyFn = col && col.sortKey ? col.sortKey : function (r) { return V.colValue(r, state.sort.key); };

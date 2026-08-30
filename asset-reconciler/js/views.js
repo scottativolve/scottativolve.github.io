@@ -246,6 +246,23 @@
     }
   ];
 
+  /* The quick-search box over a list of rows. Shared so that the export can
+     reproduce exactly what the table was showing rather than approximating it. */
+  function searchRows(rows, q, columns) {
+    q = String(q || '').toLowerCase().trim();
+    if (!q) return rows;
+    var cols = columns && columns.length ? columns : BASE_COLS;
+    return rows.filter(function (r) {
+      var hit = cols.some(function (k) {
+        var v = colValue(r, k);
+        if (Array.isArray(v)) v = v.join(' ');
+        if (v instanceof Date) v = global.U.fmtDate(v);
+        return String(v === null || v === undefined ? '' : v).toLowerCase().indexOf(q) >= 0;
+      });
+      return hit || String(r.name).toLowerCase().indexOf(q) >= 0;
+    });
+  }
+
   function applyView(view, rows) {
     var out = rows;
     if (view.custom) out = view.custom(out);
@@ -264,6 +281,7 @@
     colValue: colValue,
     OPERATORS: OPERATORS,
     testFilter: testFilter,
+    searchRows: searchRows,
     testCondition: testCondition,
     BUILT_IN: BUILT_IN,
     BASE_COLS: BASE_COLS,
