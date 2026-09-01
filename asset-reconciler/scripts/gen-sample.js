@@ -102,6 +102,7 @@ function pushFs(d, over = {}) {
     'OS': 'Windows 11',
     'OS Version': '10.0.22631',
     'IP Address': d.ip,
+    'MAC Address': macFor(d.id),
     'Last Audit Date': ukDate(d.audit),
     'Created Time': ukDate(daysAgo(int(200, 900)))
   }, over));
@@ -118,6 +119,7 @@ function pushIntune(d, over = {}) {
     'Primary user UPN': d.person.upn,
     'Primary user display name': d.person.name,
     'IP Address': d.ip,
+    'MAC Address': macFor(d.id),
     'Last check-in': isoDate(d.checkIn),
     'Serial number': d.serial,
     'Manufacturer': d.vendor,
@@ -314,6 +316,63 @@ for (let i = 0; i < 6; i++) {
   });
 });
 
+/* ---- Arctic Wolf vulnerability scan ------------------------------------
+   Shaped like the real export: a UUID asset id, the device name, a risk score
+   out of 10 and a count of open findings, with a scan date that is sometimes
+   well behind the last-seen date. Most machines are covered; some deliberately
+   are not, and a couple are scanned that neither other system knows about. */
+const awRows = [];
+function macFor(id) {
+  const h = (n) => n.toString(16).padStart(2, '0');
+  return [0x30, 0xf6, (id >> 8) & 255, id & 255, (id * 7) & 255, (id * 13) & 255].map(h).join(':');
+}
+function awRow(name, ip, opts = {}) {
+  const id = n++;
+  const risks = opts.risks !== undefined ? opts.risks : int(0, 180);
+  // A high score means something severe is open, which is not the same as a
+  // long tail of minor findings - so the two are only loosely related.
+  const score = opts.score !== undefined ? opts.score
+              : (risks > 900 ? 9.9 : risks > 400 ? pick([8.8, 9.1, 9.9]) : pick([3.9, 5.5, 6.8, 7.5]));
+  const seen = daysAgo(int(0, 4));
+  const scan = daysAgo(opts.scanDays !== undefined ? opts.scanDays : int(0, 10));
+  return {
+    'Asset ID': [8,4,4,4,12].map(len => Math.floor(rnd() * 16 ** Math.min(len, 8))
+      .toString(16).padStart(len, '0').slice(0, len)).join('-'),
+    'Device Name': name,
+    'Asset State': 'Active',
+    'Low Signal': 'No',
+    'Category': 'Desktop',
+    'Tags': '',
+    'Sources': 'Agent',
+    'Asset Criticality': opts.criticality || 'Unassigned',
+    'Last Successful Scan': isoDate(scan),
+    'Last Seen': isoDate(seen),
+    'IP Addresses': ip || '',
+    'MAC Address': macFor(id),
+    'Hostname': name,
+    'NetBIOS': '',
+    'Operating System': 'Name: Microsoft Windows 11 Enterprise, Version: 10.0.26100',
+    'OS Type': 'windows',
+    'Manufacturer': '',
+    'Risks': risks,
+    'Risk Score': score
+  };
+}
+
+// Scan most of the machines Intune knows about.
+const scanned = intuneRows.filter(() => rnd() > 0.18);
+scanned.forEach((d, i) => {
+  let opts = {};
+  if (i < 6) opts = { risks: int(950, 2100), score: 9.9 };            // the worst offenders
+  else if (i < 14) opts = { risks: int(420, 900) };                    // badly behind on patching
+  else if (i % 17 === 0) opts = { scanDays: int(40, 120) };            // scan long out of date
+  awRows.push(awRow(d['Device name'], d['IP Address'], opts));
+});
+
+// Two machines scanned that neither other system holds.
+awRows.push(awRow('ivolve-d9911zz', '10.20.10.201', { risks: 640 }));
+awRows.push(awRow('shr-unknown01', '10.24.10.44', { risks: 88 }));
+
 /* ---- location lookup -------------------------------------------------- */
 const locRows = SITES.map((s, i) => ({
   'Location': s[0], 'Address': s[1], 'Town': s[2], 'Postcode': s[3],
@@ -339,11 +398,12 @@ function csv(rows) {
 }
 
 const outDir = process.argv[2];
-const fsCsv = csv(fsRows), inCsv = csv(intuneRows), locCsv = csv(locRows);
+const fsCsv = csv(fsRows), inCsv = csv(intuneRows), locCsv = csv(locRows), awCsv = csv(awRows);
 
 fs.writeFileSync(path.join(outDir, 'sample-data', 'freshservice-assets-sample.csv'), fsCsv);
 fs.writeFileSync(path.join(outDir, 'sample-data', 'intune-devices-sample.csv'), inCsv);
 fs.writeFileSync(path.join(outDir, 'sample-data', 'location-lookup-sample.csv'), locCsv);
+fs.writeFileSync(path.join(outDir, 'sample-data', 'arctic-wolf-sample.csv'), awCsv);
 
 const js = `/* Sample data for the "Load sample data" button.
 
@@ -355,7 +415,8 @@ const js = `/* Sample data for the "Load sample data" button.
 window.SampleData = {
   freshservice: ${JSON.stringify(fsCsv)},
   intune: ${JSON.stringify(inCsv)},
-  locations: ${JSON.stringify(locCsv)}
+  locations: ${JSON.stringify(locCsv)},
+  arcticwolf: ${JSON.stringify(awCsv)}
 };
 `;
 fs.writeFileSync(path.join(outDir, 'js', 'sampledata.js'), js);
@@ -363,3 +424,4 @@ fs.writeFileSync(path.join(outDir, 'js', 'sampledata.js'), js);
 console.log('freshservice rows:', fsRows.length);
 console.log('intune rows:', intuneRows.length);
 console.log('location rows:', locRows.length);
+console.log('arctic wolf rows:', awRows.length);

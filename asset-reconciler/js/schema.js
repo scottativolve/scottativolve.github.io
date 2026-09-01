@@ -30,6 +30,7 @@
         { key: 'os',           label: 'Operating system', aliases: ['os', 'operating system', 'os name'] },
         { key: 'osVersion',    label: 'OS version',       aliases: ['os version', 'operating system version', 'os service pack'] },
         { key: 'ipAddress',    label: 'Last seen IP address', aliases: ['ip address', 'last seen ip', 'last known ip', 'ip', 'ipv4 address', 'ipv4', 'private ip', 'network ip', 'host ip'] },
+        { key: 'mac',          label: 'MAC address',      aliases: ['mac address', 'mac', 'physical address', 'ethernet mac'] },
         { key: 'lastAudit',    label: 'Last audit / seen',type: 'date', aliases: ['last audit date', 'last audit', 'last seen', 'agent last contacted', 'last contacted', 'last scan'] },
         { key: 'createdAt',    label: 'Created',          type: 'date', aliases: ['created time', 'created at', 'created date', 'created', 'acquisition date'] },
         { key: 'description',  label: 'Description',      aliases: ['description', 'notes', 'comments'] }
@@ -52,6 +53,7 @@
         { key: 'model',        label: 'Model',            aliases: ['model', 'device model', 'systemmodel'] },
         { key: 'manufacturer', label: 'Manufacturer',     aliases: ['manufacturer', 'systemmanufacturer', 'make'] },
         { key: 'ipAddress',    label: 'Last seen IP address', aliases: ['ip address', 'last seen ip', 'wi-fi ip address', 'wifi ip address', 'ipv4 address', 'ipv4', 'ip', 'public ip', 'private ip'] },
+        { key: 'mac',          label: 'MAC address',      aliases: ['mac address', 'mac', 'wi-fi mac', 'ethernet mac', 'physical address'] },
         { key: 'lastCheckIn',  label: 'Last check-in',    type: 'date', aliases: ['last check-in', 'last check in', 'lastcheckin', 'last sync', 'lastsyncdatetime', 'last contact', 'last contacted', 'last check-in time'] },
         { key: 'enrolled',     label: 'Enrolled',         type: 'date', aliases: ['enrollment date', 'enrolled date', 'enrolleddatetime', 'enrolment date', 'enrolled'] },
         { key: 'compliance',   label: 'Compliance',       aliases: ['compliance', 'compliance state', 'compliancestate', 'compliant'] },
@@ -59,6 +61,33 @@
         { key: 'category',     label: 'Category',         aliases: ['category', 'device category', 'devicecategory'] },
         { key: 'deviceId',     label: 'Intune device ID', aliases: ['intune device id', 'device id', 'deviceid', 'azure ad device id', 'entra device id', 'id'] },
         { key: 'encrypted',    label: 'Encrypted',        aliases: ['encrypted', 'encryption', 'bitlocker'] }
+      ]
+    },
+
+    arcticwolf: {
+      id: 'arcticwolf',
+      label: 'Arctic Wolf',
+      short: 'Arctic Wolf',
+      hint: 'Vulnerability scan export (risk score and risk counts)',
+      signature: ['risk score', 'risks', 'asset criticality', 'last successful scan', 'low signal', 'netbios'],
+      fields: [
+        { key: 'name',        label: 'Device name',      required: true, aliases: ['device name', 'hostname', 'asset name', 'name', 'netbios'] },
+        { key: 'hostname',    label: 'Hostname',         aliases: ['hostname', 'host name', 'fqdn'] },
+        { key: 'riskScore',   label: 'Risk score',       type: 'number', aliases: ['risk score', 'score', 'highest risk score', 'max risk score'] },
+        { key: 'risks',       label: 'Number of risks',  type: 'number', aliases: ['risks', 'risk count', 'number of risks', 'vulnerabilities', 'vulnerability count', 'open risks'] },
+        { key: 'lastScan',    label: 'Last successful scan', type: 'date', aliases: ['last successful scan', 'last scan', 'last scan date', 'last successful scan date'] },
+        { key: 'lastSeen',    label: 'Last seen',        type: 'date', aliases: ['last seen', 'last seen date', 'last contact'] },
+        { key: 'ipAddress',   label: 'IP address(es)',   aliases: ['ip addresses', 'ip address', 'ip', 'ipv4 address'] },
+        { key: 'mac',         label: 'MAC address',      aliases: ['mac address', 'mac', 'physical address'] },
+        { key: 'assetId',     label: 'Arctic Wolf asset ID', aliases: ['asset id', 'id', 'uuid'] },
+        { key: 'state',       label: 'Asset state',      aliases: ['asset state', 'state', 'status'] },
+        { key: 'criticality', label: 'Asset criticality',aliases: ['asset criticality', 'criticality', 'business criticality'] },
+        { key: 'category',    label: 'Category',         aliases: ['category', 'device category', 'asset category', 'device type'] },
+        { key: 'os',          label: 'Operating system', aliases: ['operating system', 'os'] },
+        { key: 'osType',      label: 'OS type',          aliases: ['os type', 'platform', 'ostype'] },
+        { key: 'sources',     label: 'Scan source',      aliases: ['sources', 'source', 'discovered by'] },
+        { key: 'tags',        label: 'Tags',             aliases: ['tags', 'tag', 'labels'] },
+        { key: 'lowSignal',   label: 'Low signal',       aliases: ['low signal', 'lowsignal'] }
       ]
     },
 

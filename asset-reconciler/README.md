@@ -109,7 +109,30 @@ Useful columns: `Device name`, `Serial number`, `Primary user display name`,
 `Primary user UPN`, `OS`, `OS version`, `Model`, `Manufacturer`,
 `Last check-in`, `Compliance`, `Ownership`. Only the device name is required.
 
-### 3. Location lookup (optional, but it unlocks the map)
+### 3. Arctic Wolf vulnerability scan (optional)
+
+The asset export from Arctic Wolf, carrying `Risk Score` and `Risks` per device.
+
+Useful columns: `Device Name`, `Hostname`, `Risk Score`, `Risks`,
+`Last Successful Scan`, `Last Seen`, `IP Addresses`, `MAC Address`,
+`Asset Criticality`, `Category`. Only the device name is required.
+
+**How it joins.** Arctic Wolf carries no serial number, so it matches on device
+name first and **MAC address** second — which means a machine Arctic Wolf knows
+under a different name still joins, provided one of the other exports carries
+its MAC. Include the MAC column in your Freshservice or Intune export to get
+that fallback; without it, the join is name-only.
+
+A scan record matching nothing becomes a row in its own right rather than being
+dropped, flagged as *Scanned but not in either system* — worth knowing, since it
+means something is on the network that neither the asset register nor Intune
+holds.
+
+The scan is also a third sighting of the device, so its IP and timestamp join
+the [location-by-IP](#locating-devices-by-ip-address) check on the same "most
+recently seen wins" basis as the other two.
+
+### 4. Location lookup (optional, but it unlocks the map)
 
 One row per site. The location name must match what Freshservice holds.
 
@@ -264,6 +287,34 @@ settings, and nothing else.
 
 Every view can be exported to CSV with whatever columns you have chosen, so a
 view is also the way you hand a list to somebody who does not use the tool.
+
+---
+
+## Vulnerability risk
+
+Two views rank the estate once an Arctic Wolf export is loaded:
+
+- **Vulnerability: worst risk score** — highest score first. The score reflects
+  the *severity* of the worst finding on a machine, not how many there are, so a
+  high score on a device with few risks still means something serious is open.
+- **Vulnerability: most open risks** — most findings first. A long tail is
+  usually a machine that is badly behind on patching, which makes it a rebuild
+  or update candidate rather than an incident.
+
+The two answer different questions and rarely rank the same, which is why they
+are separate views rather than one combined score. Both columns are sortable
+anywhere they appear, so any other view can be ranked by risk by adding the
+column.
+
+**No vulnerability scan** is the coverage view: live devices with no Arctic Wolf
+record at all, plus those whose last successful scan has gone stale. That is a
+gap in scanning rather than a data mismatch — normally the agent is not
+deployed — and it is the one worth clearing first, because an unscanned machine
+reports no risk at all and so never appears in the other two views.
+
+Thresholds for all three are in Settings: the score that counts as high
+(default 9), the number of open risks that counts as a lot (default 500), and
+how long a scan can go without being repeated (default 21 days).
 
 ---
 

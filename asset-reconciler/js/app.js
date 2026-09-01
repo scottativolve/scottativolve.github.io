@@ -6,7 +6,7 @@
   var U = global.U, V = global.Views, R = global.Rules, N = global.Norm,
       S = global.Schema, C = global.Charts, T = global.Table, FX = global.FSExport;
 
-  var SOURCE_IDS = ['freshservice', 'intune', 'locations', 'verification'];
+  var SOURCE_IDS = ['freshservice', 'intune', 'arcticwolf', 'locations', 'verification'];
 
   /* A config saved by an older build can be missing whole sections, and a
      shallow merge would leave the UI dereferencing keys that aren't there.
@@ -721,6 +721,9 @@
         'ask the service', function () { setView('fix-location'); }),
       C.tile('Not checked in', res.tally['stale-intune'] || 0,
         'over ' + state.cfg.staleDays + ' days', function () { setView('stale'); }),
+      C.tile('High vulnerability risk', res.tally['high-risk-score'] || 0,
+        c.arcticWolf ? 'score ' + state.cfg.riskScoreThreshold + ' or above' : 'load an Arctic Wolf export',
+        function () { setView('risk-score'); }),
       C.tile('Moved, by IP address', (res.tally['ip-location-mismatch'] || 0) + (res.tally['ip-suggests-location'] || 0),
         c.subnets ? 'last seen on another site\u2019s network' : 'add IP subnets to the lookup',
         function () { setView('moved-by-ip'); })
@@ -1810,7 +1813,10 @@
     var fields = [
       ['staleDays', 'Days without an Intune check-in before a device counts as stale', 1, 365],
       ['fsStaleDays', 'Days without a Freshservice audit before the record counts as stale', 1, 365],
-      ['activeDays', 'Checked in within this many days counts as definitely still in use', 1, 90]
+      ['activeDays', 'Checked in within this many days counts as definitely still in use', 1, 90],
+      ['riskScoreThreshold', 'Arctic Wolf risk score at or above which a device is high risk', 0, 10],
+      ['risksThreshold', 'Open risks on one device before it counts as a lot', 1, 100000],
+      ['scanStaleDays', 'Days without a successful vulnerability scan before it is stale', 1, 365]
     ];
     var grid3 = U.el('div', { class: 'grid3', style: { marginTop: '12px' } });
     fields.forEach(function (f) {
@@ -1818,8 +1824,9 @@
         U.el('label', {}, f[1]),
         U.el('input', {
           type: 'number', min: f[2], max: f[3], value: state.cfg[f[0]],
+          step: f[0] === 'riskScoreThreshold' ? '0.1' : '1',
           onchange: function (e) {
-            var v = parseInt(e.target.value, 10);
+            var v = parseFloat(e.target.value);
             if (!isNaN(v)) { state.cfg[f[0]] = v; saveCfg(); }
           }
         })

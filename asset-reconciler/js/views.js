@@ -33,6 +33,11 @@
     { key: 'osVersion',   label: 'OS version',    width: 110, get: function (r) { return r.osVersion; } },
     { key: 'compliance',  label: 'Compliance',    width: 110, get: function (r) { return r.compliance; } },
     { key: 'ownership',   label: 'Ownership',     width: 100, get: function (r) { return r.ownership; } },
+    { key: 'riskScore',   label: 'Risk score',    width: 80, type: 'number', get: function (r) { return r.riskScore; } },
+    { key: 'risks',       label: 'Open risks',    width: 85, type: 'number', get: function (r) { return r.risks; } },
+    { key: 'awLastScan',  label: 'Last scan',     width: 115, type: 'date', get: function (r) { return r.awLastScan; } },
+    { key: 'awCriticality', label: 'AW criticality', width: 110, get: function (r) { return r.awCriticality; } },
+    { key: 'awCategory',  label: 'AW category',   width: 100, get: function (r) { return r.awCategory; } },
     { key: 'ip',          label: 'Last seen IP',  width: 120, get: function (r) { return r.ip; } },
     { key: 'ipSiteName',  label: 'Site by IP',    width: 150, get: function (r) { return r.ipSiteName; } },
     { key: 'ipStatus',    label: 'IP vs location',width: 130, get: function (r) { return r.ipStatus; } },
@@ -220,6 +225,35 @@
                    'broadband, but also sites whose subnet is missing from the lookup.',
       columns: ['name', 'location', 'ip', 'fsUser', 'intuneUser', 'lastCheckIn', 'issues'],
       filter: { match: 'all', conditions: [{ field: '__issue', op: 'is', value: 'ip-off-network' }] }
+    },
+    {
+      id: 'risk-score',
+      name: 'Vulnerability: worst risk score',
+      description: 'Devices ranked by the Arctic Wolf risk score, highest first. The score reflects the severity ' +
+                   'of the worst finding on the machine rather than how many there are.',
+      columns: ['name', 'riskScore', 'risks', 'location', 'fsUser', 'awLastScan', 'lastCheckIn', 'issues'],
+      filter: { match: 'all', conditions: [{ field: 'riskScore', op: 'notEmpty' }] },
+      sort: { key: 'riskScore', dir: 'desc' }
+    },
+    {
+      id: 'most-risks',
+      name: 'Vulnerability: most open risks',
+      description: 'Devices ranked by how many open findings they carry, most first. A long tail usually means ' +
+                   'the machine is behind on patching.',
+      columns: ['name', 'risks', 'riskScore', 'location', 'fsUser', 'awLastScan', 'lastCheckIn', 'issues'],
+      filter: { match: 'all', conditions: [{ field: 'risks', op: 'notEmpty' }] },
+      sort: { key: 'risks', dir: 'desc' }
+    },
+    {
+      id: 'not-scanned',
+      name: 'No vulnerability scan',
+      description: 'Live devices with no Arctic Wolf record at all — a scanning coverage gap rather than a data ' +
+                   'mismatch, usually meaning the agent is not deployed.',
+      columns: ['name', 'location', 'fsUser', 'os', 'lastCheckIn', 'state', 'issues'],
+      filter: { match: 'any', conditions: [
+        { field: '__issue', op: 'is', value: 'not-scanned' },
+        { field: '__issue', op: 'is', value: 'scan-stale' }
+      ] }
     },
     {
       id: 'duplicates',

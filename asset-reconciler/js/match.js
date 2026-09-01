@@ -12,7 +12,10 @@
     activeDays: 14,         // checked in this recently = definitely still alive
     computerTypes: 'computer|laptop|desktop|pc|workstation|notebook|tablet|surface|macbook|imac',
     matchOnSerial: true,
-    matchOnName: true
+    matchOnName: true,
+    riskScoreThreshold: 9,      // Arctic Wolf score at or above this is "high"
+    risksThreshold: 500,        // this many open risks on one device is "a lot"
+    scanStaleDays: 21           // no successful scan in this long is stale
   };
 
   function settings(overrides) {
@@ -49,6 +52,7 @@
     cfg = settings(cfg);
     var fsRows = (data.freshservice || []).slice();
     var inRows = (data.intune || []).slice();
+    var awRows = (data.arcticwolf || []).slice();
     var locRows = data.locations || [];
     var verRows = data.verification || [];
 
@@ -74,6 +78,40 @@
       if (!ip) return null;
       for (var i = 0; i < subnetIndex.length; i++) {
         if (global.IPNet.contains(subnetIndex[i].net, ip)) return subnetIndex[i];
+      }
+      return null;
+    }
+
+    /* ------------------------------------------------ vulnerability scan
+       Arctic Wolf carries no serial number, so it joins on device name and,
+       failing that, MAC address - which both other exports can supply. */
+    function macKey(v) {
+      var m = N.clean(v).toUpperCase().replace(/[^A-F0-9]/g, '');
+      return m.length === 12 ? m : '';
+    }
+
+    var awByName = new Map();
+    var awByMac = new Map();
+    awRows.forEach(function (a) {
+      var nk = N.deviceName(a.name) || N.deviceName(a.hostname);
+      if (nk && !awByName.has(nk)) awByName.set(nk, a);
+      var mk = macKey(a.mac);
+      if (mk && !awByMac.has(mk)) awByMac.set(mk, a);
+    });
+    var usedAw = new Set();
+
+    function findAw(fsRec, inRec) {
+      var names = [fsRec && fsRec.name, inRec && inRec.name];
+      for (var i = 0; i < names.length; i++) {
+        var nk = N.deviceName(names[i]);
+        var hit = nk ? awByName.get(nk) : null;
+        if (hit && !usedAw.has(hit)) { usedAw.add(hit); return { rec: hit, on: 'name' }; }
+      }
+      var macs = [fsRec && fsRec.mac, inRec && inRec.mac];
+      for (var j = 0; j < macs.length; j++) {
+        var mk = macKey(macs[j]);
+        var mhit = mk ? awByMac.get(mk) : null;
+        if (mhit && !usedAw.has(mhit)) { usedAw.add(mhit); return { rec: mhit, on: 'mac' }; }
       }
       return null;
     }
@@ -149,10 +187,21 @@
       pairs.push({ fs: null, intune: r, matchType: 'intune-only', shadowed: shadowed(r) });
     });
 
+    // Attach the scan to each pair before working out what is left over.
+    pairs.forEach(function (p) {
+      var hit = findAw(p.fs, p.intune);
+      if (hit) { p.aw = hit.rec; p.awOn = hit.on; }
+    });
+    awRows.forEach(function (a) {
+      if (usedAw.has(a)) return;
+      pairs.push({ fs: null, intune: null, aw: a, matchType: 'aw-only' });
+    });
+
     /* ------------------------------------------------ build rows */
     var rows = pairs.map(function (p, i) {
-      var fs = p.fs, intune = p.intune;
-      var name = N.clean(fs && fs.name) || N.clean(intune && intune.name) || '(unnamed)';
+      var fs = p.fs, intune = p.intune, aw = p.aw || null;
+      var name = N.clean(fs && fs.name) || N.clean(intune && intune.name) ||
+                 N.clean(aw && aw.name) || N.clean(aw && aw.hostname) || '(unnamed)';
       var nameKey = N.deviceName(name);
 
       var locRaw = fs ? N.clean(fs.location) : '';
@@ -181,21 +230,34 @@
       var lastCheckIn = intune ? global.U.parseDate(intune.lastCheckIn) : null;
       var lastAudit = fs ? global.U.parseDate(fs.lastAudit) : null;
 
-      var assetType = N.clean(fs && fs.assetType) || (intune ? 'Computer' : '');
+      var assetType = N.clean(fs && fs.assetType) ||
+                      (intune ? 'Computer' : N.clean(aw && aw.category));
       var inScope = fs ? isComputer(assetType, cfg) : true;
 
       /* Last-seen IP. Both systems record one; the useful one is whichever
          system saw the device most recently, since that is the address that
          says where it is now. */
+      var awLastSeen = aw ? global.U.parseDate(aw.lastSeen) : null;
+      var awLastScan = aw ? global.U.parseDate(aw.lastScan) : null;
+
+      var sightings = [
+        { ip: global.IPNet.primary(fs && fs.ipAddress), at: lastAudit, from: 'Freshservice' },
+        { ip: global.IPNet.primary(intune && intune.ipAddress), at: lastCheckIn, from: 'Intune' },
+        { ip: global.IPNet.primary(aw && aw.ipAddress), at: awLastSeen, from: 'Arctic Wolf' }
+      ].filter(function (x) { return x.ip; });
+
+      // Most recently seen wins; an address with no timestamp only counts when
+      // nothing better is on offer.
+      sightings.sort(function (a, b) {
+        if (a.at && b.at) return b.at - a.at;
+        if (a.at) return -1;
+        if (b.at) return 1;
+        return 0;
+      });
+      var ip = sightings.length ? sightings[0].ip : '';
+      var ipFrom = sightings.length ? sightings[0].from : '';
       var fsIp = global.IPNet.primary(fs && fs.ipAddress);
       var inIp = global.IPNet.primary(intune && intune.ipAddress);
-      var ip = '', ipFrom = '';
-      if (fsIp && inIp) {
-        var fsNewer = lastAudit && lastCheckIn ? lastAudit > lastCheckIn : !!lastAudit;
-        ip = fsNewer ? fsIp : inIp;
-        ipFrom = fsNewer ? 'Freshservice' : 'Intune';
-      } else if (inIp) { ip = inIp; ipFrom = 'Intune'; }
-      else if (fsIp) { ip = fsIp; ipFrom = 'Freshservice'; }
 
       var ipClass = ip ? global.IPNet.classify(ip) : '';
       var ipHit = siteForIp(ip);
@@ -256,6 +318,17 @@
         compliance: N.clean(intune && intune.compliance),
         ownership: N.clean(intune && intune.ownership),
 
+        aw: aw,
+        awOn: p.awOn || '',
+        riskScore: aw && typeof aw.riskScore === 'number' ? aw.riskScore : null,
+        risks: aw && typeof aw.risks === 'number' ? aw.risks : null,
+        awLastScan: awLastScan,
+        awLastSeen: awLastSeen,
+        awCriticality: N.clean(aw && aw.criticality),
+        awCategory: N.clean(aw && aw.category),
+        awState: N.clean(aw && aw.state),
+        daysSinceScan: awLastScan ? Math.floor((Date.now() - awLastScan) / 86400000) : null,
+
         ip: ip,
         ipFrom: ipFrom,
         ipClass: ipClass,
@@ -303,6 +376,10 @@
         byName: pairs.filter(function (p) { return p.matchType === 'name'; }).length,
         locations: locRows.length,
         verification: verRows.length,
+        arcticWolf: awRows.length,
+        awMatched: pairs.filter(function (p) { return p.aw && (p.fs || p.intune); }).length,
+        awOnly: pairs.filter(function (p) { return p.matchType === 'aw-only'; }).length,
+        awByMac: pairs.filter(function (p) { return p.awOn === 'mac'; }).length,
         sitesWithSubnet: locRows.filter(function (l) {
           return global.IPNet.parseSubnetList(l.subnet).length > 0;
         }).length,

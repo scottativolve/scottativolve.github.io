@@ -69,7 +69,7 @@
     if (col.type === 'date') {
       if (!v) { td.appendChild(U.el('span', { class: 'muted' }, 'never')); return; }
       td.appendChild(U.el('span', { title: U.fmtDate(v) }, U.fmtDate(v)));
-      td.appendChild(U.el('div', { class: 'muted', style: { fontSize: '11px' } }, U.ageLabel(v) + ' ago'));
+      td.appendChild(U.el('div', { class: 'muted', style: { fontSize: '11px' } }, U.agoLabel(v)));
       return;
     }
     if (col.type === 'number') {
@@ -370,6 +370,36 @@
     });
     cmp.appendChild(kv);
     body.appendChild(cmp);
+
+    if (row.aw) {
+      var vuln = U.el('div', { class: 'card' });
+      vuln.appendChild(U.el('header', {}, [
+        U.el('h3', {}, 'Vulnerability scan'),
+        U.el('span', { class: 'sub' }, 'Arctic Wolf' + (row.awOn === 'mac' ? ' — matched on MAC address' : ''))
+      ]));
+      vuln.appendChild(U.el('div', { class: 'row', style: { gap: '24px', marginBottom: '8px' } }, [
+        U.el('div', {}, [
+          U.el('div', { class: 'hint' }, 'Risk score'),
+          U.el('div', { style: { fontSize: '22px', fontWeight: '600' } },
+            row.riskScore === null ? '—' : String(row.riskScore))
+        ]),
+        U.el('div', {}, [
+          U.el('div', { class: 'hint' }, 'Open risks'),
+          U.el('div', { style: { fontSize: '22px', fontWeight: '600' } },
+            row.risks === null ? '—' : U.num(row.risks))
+        ])
+      ]));
+      [['Last successful scan', row.awLastScan ? U.fmtDate(row.awLastScan) + ' (' + U.agoLabel(row.awLastScan) + ')' : 'never'],
+       ['Last seen by Arctic Wolf', row.awLastSeen ? U.fmtDate(row.awLastSeen) : '—'],
+       ['Criticality', row.awCriticality], ['Category', row.awCategory], ['State', row.awState]].forEach(function (p) {
+        if (!p[1]) return;
+        vuln.appendChild(U.el('div', { style: { fontSize: '12.5px' } }, [
+          U.el('span', { style: { color: 'var(--text-secondary)' } }, p[0] + ': '),
+          U.el('strong', {}, String(p[1]))
+        ]));
+      });
+      body.appendChild(vuln);
+    }
 
     if (row.ver) {
       var v = U.el('div', { class: 'card' });

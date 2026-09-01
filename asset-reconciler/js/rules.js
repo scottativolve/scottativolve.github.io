@@ -18,7 +18,7 @@
         return r.inScope && r.fs && !r.intune && !r.shadowed && !N.isRetiredState(r.state);
       },
       detail: function (r) {
-        return 'Freshservice state "' + (r.state || 'not set') + '", last audit ' + global.U.ageLabel(r.lastAudit) + ' ago';
+        return 'Freshservice state "' + (r.state || 'not set') + '", last audit ' + global.U.agoLabel(r.lastAudit);
       }
     },
     {
@@ -28,7 +28,7 @@
       help: 'Intune manages this device but Freshservice has no asset record. The Freshservice agent is probably not installed, or the asset was never created.',
       test: function (r) { return r.intune && !r.fs && !r.shadowed; },
       detail: function (r) {
-        return 'Enrolled to ' + (r.intuneUser || 'nobody') + ', last check-in ' + global.U.ageLabel(r.lastCheckIn) + ' ago';
+        return 'Enrolled to ' + (r.intuneUser || 'nobody') + ', last check-in ' + global.U.agoLabel(r.lastCheckIn);
       }
     },
     {
@@ -112,7 +112,7 @@
       test: function (r, cfg) {
         return r.intune && r.daysSinceCheckIn !== null && r.daysSinceCheckIn > cfg.staleDays;
       },
-      detail: function (r) { return 'Last Intune check-in ' + global.U.ageLabel(r.lastCheckIn) + ' ago'; }
+      detail: function (r) { return 'Last Intune check-in ' + global.U.agoLabel(r.lastCheckIn); }
     },
     {
       code: 'stale-fs-agent',
@@ -122,7 +122,7 @@
       test: function (r, cfg) {
         return r.fs && r.daysSinceAudit !== null && r.daysSinceAudit > cfg.fsStaleDays;
       },
-      detail: function (r) { return 'Last Freshservice audit ' + global.U.ageLabel(r.lastAudit) + ' ago'; }
+      detail: function (r) { return 'Last Freshservice audit ' + global.U.agoLabel(r.lastAudit); }
     },
     {
       code: 'state-conflict-active',
@@ -134,7 +134,7 @@
                r.daysSinceCheckIn !== null && r.daysSinceCheckIn <= cfg.activeDays;
       },
       detail: function (r) {
-        return 'State "' + r.state + '" but checked in ' + global.U.ageLabel(r.lastCheckIn) + ' ago';
+        return 'State "' + r.state + '" but checked in ' + global.U.agoLabel(r.lastCheckIn);
       },
       fix: { field: 'state', from: 'manual' }
     },
@@ -286,6 +286,78 @@
       detail: function (r) { return 'Name "' + r.name + '" is not unique in one of the source files'; }
     },
     {
+      code: 'high-risk-score',
+      label: 'High vulnerability risk score',
+      severity: 'high',
+      help: 'Arctic Wolf scores this device at or above the high-risk threshold in Settings. The score reflects ' +
+            'the severity of the worst findings rather than how many there are, so a high score on a device ' +
+            'with few risks still means something serious is open on it.',
+      test: function (r, cfg) {
+        return r.riskScore !== null && r.riskScore >= cfg.riskScoreThreshold;
+      },
+      detail: function (r) {
+        return 'Risk score ' + r.riskScore + (r.risks !== null ? ' across ' + global.U.num(r.risks) + ' open risks' : '') +
+               (r.awLastScan ? ', scanned ' + global.U.agoLabel(r.awLastScan) : '');
+      }
+    },
+    {
+      code: 'many-risks',
+      label: 'Large number of open risks',
+      severity: 'medium',
+      help: 'The count of open findings on this device is above the threshold in Settings. A long tail of ' +
+            'lower-severity risks usually means the machine is behind on patching rather than compromised, ' +
+            'which makes it a rebuild or update candidate.',
+      test: function (r, cfg) {
+        return r.risks !== null && r.risks >= cfg.risksThreshold;
+      },
+      detail: function (r) {
+        return global.U.num(r.risks) + ' open risks, worst scored ' + (r.riskScore === null ? 'unknown' : r.riskScore);
+      }
+    },
+    {
+      code: 'not-scanned',
+      label: 'Not covered by Arctic Wolf',
+      severity: 'medium',
+      help: 'This device is live in Intune or Freshservice but has no Arctic Wolf record, so nothing is scanning ' +
+            'it for vulnerabilities. That is a coverage gap rather than a data mismatch: the agent is probably ' +
+            'not deployed to it.',
+      test: function (r, cfg, ctx) {
+        if (!ctx.hasArcticWolf || r.aw) return false;
+        if (!r.inScope) return false;                       // printers and phones are not in scope
+        if (N.isRetiredState(r.state)) return false;
+        // Only claim a gap for machines that are demonstrably alive.
+        return r.daysSinceCheckIn !== null && r.daysSinceCheckIn <= cfg.staleDays;
+      },
+      detail: function (r) {
+        return 'Checked in to Intune ' + global.U.agoLabel(r.lastCheckIn) + ', but no vulnerability scan record';
+      }
+    },
+    {
+      code: 'scan-stale',
+      label: 'Vulnerability scan is stale',
+      severity: 'low',
+      help: 'Arctic Wolf knows this device but has not completed a scan of it recently, so its risk figures are ' +
+            'out of date and may understate what is open on it now.',
+      test: function (r, cfg) {
+        return r.aw && r.daysSinceScan !== null && r.daysSinceScan > cfg.scanStaleDays;
+      },
+      detail: function (r) {
+        return 'Last successful scan ' + global.U.agoLabel(r.awLastScan);
+      }
+    },
+    {
+      code: 'scan-only',
+      label: 'Scanned but not in either system',
+      severity: 'medium',
+      help: 'Arctic Wolf is scanning a device that neither Freshservice nor Intune knows about. Either the asset ' +
+            'register and Intune are both missing it, or it is not a corporate machine at all — both worth knowing.',
+      test: function (r) { return r.matchType === 'aw-only'; },
+      detail: function (r) {
+        return 'Seen by Arctic Wolf ' + global.U.agoLabel(r.awLastSeen) +
+               (r.ip ? ' on ' + r.ip : '') + ', with no Freshservice or Intune record';
+      }
+    },
+    {
       code: 'non-compliant',
       label: 'Not compliant in Intune',
       severity: 'medium',
@@ -338,7 +410,10 @@
 
   /* Run every enabled rule over every row, writing `issues` and `severity`. */
   function apply(result, cfg, enabled) {
-    var ctx = { hasLocations: result.sites && result.sites.size > 0 };
+    var ctx = {
+      hasLocations: result.sites && result.sites.size > 0,
+      hasArcticWolf: !!(result.counts && result.counts.arcticWolf)
+    };
     var active = RULES.filter(function (r) { return isEnabled(r, enabled); });
     var tally = {};
     active.forEach(function (r) { tally[r.code] = 0; });

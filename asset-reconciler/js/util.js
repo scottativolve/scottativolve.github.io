@@ -111,6 +111,18 @@
     return Math.round(n / 30.4) + ' months';
   }
 
+  /* The full phrase, so callers never concatenate their own " ago" onto
+     "today" or onto a date in the future. */
+  function agoLabel(v) {
+    var n = daysSince(v);
+    if (n === null) return 'never';
+    if (n < 0) return 'in ' + Math.abs(n) + (Math.abs(n) === 1 ? ' day' : ' days');
+    if (n === 0) return 'today';
+    if (n === 1) return 'yesterday';
+    if (n < 60) return n + ' days ago';
+    return Math.round(n / 30.4) + ' months ago';
+  }
+
   function todayStamp() {
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -211,7 +223,7 @@
     el: el, qs: qs, qsa: qsa, clear: clear,
     num: num, pct: pct, parseDate: parseDate, fmtDate: fmtDate,
     daysSince: daysSince, ageLabel: ageLabel, todayStamp: todayStamp,
-    truncate: truncate, escapeHtml: escapeHtml,
+    agoLabel: agoLabel, truncate: truncate, escapeHtml: escapeHtml,
     download: download, toast: toast, tooltip: tooltip, debounce: debounce,
     sortBy: sortBy, groupBy: groupBy, uniq: uniq
   };
