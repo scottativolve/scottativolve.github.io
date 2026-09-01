@@ -388,12 +388,23 @@
       }, [
         U.el('span', {}, v.name),
         U.el('span', { class: 'count' }, U.num(n)),
+        U.el('span', {
+          class: 'del',
+          title: v.isCustom ? 'Edit this view' : 'See how this view is defined',
+          onclick: function (e) {
+            e.stopPropagation();
+            openViewBuilder(v, v.isCustom ? 'edit' : 'inspect');
+          }
+        }, '\u2699'),
         v.isCustom ? U.el('span', {
           class: 'del', title: 'Delete this view',
           onclick: function (e) {
             e.stopPropagation();
+            if (!confirm('Delete the view "' + v.name + '"? Devices and notes are not affected.')) return;
             state.customViews = state.customViews.filter(function (x) { return x.id !== v.id; });
             global.Store.set('customViews', state.customViews);
+            delete state.viewColumnsById[v.id];
+            global.Store.set('viewColumns', state.viewColumnsById);
             if (state.viewId === v.id) state.viewId = 'attention';
             render();
           }
@@ -882,6 +893,12 @@
       class: 'btn sm', onclick: function () { openColumnPicker(view); }
     }, 'Columns'));
 
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      title: view.isCustom ? 'Change this view\u2019s conditions' : 'See how this view is defined, and copy it',
+      onclick: function () { openViewBuilder(view, view.isCustom ? 'edit' : 'inspect'); }
+    }, view.isCustom ? 'Edit view' : 'View settings'));
+
     controls.appendChild(U.el('label', { class: 'check' }, [
       U.el('input', {
         type: 'checkbox', checked: !!view.group,
@@ -1115,6 +1132,8 @@
     ]);
     setTimeout(function () { box.focus(); }, 60);
   }
+
+  var previewHook = function () {};
 
   function openColumnPicker(view) {
     var chosen = grid.state.columns.slice();
@@ -2003,16 +2022,64 @@
   /*  custom view builder                                                 */
   /* ==================================================================== */
 
-  function openViewBuilder(existing) {
-    var draft = existing ? JSON.parse(JSON.stringify(existing)) : {
-      id: 'custom-' + Date.now().toString(36),
-      name: '',
-      description: '',
-      columns: V.BASE_COLS.slice(),
-      filter: { match: 'all', conditions: [{ field: '__anyIssue', op: 'is' }] }
-    };
+  /* mode: 'new' | 'edit' | 'inspect'
+     Built-in views open read-only so their definition can be read and copied;
+     a copy is an ordinary custom view and fully editable. */
+  function openViewBuilder(existing, mode) {
+    mode = mode || (existing ? 'edit' : 'new');
+    var readOnly = mode === 'inspect';
+    // Drop any hook left by a previous dialog before this one wires its own.
+    previewHook = function () {};
+
+    function blankDraft() {
+      return {
+        id: 'custom-' + Date.now().toString(36),
+        name: '',
+        description: '',
+        columns: V.BASE_COLS.slice(),
+        filter: { match: 'all', conditions: [{ field: '__anyIssue', op: 'is' }] }
+      };
+    }
+
+    var draft;
+    if (existing) {
+      draft = {
+        id: existing.id,
+        name: existing.name,
+        description: existing.description || '',
+        columns: (state.viewColumnsById[existing.id] || existing.columns || V.BASE_COLS).slice(),
+        filter: existing.filter
+          ? JSON.parse(JSON.stringify(existing.filter))
+          : { match: 'all', conditions: [] }
+      };
+    } else {
+      draft = blankDraft();
+    }
+
+    // Two built-ins cannot be expressed as conditions: one has no filter at all
+    // and one is driven by code. Say so rather than showing an empty box that
+    // implies the view matches everything.
+    var codeDriven = !!(existing && existing.custom);
+    var unfiltered = !!(existing && !existing.custom && !existing.filter);
 
     var body = U.el('div', { class: 'body' });
+
+    if (readOnly) {
+      body.appendChild(U.el('div', { class: 'row tight', style: { marginBottom: '12px' } }, [
+        U.el('span', { class: 'badge low' }, 'Built-in view'),
+        U.el('span', { class: 'hint' },
+          'Shown as it is defined. Use "Save as a copy" to get an editable version.')
+      ]));
+    }
+    if (codeDriven) {
+      body.appendChild(U.el('div', { class: 'hint', style: { marginBottom: '12px', color: 'var(--critical)' } },
+        'This view is built from a rule in code rather than from conditions — it lists Freshservice assets whose ' +
+        'type is outside the computer types in Settings. A copy would not reproduce it, so copying is disabled.'));
+    } else if (unfiltered) {
+      body.appendChild(U.el('div', { class: 'hint', style: { marginBottom: '12px' } },
+        'This view has no conditions: it lists every reconciled device. A copy starts from that and you can add ' +
+        'conditions to narrow it.'));
+    }
     body.appendChild(U.el('div', { class: 'field', style: { marginBottom: '12px' } }, [
       U.el('label', {}, 'View name'),
       U.el('input', { type: 'text', value: draft.name, placeholder: 'e.g. North region, no user set',
@@ -2057,7 +2124,7 @@
         var valueControl;
         if (isIssue) {
           valueControl = U.el('select', {
-            onchange: function (e) { cond.value = e.target.value; }
+            onchange: function (e) { cond.value = e.target.value; previewHook(); }
           }, R.RULES.map(function (rule) {
             return U.el('option', { value: rule.code, selected: cond.value === rule.code }, rule.label);
           }));
@@ -2071,7 +2138,7 @@
                 type: opDef && opDef.numeric ? 'number' : 'text',
                 value: cond.value === undefined ? '' : cond.value,
                 placeholder: 'value',
-                oninput: function (e) { cond.value = e.target.value; }
+                oninput: function (e) { cond.value = e.target.value; previewHook(); }
               });
         }
 
@@ -2115,32 +2182,72 @@
           drawConditions();
         }
       }, '+ Add condition'));
+      previewHook();
     }
     drawConditions();
 
     var preview = U.el('div', { class: 'hint', style: { marginTop: '14px' } });
     function updatePreview() {
       if (!state.result) { preview.textContent = ''; return; }
-      var n = state.result.rows.filter(function (r) { return V.testFilter(r, draft.filter); }).length;
-      preview.textContent = n + ' of ' + state.result.rows.length + ' devices match right now.';
-    }
-    body.appendChild(U.el('button', { class: 'btn sm ghost', onclick: updatePreview }, 'Test this filter'));
-    body.appendChild(preview);
-
-    modal(existing ? 'Edit view' : 'New view', body, [
-      { label: 'Cancel', ghost: true },
-      {
-        label: 'Save view', primary: true, action: function () {
-          if (!draft.name.trim()) { U.toast('Give the view a name.', 'err'); return false; }
-          draft.filter.conditions = draft.filter.conditions.filter(function (c) { return c.field; });
-          state.customViews = state.customViews.filter(function (v) { return v.id !== draft.id; }).concat([draft]);
-          global.Store.set('customViews', state.customViews);
-          state.viewId = draft.id;
-          setTab('devices');
-          U.toast('View saved. Use "Export configuration" in Settings to share it with colleagues.', 'ok', 6000);
-        }
+      if (codeDriven) {
+        preview.textContent = 'Matches ' + U.num(V.applyView(existing, state.result.rows).length) + ' devices.';
+        return;
       }
-    ]);
+      var n = state.result.rows.filter(function (r) { return V.testFilter(r, draft.filter); }).length;
+      preview.textContent = U.num(n) + ' of ' + U.num(state.result.rows.length) + ' devices match right now.';
+    }
+    previewHook = updatePreview;      // called whenever a condition changes
+    body.appendChild(preview);
+    updatePreview();
+
+    body.appendChild(U.el('div', { class: 'hint', style: { marginTop: '10px' } },
+      'Which columns this view shows is set with the Columns button on the device list, and is remembered ' +
+      'per view.'));
+
+    function saveDraft(asCopy) {
+      if (asCopy) {
+        draft.id = 'custom-' + Date.now().toString(36);
+        if (!/copy/i.test(draft.name)) draft.name = draft.name + ' (copy)';
+      }
+      if (!draft.name.trim()) { U.toast('Give the view a name.', 'err'); return false; }
+      draft.filter.conditions = (draft.filter.conditions || []).filter(function (c) { return c.field; });
+      state.customViews = state.customViews.filter(function (v) { return v.id !== draft.id; }).concat([draft]);
+      global.Store.set('customViews', state.customViews);
+      if (asCopy) {
+        // Carry the original's columns onto the copy so it looks the same.
+        state.viewColumnsById[draft.id] = draft.columns.slice();
+        global.Store.set('viewColumns', state.viewColumnsById);
+      }
+      state.viewId = draft.id;
+      setTab('devices');
+      U.toast(asCopy ? 'Copied to "' + draft.name + '" — edit it freely.'
+                     : 'View updated.', 'ok', 6000);
+    }
+
+    var buttons = [{ label: readOnly ? 'Close' : 'Cancel', ghost: true }];
+    if (readOnly) {
+      buttons.push({
+        label: 'Save as a copy', primary: true,
+        action: function () {
+          if (codeDriven) { U.toast('This view cannot be copied — its rule lives in code.', 'err'); return false; }
+          return saveDraft(true);
+        }
+      });
+    } else {
+      buttons.push({
+        label: mode === 'edit' ? 'Save changes' : 'Save view', primary: true,
+        action: function () { return saveDraft(false); }
+      });
+    }
+
+    modal(mode === 'inspect' ? 'View settings — ' + draft.name
+        : mode === 'edit' ? 'Edit view — ' + draft.name
+        : 'New view', body, buttons);
+
+    if (readOnly) {
+      // Everything in the body is for reading; the footer still works.
+      U.qsa('input, select, textarea, button', body).forEach(function (el) { el.disabled = true; });
+    }
   }
 
   function importConfig() {

@@ -240,6 +240,24 @@ combination of conditions ("region is North West **and** no user in
 Freshservice"). Saved views appear in the sidebar for whoever is using that
 browser.
 
+**Every view can be opened and read.** The gear beside a view in the sidebar,
+or the button above the list, shows how it is defined, with a live count of how
+many devices match as you change it:
+
+- **Your own views** open for editing — change the conditions, the name or the
+  description and save over it.
+- **Built-in views** open read-only, so you can see exactly what
+  *Status conflicts* or *Stale devices* actually tests. **Save as a copy** turns
+  one into an ordinary custom view you can then edit freely, which is usually
+  the quickest way to build something close to a built-in but not quite.
+
+One built-in, *Other asset types*, is driven by code rather than conditions —
+it lists Freshservice assets whose type falls outside the computer types in
+Settings — so it can be read but not copied, and the dialog says so.
+
+Columns are separate from conditions: set them with the **Columns** button on
+the list, and they are remembered per view.
+
 To share a set of views with colleagues, use **Settings → Export configuration**
 and have them import the file. That carries your views, thresholds and import
 settings, and nothing else.
