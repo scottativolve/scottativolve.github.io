@@ -1,10 +1,21 @@
-# Asset Reconciler — Freshservice ↔ Intune
+# Asset Reconciler — Freshservice ↔ Intune ↔ FortiManager
 
-A browser tool for reconciling the Freshservice asset register against Intune.
-Drop in the two exports (plus a location lookup), and it matches the records,
-flags everything the two systems disagree about, drives the views you send out
-to services, builds the Freshservice import that corrects the data, and plots
-the estate on a map.
+A browser tool for reconciling the Freshservice asset register against the
+systems that actually know what is on the network. Drop in the exports (plus a
+location lookup), and it matches the records, flags everything the systems
+disagree about, drives the views you send out to services, builds the
+Freshservice import that corrects the data, and plots the estate on a map.
+
+It handles **two separate populations**, reconciled independently:
+
+| Population | Compared against | Answers |
+|---|---|---|
+| **PCs** | Freshservice ↔ Intune ↔ Arctic Wolf | who has it, where is it, is it stale, is it at risk |
+| **Network assets** | FortiManager ↔ Freshservice | what has been added since, what has been replaced, what firmware is recorded |
+
+They share the site list, the map, the notes and the duplicate finder, but they
+have their own tabs, views, checks and import builder — a firewall and a laptop
+have almost nothing in common to compare.
 
 It replaces the export-to-CSV, VLOOKUP, filter, re-export cycle.
 
@@ -23,13 +34,15 @@ not a server, and it can be switched off or wiped from Settings. See
 ## Contents
 
 - [Getting started](#getting-started)
-- [The three input files](#the-three-input-files)
+- [The input files](#the-input-files)
+- [Network assets](#network-assets)
 - [How records are matched](#how-records-are-matched)
 - [What it checks for](#what-it-checks-for)
 - [The working views](#the-working-views)
 - [The site verification loop](#the-site-verification-loop)
 - [Building the Freshservice import](#building-the-freshservice-import)
 - [The map](#the-map)
+- [Network assets](#network-assets)
 - [Other asset types](#other-asset-types)
 - [Settings and what is stored](#settings-and-what-is-stored)
 - [Where to host it](#where-to-host-it)
@@ -47,7 +60,7 @@ When you are ready, drop your own exports on the same page.
 
 ---
 
-## The three input files
+## The input files
 
 Drop all of them on the big box at the top and the tool works out which is
 which from the column headings. If a file is not recognised, drop it on the
@@ -159,6 +172,21 @@ One row per site. The location name must match what Freshservice holds.
 
 A worked example of each file is in [`sample-data/`](sample-data/).
 
+### 5. FortiManager managed devices (optional)
+
+Device Manager → Table View → Export, with every column included. Drop **both**
+environments on the same box if you have more than one. See
+[Network assets](#network-assets) — this file is a rendered tree and needs
+explaining properly.
+
+### 6. Freshservice network assets (optional)
+
+The network asset export, which has a different column set from the PC one
+(`Physical Subtype`, `Ports`, `Subnet Mask`, `Firmware Version`). Keep it as a
+separate export from the PC file — the tool tells the two apart by their
+columns, but a single export containing both makes the PC reconciliation report
+switches as missing from Intune.
+
 ### Locating devices by IP address
 
 If your site list carries an `IP Subnet` column and the exports carry a last-seen
@@ -172,6 +200,13 @@ Subnets can be written as CIDR (`10.20.30.0/24`), a dotted mask
 (`10.20.30.10-10.20.30.50`), or a bare network address, which is read as a `/24`.
 A site with more than one range takes them all in the same cell, separated by
 semicolons: `10.20.30.0/24; 10.20.31.0/24`.
+
+**This column is the data VLAN — the range the PCs sit on.** It is used only
+for the PC population, which is correct: network equipment lives on a different
+range, so the same column cannot place a switch. Network assets take their site
+from the FortiManager device name instead, and never from an IP address. If you
+add a management range to the site list later it will be read as a separate
+column rather than overloading this one.
 
 Where the two systems disagree on the address, the tool uses whichever system
 saw the device **most recently** — the point is where it is now, not where it
@@ -556,6 +591,97 @@ and the job never needs repeating.
 
 Map background tiles come from OpenStreetMap, so the map itself needs internet
 access. Everything else in the tool works offline.
+
+---
+
+## Network assets
+
+The network side answers a different question from the PC side. Freshservice's
+network register was imported by hand and has not been maintained, so what
+matters is **presence**, not field-by-field agreement:
+
+- **New since last import** — managed by FortiManager, absent from
+  Freshservice. This is the list you build an import from.
+- **Possibly replaced** — on a Freshservice record but managed by neither
+  environment. Replaced, decommissioned, or never removed.
+
+Everything else — firmware drift, locations, duplicates — is secondary, and
+only matters once those two lists are dealt with.
+
+### The FortiManager export
+
+Export from **Device Manager → Table View → Export**, and include every column
+offered. Two things about that file are worth knowing, because both used to
+break naive handling of it:
+
+**It is a rendered tree, not a table.** The hierarchy lives in the *leading
+spaces* of the Device Name column: a firewall at the left margin, then a `FSW`
+or `FAP` section row, then the switches and access points indented beneath it.
+Trim those spaces and you lose the structure entirely. The parser reads the
+indent depth before anything else touches the row, and a section label it does
+not recognise (a Security Fabric group, say) is reported as unknown rather than
+assumed to be switches.
+
+**An HA row is two firewalls.** A cluster is exported as one line with both
+serials packed into one cell — `FGT70GTK26066915 (Primary),FGT70GTK26061507
+(Secondary)` — and the member names and sync states in another. Each member
+becomes its own asset, with its own serial, role, sync state and **its own
+location**: an HA pair can span two buildings, and inheriting the site from the
+parent row would put one member at the wrong one.
+
+### Two environments
+
+If you run more than one FortiManager, **drop both exports on the same box**.
+They are held together and unioned by column name, with each row tagged with
+the environment it came from, and you can name the environments on the Data tab
+so the tables and the import read *Current supplier* rather than
+`managed_devices_root_20260902153522`.
+
+Do not append them in a spreadsheet. Two environments rarely export the same
+columns — one may carry the WAN `IP Address` and the other not — and because
+the shared columns sit at different positions, pasting one under the other
+shifts every field silently. The union is by name for exactly that reason, and
+it means a column you gain in a later export simply appears.
+
+A serial found in both environments is flagged rather than merged: expected
+mid-migration, worth a look otherwise.
+
+### Which site a device is at
+
+The site comes from the number at the front of the device name, zero-padded to
+three, matched against your site list — right for the great majority. Where it
+is not, the tool never guesses harder:
+
+1. **A site override** — device name to site code, kept in the project file —
+   wins over everything.
+2. Otherwise the **number in the device's own name**, if it matches a site.
+3. Otherwise the site of the **firewall it sits under**.
+
+Then it sanity-checks the answer: if the device name and the site name share no
+word, the row is flagged **Site looks wrong** rather than quietly accepted. That
+is what catches a house number masquerading as a site code — `113-117-Stanley
+Road` resolving to site 113, which is somewhere else entirely — and a campus
+firewall whose switches belong to neighbouring sites. Near-miss spellings
+(*Gorefield* against *Gorefeld*) are treated as the same place, so the flag
+stays worth reading.
+
+**Site overrides** on the Network tab lists everything unresolved or suspect,
+with a dropdown of your real site codes. Clearing that list is the one piece of
+manual setup the network side needs.
+
+### Building the network import
+
+Most network rows *create* an asset rather than correct one, so Workspace,
+Name, Asset Type and Product must all be present — and three of those have to
+be spelled the way Freshservice spells them. A Product name the tool invented
+would either fail the import or quietly create a second product.
+
+So the builder keeps three mappings, and **learns them from your own data**:
+where a matched device already has a Freshservice Product, that is by definition
+a value Freshservice accepts for that platform, so it is adopted. In practice
+that fills nearly all of them on the first run, and the boxes it cannot fill
+are highlighted. The export button refuses to run while any required mapping is
+blank, and shows the first rows exactly as they will be written.
 
 ---
 

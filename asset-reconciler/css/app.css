@@ -606,6 +606,11 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
 .kv > div.k { color: var(--text-secondary); font-weight: 550; }
 .kv > div.hdr { font-weight: 650; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); background: var(--surface-2); }
 .kv > div.mismatch { background: color-mix(in srgb, var(--critical) 9%, var(--surface-1)); }
+/* Two-column variant: a label and one value, for the network dialogs where
+   there is nothing to sit side by side. */
+.kv.two { grid-template-columns: minmax(180px, 1fr) minmax(180px, 1.2fr); }
+.kv.two > div.k { align-self: center; }
+.kv select, .kv input[type="text"] { width: 100%; }
 
 /* -------------------------------------------------------------- toasts */
 

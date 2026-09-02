@@ -91,14 +91,84 @@
       ]
     },
 
+    fortimanager: {
+      id: 'fortimanager',
+      label: 'FortiManager',
+      short: 'Forti',
+      hint: 'Managed devices export (Device Manager \u2192 Table View \u2192 Export). Drop both environments here.',
+      multi: true,
+      signature: ['config status', 'policy package status', 'fortiguard license', 'provisioning templates',
+                  'management mode', 'controller counter', 'fgsp', 'ha status'],
+      anti: ['compliance', 'primary user upn', 'enrollment date', 'asset state', 'used by'],
+      fields: [
+        { key: 'name',        label: 'Device name',    required: true, aliases: ['device name', 'name'] },
+        { key: 'serial',      label: 'Serial number',  aliases: ['serial number', 'serial'] },
+        { key: 'platform',    label: 'Platform',       aliases: ['platform', 'model', 'device model'] },
+        { key: 'firmware',    label: 'Firmware version', aliases: ['firmware version', 'firmware', 'os version'] },
+        { key: 'hostName',    label: 'Host name',      aliases: ['host name', 'hostname'] },
+        { key: 'haStatus',    label: 'HA status',      aliases: ['ha status', 'ha', 'cluster status'] },
+        { key: 'configStatus',label: 'Config status',  aliases: ['config status', 'configuration status'] },
+        { key: 'ipAddress',   label: 'IP address',     aliases: ['ip address', 'ip', 'wan ip', 'external ip', 'ipv4 address'] },
+        { key: 'description', label: 'Description',    aliases: ['description', 'comments', 'notes'] },
+        { key: 'controllers', label: 'Controller counter', aliases: ['controller counter', 'controllers'] },
+        { key: 'mgmtMode',    label: 'Management mode',aliases: ['management mode', 'managed mode'] },
+        { key: 'policyPkg',   label: 'Policy package status', aliases: ['policy package status', 'policy package'] },
+        { key: 'fortiguard',  label: 'FortiGuard licence', aliases: ['fortiguard license', 'fortiguard licence', 'fortiguard'] },
+        { key: 'upgrade',     label: 'Upgrade status', aliases: ['upgrade status'] },
+        { key: 'fwTemplate',  label: 'Firmware template', aliases: ['firmware template'] },
+        { key: 'provisioning',label: 'Provisioning templates', aliases: ['provisioning templates'] },
+        { key: 'fabric',      label: 'Fabric member',  aliases: ['fabric member', 'security fabric'] },
+        { key: 'autoLink',    label: 'Auto-link status', aliases: ['auto link status', 'autolink status'] },
+        { key: 'sdwan',       label: 'Managed by SD-WAN Manager', aliases: ['managed by sd wan manager', 'managed by sdwan manager'] },
+        { key: 'address',     label: 'Address',        aliases: ['address device', 'address'] }
+      ]
+    },
+
+    fsnetwork: {
+      id: 'fsnetwork',
+      label: 'Freshservice network',
+      short: 'FS net',
+      hint: 'Network assets export (routers, switches, access points)',
+      signature: ['physical subtype', 'virtual subtype', 'availability zone', 'ports',
+                  'subnet mask', 'discovery enabled', 'book value'],
+      anti: ['last login by', 'used by email', 'operating system', 'compliance', 'jailbroken', 'config status'],
+      fields: [
+        { key: 'name',        label: 'Device name',    required: true, aliases: ['name', 'display name', 'device name', 'hostname', 'asset name'] },
+        { key: 'serial',      label: 'Serial number',  aliases: ['serial number', 'serial no', 'serial'] },
+        { key: 'assetTag',    label: 'Asset tag',      aliases: ['asset tag', 'asset id', 'tag'] },
+        { key: 'assetType',   label: 'Asset type',     aliases: ['asset type', 'asset type name', 'ci type'] },
+        { key: 'ciType',      label: 'Type',           aliases: ['type'] },
+        { key: 'subtype',     label: 'Physical subtype', aliases: ['physical subtype', 'subtype'] },
+        { key: 'state',       label: 'Asset state',    aliases: ['asset state', 'state', 'asset status'] },
+        { key: 'usageType',   label: 'Usage type',     aliases: ['usage type'] },
+        { key: 'location',    label: 'Location',       aliases: ['location', 'location name', 'site'] },
+        { key: 'department',  label: 'Department',     aliases: ['department', 'department name'] },
+        { key: 'product',     label: 'Product',        aliases: ['product', 'product name', 'model'] },
+        { key: 'vendor',      label: 'Vendor',         aliases: ['vendor', 'manufacturer', 'make'] },
+        { key: 'firmware',    label: 'Firmware',       aliases: ['firmware'] },
+        { key: 'firmwareVersion', label: 'Firmware version', aliases: ['firmware version'] },
+        { key: 'ipAddress',   label: 'IP address',     aliases: ['ip address', 'ip', 'ipv4 address'] },
+        { key: 'mac',         label: 'MAC address',    aliases: ['mac address', 'mac', 'physical address'] },
+        { key: 'subnetMask',  label: 'Subnet mask',    aliases: ['subnet mask', 'netmask'] },
+        { key: 'ports',       label: 'Ports',          aliases: ['ports', 'port count'] },
+        { key: 'domain',      label: 'Domain',         aliases: ['domain'] },
+        { key: 'workspace',   label: 'Workspace',      aliases: ['workspace'] },
+        { key: 'lastAudit',   label: 'Last audit',     type: 'date', aliases: ['last audit date', 'last audit', 'last seen'] },
+        { key: 'acquired',    label: 'Acquisition date', type: 'date', aliases: ['acquisition date', 'acquired'] },
+        { key: 'endOfLife',   label: 'End of life',    aliases: ['end of life', 'eol'] },
+        { key: 'description', label: 'Description',    aliases: ['description', 'comments'] }
+      ]
+    },
+
     locations: {
       id: 'locations',
       label: 'Location lookup',
       short: 'Sites',
       hint: 'Your location → address list (adds the map)',
-      signature: ['postcode', 'address', 'latitude', 'longitude', 'expected devices', 'post code', 'ip subnet', 'subnet'],
+      signature: ['postcode', 'address', 'latitude', 'longitude', 'expected devices', 'post code', 'ip subnet', 'subnet', 'site code'],
       fields: [
-        { key: 'location',  label: 'Location name',   required: true, aliases: ['location', 'location name', 'site', 'site name', 'service', 'service name', 'name'] },
+        { key: 'location',  label: 'Location name',   required: true, aliases: ['service location name', 'location name', 'service name', 'site name', 'location', 'service', 'name'] },
+        { key: 'siteCode',  label: 'Site code',       aliases: ['site code', 'code', 'site id', 'site ref', 'service code'] },
         { key: 'address',   label: 'Address',         aliases: ['address', 'full address', 'address line 1', 'street', 'address 1', 'street address'] },
         { key: 'town',      label: 'Town / city',     aliases: ['town', 'city', 'address line 2', 'locality'] },
         { key: 'postcode',  label: 'Postcode',        aliases: ['postcode', 'post code', 'zip', 'zip code', 'postal code'] },
@@ -146,9 +216,21 @@
     var hc = h.replace(/ /g, ''), ac = a.replace(/ /g, '');
     if (hc === ac) return 95;
 
-    // Header is the alias plus a qualifier: "Serial Number (Device)"
-    if (h.indexOf(a + ' ') === 0 || h.indexOf(' ' + a) === h.length - a.length - 1) {
+    // Header is the alias plus a qualifier: "Serial Number (Device)".
+    // Both tests must be a real hit: indexOf returns -1 when the alias is
+    // absent, and for a header the same length as the alias that -1 also
+    // equals h.length - a.length - 1, which used to award 82 to a header
+    // sharing nothing but its length ("Updated At" for "OS Version").
+    var tailAt = h.length - a.length - 1;
+    if (h.indexOf(a + ' ') === 0 || (tailAt >= 0 && h.indexOf(' ' + a) === tailAt)) {
       return 82 - Math.min(12, h.length - a.length);
+    }
+    /* A one- or two-character alias ("x", "y", "os", "ip") matches far too
+       much as a substring: "County" contains "y", which was enough to make it
+       the best candidate for Latitude. Short aliases have to match a whole
+       word. */
+    if (a.length <= 2) {
+      return h.split(' ').indexOf(a) >= 0 ? 74 : 0;
     }
     if (h.indexOf(a) >= 0) return 70 - Math.min(20, h.length - a.length);
     if (a.indexOf(h) >= 0) return 58 - Math.min(20, a.length - h.length);
@@ -208,19 +290,30 @@
         var matched = headers.some(function (h) { return scoreAlias(h, sig) >= 90; });
         if (matched) hit += 1;
       });
+      // Two exports of the same population can share most of their headers —
+      // the Freshservice PC and network exports do — so positive signals alone
+      // cannot separate them. anti lists headers that rule a source out.
+      var miss = 0;
+      (src.anti || []).forEach(function (sig) {
+        var matched = headers.some(function (h) { return scoreAlias(h, sig) >= 90; });
+        if (matched) miss += 1;
+      });
       // Fraction of required fields we could map at all.
       var mapping = autoMap(id, headers);
       var req = src.fields.filter(function (f) { return f.required; });
       var reqOk = req.every(function (f) { return mapping[f.key]; }) ? 1 : 0;
       var coverage = Object.keys(mapping).length / src.fields.length;
-      scores[id] = hit * 3 + reqOk * 2 + coverage * 2;
+      scores[id] = hit * 3 + reqOk * 2 + coverage * 2 - miss * 4;
     });
 
-    var bestId = null, bestScore = 0;
-    Object.keys(scores).forEach(function (id) {
-      if (scores[id] > bestScore) { bestScore = scores[id]; bestId = id; }
-    });
-    return { source: bestScore >= 4 ? bestId : null, scores: scores };
+    var ranked = Object.keys(scores).sort(function (a, b) { return scores[b] - scores[a]; });
+    var bestId = ranked[0], bestScore = scores[bestId];
+    var runnerUp = ranked.length > 1 ? scores[ranked[1]] : 0;
+    // A file the FortiManager export could be mistaken for is worse than a
+    // file we admit we cannot place: loading 800 network devices as Intune
+    // devices would corrupt the PC reconciliation silently.
+    var confident = bestScore >= 6 && bestScore - runnerUp >= 2;
+    return { source: confident ? bestId : null, scores: scores };
   }
 
   function fieldsOf(sourceId) { return (SOURCES[sourceId] || { fields: [] }).fields; }

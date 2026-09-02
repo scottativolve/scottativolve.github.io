@@ -32,6 +32,16 @@
     return best;
   }
 
+  /* Synthetic per-row key holding the first column's indent depth. */
+  var INDENT = '__indent';
+
+  function indentOf(v) {
+    var s = v === undefined || v === null ? '' : String(v);
+    var n = 0;
+    while (n < s.length && (s[n] === ' ' || s[n] === '\t')) n += s[n] === '\t' ? 4 : 1;
+    return n;
+  }
+
   function parse(text, opts) {
     opts = opts || {};
     if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);       // strip BOM
@@ -95,6 +105,10 @@
       for (var c2 = 0; c2 < headers.length; c2++) {
         obj[headers[c2]] = raw[c2] === undefined ? '' : String(raw[c2]).trim();
       }
+      // FortiManager encodes the device tree as leading spaces in the first
+      // column, so the depth has to be read before the trim above throws it
+      // away. Kept off the header list: it is not a column anyone can map.
+      obj[INDENT] = indentOf(raw[0]);
       out.push(obj);
     }
     return { headers: headers, rows: out, delimiter: delim };
@@ -174,6 +188,7 @@
   }
 
   global.CSV = {
+    INDENT: INDENT,
     parse: parse,
     stringify: stringify,
     readFile: readFile,

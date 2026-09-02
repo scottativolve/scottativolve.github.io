@@ -12,17 +12,21 @@
     return U.el('span', { class: 'badge ' + sev }, [U.el('span', { class: 'sev sev-' + sev }), label]);
   }
 
-  function issueChips(row, onChipClick) {
+  /* The rule registry is an argument for the same reason the column registry
+     is: network assets have their own rules, and a chip drawn from the PC
+     registry would come out blank. */
+  function issueChips(row, onChipClick, rules) {
+    var R = rules || global.Rules;
     var frag = document.createDocumentFragment();
     if (!row.issues.length) {
       frag.appendChild(U.el('span', { class: 'badge ok' }, [U.el('span', { class: 'sev sev-ok' }), 'No issues']));
       return frag;
     }
     var ordered = row.issues.slice().sort(function (a, b) {
-      return R.SEVERITY_ORDER[(R.BY_CODE[b] || {}).severity] - R.SEVERITY_ORDER[(R.BY_CODE[a] || {}).severity];
+      return R.SEVERITY_ORDER[(byCode(R)[b] || {}).severity] - R.SEVERITY_ORDER[(byCode(R)[a] || {}).severity];
     });
     ordered.forEach(function (code) {
-      var rule = R.BY_CODE[code];
+      var rule = byCode(R)[code];
       if (!rule) return;
       var chip = U.el('span', {
         class: 'badge ' + rule.severity,
@@ -42,7 +46,7 @@
 
     if (col.key === 'issues') {
       td.className = 'chips';
-      td.appendChild(issueChips(row, ctx.onChipClick));
+      td.appendChild(issueChips(row, ctx.onChipClick, ctx.rules));
       return;
     }
     if (col.key === 'notes') {
@@ -93,6 +97,10 @@
 
   function create(container, opts) {
     opts = opts || {};
+    /* The grid does not care what a row is, only how to read a column out of
+       one, so the column registry is an argument. Network assets pass their
+       own; everything else gets the PC one. */
+    var V = opts.views || global.Views;
     var state = {
       rows: [],
       columns: V.BASE_COLS.slice(),
@@ -172,7 +180,7 @@
 
       /* --------------------------------------------------------- body */
       var tbody = U.el('tbody');
-      var ctx = { onChipClick: opts.onChipClick, onNotesClick: opts.onNotesClick };
+      var ctx = { onChipClick: opts.onChipClick, onNotesClick: opts.onNotesClick, rules: opts.rules };
 
       function addRow(r) {
         var tr = U.el('tr', {
@@ -302,7 +310,13 @@
     ];
   }
 
+  /* Rules.BY_CODE on the PC side, NetMatch.RULE_BY_CODE on the network side —
+     the same shape under two names. */
+  function byCode(R) { return R.BY_CODE || R.RULE_BY_CODE || {}; }
+
   function openDrawer(row, onClose, opts) {
+    var R = (opts && opts.rules) || global.Rules;
+    var rowFields = (opts && opts.fieldRows) || fieldRows;
     opts = opts || {};
     var back = U.el('div', { class: 'drawer-back', onclick: close });
     var drawer = U.el('div', { class: 'drawer', role: 'dialog', 'aria-label': 'Device detail' });
@@ -335,7 +349,7 @@
       var issuesCard = U.el('div', { class: 'card', style: { marginBottom: '16px' } });
       issuesCard.appendChild(U.el('h3', { style: { marginBottom: '8px' } }, 'What is wrong'));
       row.issues.forEach(function (code) {
-        var rule = R.BY_CODE[code];
+        var rule = byCode(R)[code];
         if (!rule) return;
         issuesCard.appendChild(U.el('div', { style: { marginBottom: '10px' } }, [
           U.el('div', { class: 'row tight' }, [
@@ -350,17 +364,18 @@
       body.appendChild(U.el('div', { class: 'card' }, [
         U.el('span', { class: 'badge ok' }, [U.el('span', { class: 'sev sev-ok' }), 'No issues found']),
         U.el('div', { class: 'hint', style: { marginTop: '6px' } },
-          'Both systems agree on this device, and nothing is stale.')
+          opts.cleanText || 'Both systems agree on this device, and nothing is stale.')
       ]));
     }
 
     var cmp = U.el('div', { class: 'card' });
     cmp.appendChild(U.el('h3', { style: { marginBottom: '10px' } }, 'Side by side'));
     var kv = U.el('div', { class: 'kv' });
+    var sideLabels = opts.sideLabels || ['Freshservice', 'Intune'];
     kv.appendChild(U.el('div', { class: 'hdr' }, 'Field'));
-    kv.appendChild(U.el('div', { class: 'hdr' }, 'Freshservice'));
-    kv.appendChild(U.el('div', { class: 'hdr' }, 'Intune'));
-    fieldRows(row).forEach(function (f) {
+    kv.appendChild(U.el('div', { class: 'hdr' }, sideLabels[0]));
+    kv.appendChild(U.el('div', { class: 'hdr' }, sideLabels[1]));
+    rowFields(row).forEach(function (f) {
       var a = N.clean(f[1]), b = N.clean(f[2]);
       var differs = a && b && a !== '—' && b !== '—' && !N.looseEqual(a, b);
       if (f[0] === 'Assigned user') differs = row.userStatus === 'mismatch';

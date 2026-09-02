@@ -55,16 +55,6 @@
     { key: 'postcode',    label: 'Postcode',      width: 90,  get: function (r) { return r.site ? N.clean(r.site.postcode) : ''; } }
   ];
 
-  var COL_BY_KEY = {};
-  COLUMNS.forEach(function (c) { COL_BY_KEY[c.key] = c; });
-
-  function colValue(row, key) {
-    var c = COL_BY_KEY[key];
-    return c ? c.get(row) : '';
-  }
-
-  /* ------------------------------------------------------ filter engine */
-
   var OPERATORS = [
     { op: 'is',          label: 'is',             needsValue: true },
     { op: 'isNot',       label: 'is not',         needsValue: true },
@@ -78,53 +68,112 @@
     { op: 'newerThan',   label: 'is newer than (days)', needsValue: true, numeric: true }
   ];
 
-  function testCondition(row, cond) {
-    // Pseudo-field: issue codes.
-    if (cond.field === '__issue') {
-      var has = row.issues.indexOf(cond.value) >= 0;
-      return cond.op === 'isNot' ? !has : has;
-    }
-    if (cond.field === '__anyIssue') {
-      return cond.op === 'isNot' ? row.issueCount === 0 : row.issueCount > 0;
+  /* ------------------------------------------------------ filter engine */
+
+  /* The engine is the same whatever the rows are: it only ever reaches a row
+     through the column registry it is given. Network assets have their own
+     columns and their own views, so they build their own engine over the same
+     code rather than a second copy of it. */
+  function engine(columns, baseCols) {
+    var COL_BY_KEY = {};
+    columns.forEach(function (c) { COL_BY_KEY[c.key] = c; });
+
+    function colValue(row, key) {
+      var c = COL_BY_KEY[key];
+      return c ? c.get(row) : '';
     }
 
-    var v = colValue(row, cond.field);
-    var col = COL_BY_KEY[cond.field] || {};
-    var isDate = col.type === 'date' || v instanceof Date;
-    var target = cond.value;
+    /* ------------------------------------------------------ filter engine */
 
-    switch (cond.op) {
-      case 'empty':    return v === null || v === undefined || v === '' || (Array.isArray(v) && !v.length);
-      case 'notEmpty': return !(v === null || v === undefined || v === '' || (Array.isArray(v) && !v.length));
-      case 'gt':       return v !== null && v !== '' && Number(v) > Number(target);
-      case 'lt':       return v !== null && v !== '' && Number(v) < Number(target);
-      case 'olderThan': {
-        var d1 = U.daysSince(v);
-        return d1 !== null && d1 > Number(target);
+    function testCondition(row, cond) {
+      // Pseudo-field: issue codes.
+      if (cond.field === '__issue') {
+        var has = row.issues.indexOf(cond.value) >= 0;
+        return cond.op === 'isNot' ? !has : has;
       }
-      case 'newerThan': {
-        var d2 = U.daysSince(v);
-        return d2 !== null && d2 < Number(target);
+      if (cond.field === '__anyIssue') {
+        return cond.op === 'isNot' ? row.issueCount === 0 : row.issueCount > 0;
       }
-      default: {
-        var s = (Array.isArray(v) ? v.join(' ') : (isDate ? U.fmtDate(v) : String(v === null || v === undefined ? '' : v))).toLowerCase();
-        var t = String(target === null || target === undefined ? '' : target).toLowerCase().trim();
-        if (cond.op === 'is') return s === t;
-        if (cond.op === 'isNot') return s !== t;
-        if (cond.op === 'contains') return s.indexOf(t) >= 0;
-        if (cond.op === 'notContains') return s.indexOf(t) < 0;
-        return true;
+
+      var v = colValue(row, cond.field);
+      var col = COL_BY_KEY[cond.field] || {};
+      var isDate = col.type === 'date' || v instanceof Date;
+      var target = cond.value;
+
+      switch (cond.op) {
+        case 'empty':    return v === null || v === undefined || v === '' || (Array.isArray(v) && !v.length);
+        case 'notEmpty': return !(v === null || v === undefined || v === '' || (Array.isArray(v) && !v.length));
+        case 'gt':       return v !== null && v !== '' && Number(v) > Number(target);
+        case 'lt':       return v !== null && v !== '' && Number(v) < Number(target);
+        case 'olderThan': {
+          var d1 = U.daysSince(v);
+          return d1 !== null && d1 > Number(target);
+        }
+        case 'newerThan': {
+          var d2 = U.daysSince(v);
+          return d2 !== null && d2 < Number(target);
+        }
+        default: {
+          var s = (Array.isArray(v) ? v.join(' ') : (isDate ? U.fmtDate(v) : String(v === null || v === undefined ? '' : v))).toLowerCase();
+          var t = String(target === null || target === undefined ? '' : target).toLowerCase().trim();
+          if (cond.op === 'is') return s === t;
+          if (cond.op === 'isNot') return s !== t;
+          if (cond.op === 'contains') return s.indexOf(t) >= 0;
+          if (cond.op === 'notContains') return s.indexOf(t) < 0;
+          return true;
+        }
       }
     }
+
+    function testFilter(row, filter) {
+      if (!filter || !filter.conditions || !filter.conditions.length) return true;
+      var results = filter.conditions.map(function (c) { return testCondition(row, c); });
+      return filter.match === 'any' ? results.some(Boolean) : results.every(Boolean);
+    }
+
+    /* ------------------------------------------------------- built-in views */
+
+    var SEARCHABLE = null;
+    function searchRows(rows, q) {
+      q = String(q || '').toLowerCase().trim();
+      if (!q) return rows;
+      if (!SEARCHABLE) SEARCHABLE = columns.map(function (c) { return c.key; });
+      return rows.filter(function (r) {
+        for (var i = 0; i < SEARCHABLE.length; i++) {
+          var v = colValue(r, SEARCHABLE[i]);
+          if (v === null || v === undefined || v === '') continue;
+          if (Array.isArray(v)) v = v.join(' ');
+          else if (v instanceof Date) v = global.U.fmtDate(v);
+          if (String(v).toLowerCase().indexOf(q) >= 0) return true;
+        }
+        return false;
+      });
+    }
+
+    function applyView(view, rows) {
+      var out = rows;
+      if (view.custom) out = view.custom(out);
+      else if (view.filter) out = out.filter(function (r) { return testFilter(r, view.filter); });
+      if (view.sort) {
+        var col = COL_BY_KEY[view.sort.key];
+        var keyFn = col && col.sortKey ? col.sortKey : function (r) { return colValue(r, view.sort.key); };
+        out = U.sortBy(out, keyFn, view.sort.dir);
+      }
+      return out;
+    }
+
+    return {
+      COLUMNS: columns,
+      COL_BY_KEY: COL_BY_KEY,
+      BASE_COLS: (baseCols || []).slice(),
+      OPERATORS: OPERATORS,
+      colValue: colValue,
+      testCondition: testCondition,
+      testFilter: testFilter,
+      searchRows: searchRows,
+      applyView: applyView
+    };
   }
-
-  function testFilter(row, filter) {
-    if (!filter || !filter.conditions || !filter.conditions.length) return true;
-    var results = filter.conditions.map(function (c) { return testCondition(row, c); });
-    return filter.match === 'any' ? results.some(Boolean) : results.every(Boolean);
-  }
-
-  /* ------------------------------------------------------- built-in views */
 
   var BASE_COLS = ['name', 'location', 'fsUser', 'intuneUser', 'state', 'lastCheckIn', 'issues'];
 
@@ -288,45 +337,7 @@
      meant - and typing a value whose column you had not added found nothing.
      Searching everything is both more useful (a serial number is findable
      without adding the column) and impossible to get out of step. */
-  var SEARCHABLE = null;
-  function searchRows(rows, q) {
-    q = String(q || '').toLowerCase().trim();
-    if (!q) return rows;
-    if (!SEARCHABLE) SEARCHABLE = COLUMNS.map(function (c) { return c.key; });
-    return rows.filter(function (r) {
-      for (var i = 0; i < SEARCHABLE.length; i++) {
-        var v = colValue(r, SEARCHABLE[i]);
-        if (v === null || v === undefined || v === '') continue;
-        if (Array.isArray(v)) v = v.join(' ');
-        else if (v instanceof Date) v = global.U.fmtDate(v);
-        if (String(v).toLowerCase().indexOf(q) >= 0) return true;
-      }
-      return false;
-    });
-  }
+  var PC = engine(COLUMNS, BASE_COLS);
 
-  function applyView(view, rows) {
-    var out = rows;
-    if (view.custom) out = view.custom(out);
-    else if (view.filter) out = out.filter(function (r) { return testFilter(r, view.filter); });
-    if (view.sort) {
-      var col = COL_BY_KEY[view.sort.key];
-      var keyFn = col && col.sortKey ? col.sortKey : function (r) { return colValue(r, view.sort.key); };
-      out = U.sortBy(out, keyFn, view.sort.dir);
-    }
-    return out;
-  }
-
-  global.Views = {
-    COLUMNS: COLUMNS,
-    COL_BY_KEY: COL_BY_KEY,
-    colValue: colValue,
-    OPERATORS: OPERATORS,
-    testFilter: testFilter,
-    searchRows: searchRows,
-    testCondition: testCondition,
-    BUILT_IN: BUILT_IN,
-    BASE_COLS: BASE_COLS,
-    applyView: applyView
-  };
+  global.Views = Object.assign({ engine: engine, BUILT_IN: BUILT_IN }, PC);
 })(window);

@@ -4,9 +4,21 @@
   'use strict';
 
   var U = global.U, V = global.Views, R = global.Rules, N = global.Norm,
-      S = global.Schema, C = global.Charts, T = global.Table, FX = global.FSExport;
+      S = global.Schema, C = global.Charts, T = global.Table, FX = global.FSExport,
+      NV = global.NetViews, NM = global.NetMatch, NX = global.NetExport, FT = global.Fortinet;
 
-  var SOURCE_IDS = ['freshservice', 'intune', 'arcticwolf', 'locations', 'verification'];
+  /* Two populations, reconciled separately. PC_SOURCES feed the device
+     reconciliation; NET_SOURCES feed the network one. The location lookup is
+     shared, because a site is a site. */
+  var PC_SOURCES = ['freshservice', 'intune', 'arcticwolf', 'locations', 'verification'];
+  var NET_SOURCES = ['fortimanager', 'fsnetwork'];
+  var SOURCE_IDS = PC_SOURCES.concat(NET_SOURCES);
+
+  /* FortiManager is exported per environment, and the two exports do not have
+     the same columns, so they are unioned by header name on load rather than
+     pasted together in a spreadsheet, where the differing column order would
+     silently shift every field. */
+  var MULTI_FILE = { fortimanager: true };
 
   /* A config saved by an older build can be missing whole sections, and a
      shallow merge would leave the UI dereferencing keys that aren't there.
@@ -42,6 +54,21 @@
     return out;
   }
 
+  /* Same problem as mergeFsConfig: a config saved by an older build can be
+     missing whole sections, and the lookup maps must survive untouched. */
+  function mergeNetConfig(saved) {
+    var base = NX.defaultConfig();
+    if (!saved || typeof saved !== 'object') return base;
+    var out = Object.assign({}, base, saved);
+    ['headers', 'include', 'fixed'].forEach(function (k) {
+      out[k] = Object.assign({}, base[k], saved[k] || {});
+    });
+    NX.LOOKUPS.forEach(function (l) {
+      out[l.id] = Object.assign({}, saved[l.id] || {});
+    });
+    return out;
+  }
+
   var state = {
     sources: {},                 // id -> { fileName, headers, raw, mapping, records }
     result: null,
@@ -62,7 +89,23 @@
     selectedIds: [],            // rows ticked on the Devices tab
     persist: global.Store.get('persist', true),   // keep the working set between visits
     author: global.Store.get('author', ''),       // name attached to notes you write
-    restoredAt: null
+    restoredAt: null,
+
+    /* --- network assets, reconciled separately from the PCs --- */
+    netResult: null,
+    netWarnings: [],
+    netCfg: NM.settings(global.Store.get('netCfg', null) || {}),
+    netEnabledRules: global.Store.get('netEnabledRules', {}),
+    netViewId: 'net-new',
+    netSearch: '',
+    netColumns: null,
+    netColumnsById: global.Store.get('netColumns', {}),
+    netSelectedIds: [],
+    netExportScope: 'view',
+    netConfig: mergeNetConfig(global.Store.get('netConfig', {})),
+    siteOverrides: global.Store.get('siteOverrides', {}),  // device name -> site code
+    envLabels: global.Store.get('envLabels', {}),          // export file -> your name for it
+    envOrder: global.Store.get('envOrder', [])
   };
 
   var grid = null;
@@ -75,6 +118,14 @@
   function loadFiles(files, forcedSource) {
     var list = Array.prototype.slice.call(files || []);
     if (!list.length) return;
+
+    /* Whether each population was already complete before this batch. Only a
+       population that becomes complete moves you off the Data tab: without
+       this, every file dropped after Freshservice and Intune were loaded
+       bounced you to the Dashboard, which made adding the FortiManager
+       exports afterwards a fight. */
+    var hadPc = !!(state.sources.freshservice && state.sources.intune);
+    var hadNet = !!(state.sources.fortimanager && state.sources.fsnetwork);
 
     var jobs = list.map(function (file) {
       return global.CSV.readFile(file).then(function (parsed) {
@@ -100,11 +151,43 @@
           mapping = S.autoMap(sourceId, parsed.headers);
         }
 
+        // Each row remembers which file it came from, so a device can be
+        // reported as being in one FortiManager environment or both.
+        var envName = environmentKey(file.name);
+        // Only a source that is loaded from several files has environments to
+        // name; the site list is not one of them.
+        if (MULTI_FILE[sourceId]) noteEnvironment(envName);
+        parsed.rows.forEach(function (r) { r.__env = envName; });
+
+        var prior = MULTI_FILE[sourceId] ? state.sources[sourceId] : null;
+        if (prior && prior.files && prior.files.indexOf(file.name) >= 0) {
+          // Re-dropping the same file replaces its rows rather than doubling them.
+          prior.raw = prior.raw.filter(function (r) { return r.__env !== envName; });
+        }
+
+        var headers = prior ? unionHeaders(prior.headers, parsed.headers) : parsed.headers;
+        var rows = prior ? prior.raw.concat(parsed.rows) : parsed.rows;
+        var files = prior ? prior.files.filter(function (f) { return f !== file.name; }).concat([file.name]) : [file.name];
+
+        if (prior) {
+          /* Adding a second export to a source keeps the mapping already
+             decided for the first and fills only what the union has newly
+             gained — here, the IP Address column one environment exports and
+             the other does not. Starting from a mapping computed for this
+             file's headers alone would drop every column the other file
+             contributed and then re-find it, which reads as though the saved
+             mapping had been wrong. */
+          var re = S.fillMapping(sourceId, headers, prior.mapping, null);
+          mapping = re.mapping;
+          filled = re.filled;
+        }
+
         state.sources[sourceId] = {
           id: sourceId,
-          fileName: file.name,
-          headers: parsed.headers,
-          raw: parsed.rows,
+          fileName: files.join(' + '),
+          files: files,
+          headers: headers,
+          raw: rows,
           mapping: mapping,
           knownFields: S.fieldKeys(sourceId),
           autoMapped: !saved,
@@ -112,13 +195,15 @@
           loadedAt: new Date()
         };
         project(sourceId);
-        return { sourceId: sourceId, file: file.name, rows: parsed.rows.length };
+        return { sourceId: sourceId, file: file.name, rows: parsed.rows.length,
+                 total: rows.length, files: files.length };
       });
     });
 
     Promise.all(jobs).then(function (results) {
       results.forEach(function (r) {
-        U.toast(S.SOURCES[r.sourceId].label + ': ' + U.num(r.rows) + ' rows from ' + r.file, 'ok');
+        U.toast(S.SOURCES[r.sourceId].label + ': ' + U.num(r.rows) + ' rows from ' + r.file +
+          (r.files > 1 ? ' (' + U.num(r.total) + ' rows across ' + r.files + ' files)' : ''), 'ok');
         var f = state.sources[r.sourceId] && state.sources[r.sourceId].filled;
         if (f && f.length) {
           U.toast(S.SOURCES[r.sourceId].label + ': matched ' + f.length + ' column' +
@@ -129,14 +214,50 @@
       });
       recompute();
       if (state.tab === 'data') render();
-      var missing = SOURCE_IDS.filter(function (id) { return !state.sources[id]; });
-      if (!missing.length || (state.sources.freshservice && state.sources.intune)) {
-        if (state.tab === 'data') setTab('dashboard');
+      if (state.tab === 'data') {
+        /* Only leave the Data tab when a population has just become complete.
+           Jumping away after the first FortiManager export also took the drop
+           boxes off screen before the second environment could be added. */
+        var hasPc = !!(state.sources.freshservice && state.sources.intune);
+        var hasNet = !!(state.sources.fortimanager && state.sources.fsnetwork);
+        if (hasPc && !hadPc) setTab('dashboard');
+        else if (hasNet && !hadNet) setTab('network');
       }
     }).catch(function (err) {
       U.toast(err.message || String(err), 'err', 8000);
       render();
     });
+  }
+
+  /* Two exports of the same system rarely offer the same columns — the two
+     FortiManager environments differ by four — so the union is by header
+     name. Order follows the first file, with anything new appended. */
+  function unionHeaders(a, b) {
+    var out = (a || []).slice();
+    (b || []).forEach(function (h) { if (out.indexOf(h) < 0) out.push(h); });
+    return out;
+  }
+
+  /* Which environment a row came from.
+
+     FortiManager names every export the same way — managed_devices_root_ plus
+     a timestamp — so the file name says nothing about which environment it is,
+     and two exports taken the same day would collapse into one label. The row
+     is therefore tagged with the file name, which is unique, and the file name
+     is what the user renames to something meaningful on the Data tab. */
+  function environmentKey(fileName) {
+    return String(fileName || '').replace(/\.[^.]+$/, '');
+  }
+
+  function envLabel(key) {
+    var named = state.envLabels[key];
+    if (named) return named;
+    var order = state.envOrder.indexOf(key);
+    return order >= 0 ? 'Export ' + (order + 1) : key;
+  }
+
+  function noteEnvironment(key) {
+    if (state.envOrder.indexOf(key) < 0) state.envOrder.push(key);
   }
 
   function project(sourceId) {
@@ -152,10 +273,69 @@
     });
     if (!data.freshservice.length && !data.intune.length) {
       state.result = null;
+    } else {
+      state.result = R.apply(global.Match.reconcile(data, state.cfg), state.cfg, state.enabledRules);
+    }
+    recomputeNet(data);
+    saveWorkingSet();
+  }
+
+  /* The site list keyed by site code, which is how network devices find their
+     location. Built from the same location lookup the map uses. */
+  function siteIndex() {
+    var src = state.sources.locations;
+    var out = {};
+    if (!src || !src.records) return out;
+    src.records.forEach(function (r) {
+      var code = normCode(r.siteCode) || codeOf(r);
+      if (!code) return;
+      out[code] = {
+        code: code, name: N.clean(r.location), town: N.clean(r.town),
+        postcode: N.clean(r.postcode), region: N.clean(r.region),
+        lat: r.lat, lon: r.lon, subnet: r.subnet
+      };
+    });
+    return out;
+  }
+
+  /* A site code is whatever the lookup calls it, normalised to three digits so
+     "1", "01" and "001" are the same site. */
+  function normCode(v) {
+    v = String(v == null ? '' : v).trim();
+    if (!v) return '';
+    return /^\d+$/.test(v) ? v.replace(/^0+/, '').padStart(3, '0') : v;
+  }
+
+  /* Fallback for a site list loaded before the code column existed in the
+     schema, or one whose code column the mapper could not place. */
+  function codeOf(rec) {
+    var raw = rec._raw || {};
+    var v = '';
+    Object.keys(raw).forEach(function (h) {
+      if (v) return;
+      if (/^\s*site\s*code\s*$/i.test(h) || /^\s*code\s*$/i.test(h)) v = raw[h];
+    });
+    return normCode(v);
+  }
+
+  function recomputeNet(data) {
+    data = data || {};
+    var forti = data.fortimanager || [];
+    var fsnet = data.fsnetwork || [];
+    if (!forti.length && !fsnet.length) {
+      state.netResult = null;
+      state.netWarnings = [];
       return;
     }
-    state.result = R.apply(global.Match.reconcile(data, state.cfg), state.cfg, state.enabledRules);
-    saveWorkingSet();
+    var sites = siteIndex();
+    var flat = FT.flatten(forti, { sites: sites, overrides: state.siteOverrides });
+    state.netWarnings = flat.warnings;
+    state.netResult = NM.apply(
+      NM.reconcile(flat.devices, fsnet, state.netCfg, sites),
+      state.netCfg, state.netEnabledRules);
+    // Learn any lookup values the Freshservice records already answer, without
+    // ever overwriting one the user typed.
+    Object.assign(state.netConfig, NX.seedLookups(state.netResult.rows, state.netConfig));
   }
 
   /* ------------------------------------------------------ working set */
@@ -169,13 +349,19 @@
       enabledRules: state.enabledRules,
       customViews: state.customViews,
       fsConfig: state.fsConfig,
+      netCfg: state.netCfg,
+      netEnabledRules: state.netEnabledRules,
+      netConfig: state.netConfig,
+      siteOverrides: state.siteOverrides,
+      envLabels: state.envLabels,
+      envOrder: state.envOrder,
       sources: {}
     };
     SOURCE_IDS.forEach(function (id) {
       var src = state.sources[id];
       if (!src) return;
       payload.sources[id] = {
-        fileName: src.fileName, headers: src.headers,
+        fileName: src.fileName, files: src.files || null, headers: src.headers,
         mapping: src.mapping, raw: src.raw,
         knownFields: src.knownFields || S.fieldKeys(id)
       };
@@ -211,7 +397,8 @@
         // rather than leaving their columns quietly blank.
         var res = S.fillMapping(id, src.headers, src.mapping, src.knownFields);
         state.sources[id] = {
-          id: id, fileName: src.fileName, headers: src.headers,
+          id: id, fileName: src.fileName, files: src.files || [src.fileName],
+          headers: src.headers,
           mapping: res.mapping, raw: src.raw,
           knownFields: S.fieldKeys(id),
           filled: res.filled
@@ -223,6 +410,12 @@
       if (payload.enabledRules) state.enabledRules = payload.enabledRules;
       if (payload.customViews) state.customViews = payload.customViews;
       if (payload.fsConfig) state.fsConfig = mergeFsConfig(payload.fsConfig);
+      if (payload.netCfg) state.netCfg = NM.settings(payload.netCfg);
+      if (payload.netEnabledRules) state.netEnabledRules = payload.netEnabledRules;
+      if (payload.netConfig) state.netConfig = mergeNetConfig(payload.netConfig);
+      if (payload.siteOverrides) state.siteOverrides = payload.siteOverrides;
+      if (payload.envLabels) state.envLabels = payload.envLabels;
+      if (payload.envOrder) state.envOrder = payload.envOrder;
       state.restoredAt = payload.savedAt ? new Date(payload.savedAt) : null;
       state.savedAt = state.restoredAt;
       state.restoredFills = restoredFills;
@@ -285,6 +478,42 @@
     return rows;
   }
 
+  /* ---------------------------------------------------- network views */
+
+  function netViews() { return NV.BUILT_IN; }
+
+  function netViewById(id) {
+    return netViews().filter(function (v) { return v.id === id; })[0] || NV.BUILT_IN[0];
+  }
+
+  function netRowsForView(view, withSearch) {
+    if (!state.netResult) return [];
+    var rows = NV.applyView(view, state.netResult.rows);
+    if (withSearch && state.netSearch) rows = NV.searchRows(rows, state.netSearch);
+    return rows;
+  }
+
+  function netViewCount(view) {
+    if (!state.netResult) return 0;
+    try { return NV.applyView(view, state.netResult.rows).length; } catch (e) { return 0; }
+  }
+
+  function netSelectedRows() {
+    if (!state.netResult || !state.netSelectedIds.length) return [];
+    var wanted = {};
+    state.netSelectedIds.forEach(function (id) { wanted[id] = true; });
+    return state.netResult.rows.filter(function (r) { return wanted[r.id]; });
+  }
+
+  function setNetView(id) {
+    if (id !== state.netViewId) {
+      state.netSearch = '';
+      state.netSelectedIds = [];
+    }
+    state.netViewId = id;
+    setTab('network');
+  }
+
   function selectedRows() {
     if (!state.result || !state.selectedIds.length) return [];
     var wanted = {};
@@ -328,12 +557,16 @@
       ['dashboard', 'Dashboard'],
       ['dupes', 'Duplicates'],
       ['devices', 'Devices'],
+      ['network', 'Network'],
       ['map', 'Map'],
       ['export', 'Freshservice import'],
       ['settings', 'Settings']
     ];
     tabs.forEach(function (t) {
-      var disabled = !state.result && t[0] !== 'data' && t[0] !== 'settings';
+      // The two populations load independently: network exports alone should
+      // open the Network tab without the PC reconciliation being present.
+      var needs = { network: !!state.netResult, data: true, settings: true };
+      var disabled = !(Object.prototype.hasOwnProperty.call(needs, t[0]) ? needs[t[0]] : !!state.result);
       host.appendChild(U.el('button', {
         class: 'tab' + (state.tab === t[0] ? ' active' : ''),
         disabled: disabled,
@@ -344,9 +577,13 @@
 
     host.appendChild(U.el('div', { class: 'spacer' }));
 
-    if (state.result) {
+    if (state.tab === 'network' && state.netResult) {
       host.appendChild(U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } },
-        U.num(state.result.rows.length) + ' devices · ' +
+        U.num(state.netResult.rows.length) + ' network devices \u00b7 ' +
+        U.num(state.netResult.rows.filter(function (r) { return r.issueCount; }).length) + ' flagged'));
+    } else if (state.result) {
+      host.appendChild(U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } },
+        U.num(state.result.rows.length) + ' devices \u00b7 ' +
         U.num(state.result.rows.filter(function (r) { return r.issueCount; }).length) + ' flagged'));
     }
 
@@ -390,6 +627,23 @@
       ]));
     });
     host.appendChild(sec);
+
+    if (state.netResult) {
+      var nsec = U.el('div', { class: 'side-section' });
+      nsec.appendChild(U.el('div', { class: 'side-head' }, 'Network views'));
+      netViews().forEach(function (v) {
+        var n = netViewCount(v);
+        nsec.appendChild(U.el('button', {
+          class: 'side-item' + (state.netViewId === v.id && state.tab === 'network' ? ' active' : ''),
+          title: v.description || '',
+          onclick: function () { setNetView(v.id); }
+        }, [
+          U.el('span', {}, v.name),
+          U.el('span', { class: 'count' }, U.num(n))
+        ]));
+      });
+      host.appendChild(nsec);
+    }
 
     if (!state.result) return;
 
@@ -475,15 +729,24 @@
       renderSidebar();
       var main = U.qs('#main');
       U.clear(main);
-      ({
+      /* Every page but these three reads a reconciliation result and would
+         throw without one. The tabs are disabled in that state, but a tab can
+         also be reached from a restored session or a stale state, so the
+         fallback lives here rather than in eight separate guards. */
+      var page = {
         data: renderData,
         dashboard: renderDashboard,
         dupes: renderDupes,
         devices: renderDevices,
+        network: renderNetwork,
         map: renderMap,
         export: renderExport,
         settings: renderSettings
-      }[state.tab] || renderData)(main);
+      }[state.tab] || renderData;
+      var ready = state.tab === 'data' || state.tab === 'settings'
+        ? true
+        : (state.tab === 'network' ? !!state.netResult : !!state.result);
+      (ready ? page : renderData)(main);
     } finally {
       rendering = false;
     }
@@ -499,7 +762,8 @@
     var src = state.sources[sourceId];
 
     var input = U.el('input', {
-      type: 'file', accept: '.csv,.txt,.tsv,.xlsx,.xls', style: { display: 'none' },
+      type: 'file', accept: '.csv,.txt,.tsv,.xlsx,.xls',
+      multiple: !!MULTI_FILE[sourceId], style: { display: 'none' },
       onchange: function (e) { loadFiles(e.target.files, sourceId); e.target.value = ''; }
     });
 
@@ -517,8 +781,11 @@
     }, [
       U.el('div', { class: 'dz-title' }, def.label),
       U.el('div', { class: 'dz-sub' }, def.hint),
-      src ? U.el('div', { class: 'dz-file' }, src.fileName) : null,
-      src ? U.el('div', { class: 'dz-meta' }, U.num(src.raw.length) + ' rows · ' +
+      src ? U.el('div', { class: 'dz-file' },
+        MULTI_FILE[sourceId] && src.files && src.files.length > 1
+          ? src.files.length + ' files loaded'
+          : src.fileName) : null,
+      src ? U.el('div', { class: 'dz-meta' }, U.num(src.raw.length) + ' rows \u00b7 ' +
             Object.keys(src.mapping).length + ' of ' + def.fields.length + ' columns mapped') : null,
       input
     ]);
@@ -529,6 +796,34 @@
         U.el('button', { class: 'btn sm', onclick: function () { openMappingModal(sourceId); } }, 'Check columns'),
         U.el('button', { class: 'btn sm ghost', onclick: function () { clearSource(sourceId); } }, 'Remove')
       ]));
+      if (MULTI_FILE[sourceId] && src.files) {
+        var envs = U.el('div', { style: { marginTop: '8px' } });
+        envs.appendChild(U.el('div', { class: 'hint', style: { textAlign: 'center' } },
+          src.files.length > 1
+            ? 'Both exports are held together, unioned by column name.'
+            : 'Drop the other environment\u2019s export here too \u2014 it is added, not replaced.'));
+        src.files.forEach(function (fileName) {
+          var key = environmentKey(fileName);
+          var n = src.raw.filter(function (r) { return r.__env === key; }).length;
+          envs.appendChild(U.el('div', { class: 'row tight', style: { marginTop: '4px' } }, [
+            U.el('input', {
+              type: 'text', value: envLabel(key), title: fileName,
+              placeholder: 'Name this environment\u2026',
+              style: { flex: '1', minWidth: '0', fontSize: '11.5px' },
+              onchange: function (e) {
+                var v = e.target.value.trim();
+                if (v) state.envLabels[key] = v; else delete state.envLabels[key];
+                global.Store.set('envLabels', state.envLabels);
+                global.Store.set('envOrder', state.envOrder);
+                render();
+              }
+            }),
+            U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } }, U.num(n) + ' rows')
+          ]));
+        });
+        wrap.appendChild(envs);
+      }
+
       var missingReq = def.fields.filter(function (f) { return f.required && !src.mapping[f.key]; });
       if (missingReq.length) {
         wrap.appendChild(U.el('div', {
@@ -1327,8 +1622,10 @@
           } else {
             U.toast('Note added to ' + U.num(res.added) + ' device' + (res.added === 1 ? '' : 's') + '.', 'ok');
           }
-          if (grid) grid.render();
-          renderNoteBar();
+          // Notes are shared by both populations, so refresh whichever list
+          // is on screen — re-rendering only the PC grid left the network
+          // flag column stale after a note was added from the Network tab.
+          refreshLists();
           // For one device the dialog stays put and shows the entry appended,
           // which is the point of a running trail; a bulk add just closes.
           if (single) { drawHistory(); box.value = ''; box.focus(); }
@@ -1336,6 +1633,27 @@
       }
     ]);
     setTimeout(function () { box.focus(); }, 60);
+  }
+
+  /* Redraw whichever device list is currently on screen. */
+  function refreshLists() {
+    if (state.tab === 'network') {
+      if (netGrid) netGrid.render();
+      renderNetNoteBar();
+    } else {
+      if (grid) grid.render();
+      renderNoteBar();
+    }
+  }
+
+  /* The import config lives in two places — localStorage for the settings and
+     the working set in IndexedDB — and only recompute() was scheduling the
+     working-set save. A value typed into a lookup box therefore reached
+     localStorage but not the working set, and on the next visit the stale
+     working-set copy overwrote it. Anything that edits the config saves both. */
+  function persistNetConfig() {
+    global.Store.set('netConfig', state.netConfig);
+    saveWorkingSet();
   }
 
   var previewHook = function () {};
@@ -1385,6 +1703,424 @@
     ]);
   }
 
+
+  /* ------------------------------------------------- network dialogs */
+
+  function openNetColumnPicker(view) {
+    var chosen = netGrid.state.columns.slice();
+    var body = U.el('div', { class: 'body' });
+    body.appendChild(U.el('p', { class: 'hint' }, 'Pick the columns this view shows. Exports use the same set.'));
+    var wrap = U.el('div', { style: { columns: '2', columnGap: '24px' } });
+    NV.COLUMNS.forEach(function (col) {
+      wrap.appendChild(U.el('label', {
+        class: 'check', style: { breakInside: 'avoid', marginBottom: '5px' }
+      }, [
+        U.el('input', {
+          type: 'checkbox', checked: chosen.indexOf(col.key) >= 0,
+          onchange: function (e) {
+            if (e.target.checked) { if (chosen.indexOf(col.key) < 0) chosen.push(col.key); }
+            else chosen = chosen.filter(function (k) { return k !== col.key; });
+          }
+        }),
+        col.label
+      ]));
+    });
+    body.appendChild(wrap);
+    modal('Columns', body, [
+      { label: 'Reset to this view’s columns', ghost: true, action: function () {
+        delete state.netColumnsById[view.id];
+        global.Store.set('netColumns', state.netColumnsById);
+        render();
+      } },
+      { label: 'Cancel', ghost: true },
+      { label: 'Apply', primary: true, action: function () {
+        var ordered = NV.COLUMNS.map(function (c) { return c.key; })
+          .filter(function (k) { return chosen.indexOf(k) >= 0; });
+        var next = ordered.length ? ordered : NV.BASE_COLS.slice();
+        if (next.indexOf('notes') < 0) next.unshift('notes');
+        netGrid.setColumns(next);
+        state.netColumns = next;
+        state.netColumnsById[view.id] = next;
+        global.Store.set('netColumns', state.netColumnsById);
+        netGrid.render();
+      } }
+    ]);
+  }
+
+  function openNetViewSettings(view) {
+    var body = U.el('div', { class: 'body' });
+    body.appendChild(U.el('p', {}, view.description || ''));
+    var kv = U.el('div', { class: 'kv two' });
+    function pair(k, v) {
+      kv.appendChild(U.el('div', { class: 'k' }, k));
+      kv.appendChild(U.el('div', {}, v));
+    }
+    pair('Rows', U.num(netViewCount(view)));
+    if (view.filter) {
+      pair('Match', view.filter.match === 'any' ? 'any of these' : 'all of these');
+      view.filter.conditions.forEach(function (c, i) {
+        var label;
+        if (c.field === '__issue') label = 'has the issue "' + ((NM.RULE_BY_CODE[c.value] || {}).label || c.value) + '"';
+        else if (c.field === '__anyIssue') label = 'has any issue at all';
+        else label = ((NV.COL_BY_KEY[c.field] || {}).label || c.field) + ' ' + c.op + (c.value ? ' "' + c.value + '"' : '');
+        pair('Condition ' + (i + 1), label);
+      });
+    } else {
+      pair('Filter', 'none — every network device');
+    }
+    if (view.sort) pair('Sorted by', ((NV.COL_BY_KEY[view.sort.key] || {}).label || view.sort.key) + ', ' + view.sort.dir);
+    body.appendChild(kv);
+    modal('View settings: ' + view.name, body, [{ label: 'Close', primary: true }]);
+  }
+
+  /* The site a device sits at is read from the number at the front of its
+     name. That is right for the great majority and wrong for a named handful —
+     a house number that looks like a site code, a campus firewall serving
+     several sites, kit with no number at all. Rather than making the parser
+     cleverer, and wrong in new ways, those cases are listed here. */
+  function openSiteOverrides() {
+    var body = U.el('div', { class: 'body' });
+    var sites = siteIndex();
+    var codes = Object.keys(sites).sort();
+
+    body.appendChild(U.el('p', { class: 'hint' },
+      'Force a device to a site code. Anything listed here wins over the name and over the ' +
+      'firewall it sits under. Names are matched exactly, ignoring case.'));
+
+    if (!codes.length) {
+      body.appendChild(U.el('div', { class: 'card', style: { borderColor: 'var(--warn)' } },
+        U.el('div', { class: 'hint' },
+          'No site list is loaded, so there are no codes to choose from. Drop your site codes file on the Data tab first.')));
+    }
+
+    /* Everything the resolver could not place, or placed suspiciously, first —
+       that is the list this dialog exists to clear. */
+    var suspect = [];
+    if (state.netResult) {
+      state.netResult.rows.forEach(function (r) {
+        if (!r.forti) return;
+        var why = !r.siteCode ? 'no site code in the name'
+                : (r.forti.siteAgrees === false ? 'resolved to ' + r.siteCode + ' ' + r.siteName + ', which shares no word with the name' : '');
+        if (why) suspect.push({ name: r.forti.name, why: why, kind: r.kind, parent: r.parent });
+      });
+    }
+
+    var draft = Object.assign({}, state.siteOverrides);
+
+    var list = U.el('div', { style: { maxHeight: '46vh', overflow: 'auto' } });
+
+    function codeSelect(name) {
+      var sel = U.el('select', {
+        onchange: function (e) {
+          if (e.target.value) draft[name] = e.target.value;
+          else delete draft[name];
+        }
+      });
+      sel.appendChild(U.el('option', { value: '' }, '— leave to the name —'));
+      codes.forEach(function (c) {
+        sel.appendChild(U.el('option', {
+          value: c, selected: (draft[name] || '') === c
+        }, c + '  ' + sites[c].name));
+      });
+      return sel;
+    }
+
+    function draw() {
+      U.clear(list);
+      var rows = U.el('div', { class: 'kv two' });
+      rows.appendChild(U.el('div', { class: 'hdr' }, 'Device name'));
+      rows.appendChild(U.el('div', { class: 'hdr' }, 'Force to site'));
+
+      // Overrides already set, then the unresolved and suspect ones.
+      var shown = {};
+      Object.keys(draft).sort().forEach(function (name) {
+        shown[name.toLowerCase()] = true;
+        rows.appendChild(U.el('div', { class: 'k' }, name));
+        rows.appendChild(codeSelect(name));
+      });
+      suspect.forEach(function (sp) {
+        if (shown[sp.name.toLowerCase()]) return;
+        shown[sp.name.toLowerCase()] = true;
+        rows.appendChild(U.el('div', { class: 'k' }, [
+          U.el('div', {}, sp.name),
+          U.el('div', { class: 'hint' }, sp.kind + (sp.parent ? ' under ' + sp.parent : '') + ' — ' + sp.why)
+        ]));
+        rows.appendChild(codeSelect(sp.name));
+      });
+      list.appendChild(rows);
+      if (!Object.keys(draft).length && !suspect.length) {
+        list.appendChild(U.el('div', { class: 'empty' },
+          'Every device resolved to a site, and none of them looks suspect. Nothing to override.'));
+      }
+    }
+    draw();
+    body.appendChild(list);
+
+    var add = U.el('div', { class: 'row', style: { marginTop: '12px' } });
+    var nameBox = U.el('input', { type: 'text', placeholder: 'Any other device name…', style: { minWidth: '260px' } });
+    add.appendChild(nameBox);
+    add.appendChild(U.el('button', {
+      class: 'btn sm',
+      onclick: function () {
+        var v = nameBox.value.trim();
+        if (!v) return;
+        if (!draft[v]) draft[v] = '';
+        nameBox.value = '';
+        draw();
+      }
+    }, 'Add'));
+    body.appendChild(add);
+
+    modal('Site overrides', body, [
+      { label: 'Cancel', ghost: true },
+      { label: 'Save overrides', primary: true, action: function () {
+        var clean = {};
+        Object.keys(draft).forEach(function (k) { if (draft[k]) clean[k] = draft[k]; });
+        state.siteOverrides = clean;
+        global.Store.set('siteOverrides', clean);
+        recompute();
+        render();
+        U.toast(Object.keys(clean).length + ' override' + (Object.keys(clean).length === 1 ? '' : 's') + ' saved.', 'ok');
+      } }
+    ]);
+  }
+
+
+  /* Building the Freshservice import for network kit.
+
+     Nearly all of these rows create a new asset rather than correct one, so
+     Workspace, Name, Asset Type and Product all have to be present and — for
+     the last three — spelled the way Freshservice spells them. The dialog
+     will not export while any of those mappings is unanswered: a wrong
+     Product name either fails the import or silently creates a second
+     product, and both are worse than being made to fill a box in. */
+  function openNetImport() {
+    var view = netViewById(state.netViewId);
+    var scope = state.netExportScope;
+    var rows = (scope === 'selection' ? netSelectedRows() : netRowsForView(view, true))
+      .filter(function (r) { return r.forti; });
+
+    var body = U.el('div', { class: 'body' });
+    var cfg = state.netConfig;
+    var dlg = null;
+
+    var head = U.el('div', { style: { marginBottom: '12px' } });
+    body.appendChild(head);
+
+    var scopeRow = U.el('div', { class: 'row', style: { marginBottom: '10px' } });
+    [['view', 'Everything in "' + view.name + '"' + (state.netSearch ? ' matching your search' : '')],
+     ['selection', U.num(state.netSelectedIds.length) + ' selected']].forEach(function (o) {
+      scopeRow.appendChild(U.el('label', { class: 'check' }, [
+        U.el('input', {
+          type: 'radio', name: 'netscope', checked: scope === o[0],
+          disabled: o[0] === 'selection' && !state.netSelectedIds.length,
+          onchange: function () { state.netExportScope = o[0]; if (dlg) dlg.close(); openNetImport(); }
+        }),
+        o[1]
+      ]));
+    });
+    body.appendChild(scopeRow);
+
+    /* --- the three lookups ------------------------------------------- */
+    var lookupHost = U.el('div');
+    body.appendChild(lookupHost);
+
+    function drawLookups() {
+      U.clear(lookupHost);
+      NX.LOOKUPS.forEach(function (l) {
+        var keys = NX.lookupKeys(rows, cfg, l.id);
+        if (!keys.length) return;
+        var blank = keys.filter(function (k) { return !k.value; }).length;
+        var card = U.el('details', { class: 'card', open: blank > 0, style: { marginBottom: '10px' } });
+        card.appendChild(U.el('summary', {}, [
+          U.el('strong', {}, l.label),
+          U.el('span', { class: 'hint', style: { marginLeft: '8px' } },
+            blank ? blank + ' of ' + keys.length + ' still to answer'
+                  : 'all ' + keys.length + ' mapped')
+        ]));
+        var kv = U.el('div', { class: 'kv two', style: { marginTop: '8px' } });
+        kv.appendChild(U.el('div', { class: 'hdr' }, l.keyLabel));
+        kv.appendChild(U.el('div', { class: 'hdr' }, l.valueLabel));
+        keys.forEach(function (k) {
+          kv.appendChild(U.el('div', { class: 'k' }, [
+            U.el('div', {}, k.key + (k.hint ? '  ' + k.hint : '')),
+            U.el('div', { class: 'hint' }, U.num(k.count) + ' device' + (k.count === 1 ? '' : 's') +
+              ' · e.g. ' + k.examples.slice(0, 2).join(', '))
+          ]));
+          kv.appendChild(U.el('input', {
+            type: 'text', value: k.value, placeholder: 'Freshservice value…',
+            style: k.value ? null : { borderColor: 'var(--warn)' },
+            oninput: function (e) {
+              cfg[l.id][k.key] = e.target.value;
+              drawStatus();
+            },
+            onchange: function () { persistNetConfig(); }
+          }));
+        });
+        card.appendChild(kv);
+        if (l.id === 'locations') {
+          card.appendChild(U.el('label', { class: 'check', style: { marginTop: '8px' } }, [
+            U.el('input', {
+              type: 'checkbox', checked: !!cfg.locationFallback,
+              onchange: function (e) {
+                cfg.locationFallback = e.target.checked;
+                persistNetConfig();
+                drawLookups(); drawStatus();
+              }
+            }),
+            'Where no Freshservice location is mapped, use the name from my site list'
+          ]));
+        }
+        lookupHost.appendChild(card);
+      });
+    }
+
+    /* --- columns ------------------------------------------------------ */
+    var colCard = U.el('details', { class: 'card', style: { marginBottom: '10px' } });
+    colCard.appendChild(U.el('summary', {}, [
+      U.el('strong', {}, 'Columns and fixed values'),
+      U.el('span', { class: 'hint', style: { marginLeft: '8px' } }, 'headers must match your instance')
+    ]));
+    var colKv = U.el('div', { class: 'kv two', style: { marginTop: '8px' } });
+    colKv.appendChild(U.el('div', { class: 'hdr' }, 'Include'));
+    colKv.appendChild(U.el('div', { class: 'hdr' }, 'Header in Freshservice'));
+    NX.COLUMNS.forEach(function (col) {
+      colKv.appendChild(U.el('div', { class: 'k' }, [
+        U.el('label', { class: 'check' }, [
+          U.el('input', {
+            type: 'checkbox', checked: !!cfg.include[col.key], disabled: col.required,
+            title: col.required ? 'Freshservice rejects an asset import without this column' : null,
+            onchange: function (e) {
+              cfg.include[col.key] = e.target.checked;
+              persistNetConfig();
+              drawLookups(); drawStatus();
+            }
+          }),
+          col.label + (col.required ? ' (required)' : '')
+        ]),
+        col.fixed ? U.el('div', { class: 'row tight', style: { marginTop: '4px' } }, [
+          U.el('span', { class: 'hint' }, 'same on every row:'),
+          U.el('input', {
+            type: 'text', value: cfg.fixed[col.key] || '', style: { maxWidth: '140px' },
+            oninput: function (e) { cfg.fixed[col.key] = e.target.value; drawStatus(); },
+            onchange: function () { persistNetConfig(); }
+          })
+        ]) : null
+      ]));
+      colKv.appendChild(U.el('input', {
+        type: 'text', value: NX.header(col, cfg),
+        oninput: function (e) { cfg.headers[col.key] = e.target.value; },
+        onchange: function () { persistNetConfig(); drawStatus(); }
+      }));
+    });
+    colCard.appendChild(colKv);
+    colCard.appendChild(U.el('label', { class: 'check', style: { marginTop: '8px' } }, [
+      U.el('input', {
+        type: 'checkbox', checked: !!cfg.describeParent,
+        onchange: function (e) {
+          cfg.describeParent = e.target.checked;
+          persistNetConfig();
+          drawStatus();
+        }
+      }),
+      'Record the firewall, HA role, environment and site code in Description'
+    ]));
+    body.appendChild(colCard);
+
+    /* --- status + preview -------------------------------------------- */
+    var status = U.el('div');
+    body.appendChild(status);
+    var preview = U.el('div', { style: { marginTop: '10px' } });
+    body.appendChild(preview);
+
+    var canExport = false;
+
+    function drawStatus() {
+      U.clear(status);
+      U.clear(preview);
+      var un = NX.unmapped(rows, cfg);
+      var blanks = NX.blankRequired(rows, cfg);
+      var missingCols = NX.missingRequired(cfg);
+      canExport = rows.length > 0 && !un.length && !blanks.length && !missingCols.length;
+
+      U.clear(head);
+      head.appendChild(U.el('div', { class: 'row tight' }, [
+        U.el('strong', {}, U.num(rows.length) + ' device' + (rows.length === 1 ? '' : 's')),
+        U.el('span', { class: 'hint' }, 'will be written to the import file')
+      ]));
+
+      if (!rows.length) {
+        status.appendChild(note('err', 'Nothing to export',
+          'This view has no FortiManager-side devices in it. "Possibly replaced" rows exist only in ' +
+          'Freshservice, so there is nothing to import for them.'));
+      }
+      if (missingCols.length) {
+        status.appendChild(note('err', 'A required column is switched off',
+          missingCols.join(', ') + ' — Freshservice rejects an asset import without it.'));
+      }
+      if (un.length) {
+        var req = un.filter(function (u) { return u.required; });
+        status.appendChild(note(req.length ? 'err' : 'warn',
+          U.num(un.length) + ' value' + (un.length === 1 ? '' : 's') + ' still to map',
+          un.slice(0, 8).map(function (u) {
+            return u.key + (u.hint ? ' (' + u.hint + ')' : '') + ' → ' + u.lookupLabel;
+          }).join('; ') + (un.length > 8 ? '; and ' + (un.length - 8) + ' more' : '')));
+      }
+      if (blanks.length) {
+        status.appendChild(note('err', 'A required column would be blank',
+          blanks.map(function (b) { return b.label + ' on ' + U.num(b.rows) + ' rows'; }).join('; ')));
+      }
+      if (canExport) {
+        status.appendChild(note('ok', 'Ready to export',
+          'Every required column has a value on every row.'));
+      }
+
+      // First few lines exactly as they will be written.
+      if (rows.length) {
+        var csv = NX.toImportCsv(rows.slice(0, 4), cfg);
+        preview.appendChild(U.el('div', { class: 'side-head' }, 'First rows, as they will be written'));
+        preview.appendChild(U.el('pre', {
+          style: {
+            overflowX: 'auto', fontSize: '11px', background: 'var(--surface-2)',
+            padding: '8px', border: '1px solid var(--grid)', maxHeight: '150px'
+          }
+        }, csv));
+      }
+    }
+
+    function note(kind, title, text) {
+      var colour = kind === 'err' ? 'var(--critical)' : kind === 'warn' ? 'var(--warn)' : 'var(--good)';
+      return U.el('div', {
+        class: 'card',
+        style: { borderLeft: '3px solid ' + colour, marginBottom: '8px', padding: '8px 10px' }
+      }, [
+        U.el('strong', {}, title),
+        U.el('div', { class: 'hint' }, text)
+      ]);
+    }
+
+    drawLookups();
+    drawStatus();
+
+    var dlg = modal('Build Freshservice import \u2014 network assets', body, [
+      { label: 'Cancel', ghost: true },
+      { label: 'Download manifest', ghost: true, action: function () {
+        if (!rows.length) { U.toast('Nothing to export.', 'err'); return; }
+        U.download('network-import-manifest-' + U.todayStamp() + '.csv', NX.toManifestCsv(rows, cfg));
+      } },
+      { label: 'Download import file', primary: true, keepOpen: true, action: function () {
+        if (!canExport) {
+          U.toast('Fill in the highlighted mappings first — an import missing Product or Asset Type ' +
+                  'is rejected by Freshservice.', 'err', 9000);
+          return;
+        }
+        persistNetConfig();
+        U.download('freshservice-network-import-' + U.todayStamp() + '.csv', NX.toImportCsv(rows, cfg));
+        U.toast('Import file written for ' + U.num(rows.length) + ' devices.', 'ok');
+      } }
+    ]);
+  }
+
   function slug(s) {
     return String(s || 'site').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'site';
   }
@@ -1411,6 +2147,220 @@
   /* ==================================================================== */
   /*  tab: map                                                            */
   /* ==================================================================== */
+
+
+  /* ==================================================================== */
+  /*  network assets                                                      */
+  /* ==================================================================== */
+
+  var netGrid = null;
+
+  function renderNetwork(main) {
+    var view = netViewById(state.netViewId);
+    var rows = netRowsForView(view);
+
+    main.appendChild(U.el('div', { class: 'page-head' }, [
+      U.el('h1', {}, view.name),
+      U.el('div', { class: 'sub' }, view.description || '')
+    ]));
+
+    if (state.netWarnings.length) {
+      var warn = U.el('div', { class: 'card', style: { borderColor: 'var(--warn)', marginBottom: '12px' } });
+      warn.appendChild(U.el('h3', {}, 'Parsing notes'));
+      state.netWarnings.slice(0, 6).forEach(function (w) {
+        warn.appendChild(U.el('div', { class: 'hint' }, w.text));
+      });
+      main.appendChild(warn);
+    }
+
+    /* Each tile counts the rows of the view it opens, not the times a rule
+       fired. A device can be a duplicate and in both environments at once, so
+       adding rule tallies gave a tile a bigger number than the view behind
+       it — and a tile you click should land on exactly what it promised. */
+    function inView(id) { return netViewCount(netViewById(id)); }
+    main.appendChild(U.el('div', { class: 'tiles', style: { marginBottom: '14px' } }, [
+      C.tile('New since last import', inView('net-new'),
+        'in FortiManager, absent from Freshservice', function () { setNetView('net-new'); }),
+      C.tile('Possibly replaced', inView('net-replaced'),
+        'in Freshservice, managed by neither', function () { setNetView('net-replaced'); }),
+      C.tile('Matched', state.netResult.rows.filter(function (r) { return r.status === 'matched'; }).length,
+        'present on both sides'),
+      C.tile('Duplicates', inView('net-dupes'),
+        'one device, more than one record', function () { setNetView('net-dupes'); }),
+      C.tile('Firmware to update', inView('net-firmware'),
+        'Freshservice has an older version', function () { setNetView('net-firmware'); }),
+      C.tile('Location to fix', inView('net-location'),
+        'wrong, missing or unresolved', function () { setNetView('net-location'); })
+    ]));
+
+    var controls = U.el('div', { class: 'row no-print', style: { marginBottom: '12px' } });
+    controls.appendChild(U.el('input', {
+      type: 'search', placeholder: 'Search these devices…', style: { minWidth: '220px' },
+      value: state.netSearch,
+      oninput: U.debounce(function (e) {
+        state.netSearch = e.target.value;
+        netGrid.setSearch(state.netSearch);
+        netGrid.render();
+        renderNetNoteBar();
+      }, 180)
+    }));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm', onclick: function () { openNetColumnPicker(view); }
+    }, 'Columns'));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm', title: 'See how this view is defined',
+      onclick: function () { openNetViewSettings(view); }
+    }, 'View settings'));
+    controls.appendChild(U.el('label', { class: 'check' }, [
+      U.el('input', {
+        type: 'checkbox', checked: false,
+        onchange: function (e) { netGrid.setGroup(e.target.checked ? 'siteName' : null); netGrid.render(); }
+      }),
+      'Group by site'
+    ]));
+    controls.appendChild(U.el('div', { class: 'spacer' }));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm', title: 'Device name → site code, for the handful the name cannot resolve',
+      onclick: function () { openSiteOverrides(); }
+    }, 'Site overrides'));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      onclick: function () {
+        var visible = netGrid.visibleRows();
+        U.download('network-' + view.id + '-' + U.todayStamp() + '.csv',
+          netViewCsv(visible, netGrid.state.columns));
+        U.toast('Exported ' + U.num(visible.length) + ' rows.', 'ok');
+      }
+    }, 'Export this view'));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm primary',
+      title: 'Build a Freshservice import from the devices you are looking at',
+      onclick: function () {
+        state.netExportScope = state.netSelectedIds.length ? 'selection' : 'view';
+        openNetImport();
+      }
+    }, 'Build import file'));
+    main.appendChild(controls);
+
+    var noteBar = U.el('div', { class: 'row no-print', style: { marginBottom: '10px' } });
+    main.appendChild(noteBar);
+
+    var gridHost = U.el('div');
+    main.appendChild(gridHost);
+
+    renderNetNoteBar = function () {
+      U.clear(noteBar);
+      var chosen = netGrid ? netGrid.selected() : [];
+      var visible = netGrid ? netGrid.visibleRows() : [];
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm' + (chosen.length ? ' primary' : ''),
+        disabled: !chosen.length,
+        onclick: function () { openNotes(chosen); }
+      }, chosen.length ? 'Add note to ' + U.num(chosen.length) + ' selected' : 'Add note to selected'));
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm',
+        onclick: function () {
+          if (!visible.length) return;
+          if (visible.length > 50 &&
+              !confirm('Add the same note to all ' + visible.length + ' devices in this view?')) return;
+          openNotes(visible);
+        }
+      }, 'Add note to all ' + U.num(visible.length) + ' in view'));
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm ghost',
+        onclick: function () {
+          visible.forEach(function (r) { netGrid.state.selection.add(r.id); });
+          netGrid.render(); renderNetNoteBar();
+        }
+      }, 'Select all in view'));
+      noteBar.appendChild(U.el('div', { class: 'spacer' }));
+      noteBar.appendChild(U.el('span', { class: 'hint' },
+        U.num(visible.length) + ' of ' + U.num(rows.length) + ' shown'));
+    };
+
+    netGrid = T.create(gridHost, {
+      views: NV,
+      rules: NM,
+      selectable: true,
+      pageSize: 150,
+      onRowClick: function (r) {
+        T.openDrawer(r, null, {
+          views: NV,
+          rules: NM,
+          fieldRows: netFieldRows,
+          sideLabels: ['FortiManager', 'Freshservice'],
+          cleanText: 'Both systems agree on this device.',
+          onAddNote: function (row) { openNotes([row]); }
+        });
+      },
+      onChipClick: function (code) { state.netSearch = ''; openNetIssue(code); },
+      onNotesClick: function (r) { openNotes([r]); },
+      onSelectionChange: function (sel) {
+        state.netSelectedIds = Array.from(sel);
+        renderNetNoteBar();
+      },
+      emptyText: 'Nothing in this view.'
+    });
+    netGrid.setRows(rows);
+    var cols = (state.netColumnsById[view.id] || view.columns || NV.BASE_COLS).slice();
+    if (cols.indexOf('notes') < 0) cols.unshift('notes');
+    netGrid.setColumns(cols);
+    state.netColumns = cols;
+    netGrid.setSearch(state.netSearch);
+    state.netSelectedIds.forEach(function (id) { netGrid.state.selection.add(id); });
+    if (view.sort) netGrid.setSort(view.sort);
+    netGrid.render();
+    renderNetNoteBar();
+  }
+
+  var renderNetNoteBar = function () {};
+
+  /* The drawer's side-by-side table for a network device. */
+  function netFieldRows(row) {
+    var f = row.forti, a = row.fs;
+    return [
+      ['Device name', f ? f.name : '', a ? a.name : ''],
+      ['Serial number', f ? f.serial : '', a ? a.serial : ''],
+      ['Type', row.kind, a ? a.assetType : ''],
+      ['Platform / product', f ? f.platform : '', a ? a.product : ''],
+      ['Firmware', f ? f.firmwareText : '', a ? (a.firmwareVersion || a.firmware) : ''],
+      ['Location', row.siteName, a ? a.location : ''],
+      ['Site code', row.siteCode, '\u2014'],
+      ['Asset state', '—', a ? a.state : ''],
+      ['Asset tag', '—', a ? a.assetTag : ''],
+      ['IP address', f ? f.ipAddress : '', a ? a.ipAddress : ''],
+      ['Under firewall', row.parent, '—'],
+      ['HA role', row.haRole ? row.haRole + (row.haSync ? ' (' + row.haSync + ')' : '') : '', '—'],
+      ['Config status', row.configStatus, '—'],
+      ['Environment', row.env ? row.env.split(', ').map(envLabel).join(', ') : '', '—'],
+      ['Site resolved from', row.siteSource, '—'],
+      ['Last audit', '—', row.lastAudit ? U.fmtDate(row.lastAudit) : ''],
+      ['Matched on', row.matchedBy || 'nothing — present in one system only', '—']
+    ];
+  }
+
+  function openNetIssue(code) {
+    var rule = NM.RULE_BY_CODE[code];
+    if (!rule) return;
+    U.toast(rule.label + (rule.hint ? ' — ' + rule.hint : ''), 'ok', 9000);
+  }
+
+  function netViewCsv(rows, columns) {
+    var cols = (columns || NV.BASE_COLS).filter(function (k) { return k !== 'notes'; });
+    var headers = cols.map(function (k) { return (NV.COL_BY_KEY[k] || {}).label || k; });
+    var out = rows.map(function (r) {
+      var o = {};
+      cols.forEach(function (k, i) {
+        var v = NV.colValue(r, k);
+        if (Array.isArray(v)) {
+          v = v.map(function (c) { return (NM.RULE_BY_CODE[c] || {}).label || c; }).join('; ');
+        } else if (v instanceof Date) v = U.fmtDate(v);
+        o[headers[i]] = v === null || v === undefined ? '' : v;
+      });
+      return o;
+    });
+    return global.CSV.stringify(out, headers);
+  }
 
   function renderMap(main) {
     var agg = global.EstateMap.aggregate(state.result.rows, { includeOther: state.includeOtherOnMap });
@@ -2122,6 +3072,85 @@
     });
     main.appendChild(rulesCard);
 
+    /* Network assets are reconciled separately, so their checks and thresholds
+       are their own. Only shown once there is network data to apply them to. */
+    if (state.netResult) {
+      var netCard = U.el('div', { class: 'card' });
+      netCard.appendChild(U.el('h2', {}, 'Network asset checks'));
+      netCard.appendChild(U.el('p', { class: 'hint' },
+        'These apply to the FortiManager and Freshservice network exports, not to the PCs.'));
+
+      [['staleAuditDays', 'Days without a Freshservice audit before a network record counts as stale', 30, 1095]]
+        .forEach(function (f) {
+          netCard.appendChild(U.el('label', { class: 'field' }, [
+            U.el('span', {}, f[1]),
+            U.el('input', {
+              type: 'number', min: String(f[2]), max: String(f[3]), value: String(state.netCfg[f[0]]),
+              onchange: function (e) {
+                var v = parseInt(e.target.value, 10);
+                if (isNaN(v)) return;
+                state.netCfg[f[0]] = Math.min(f[3], Math.max(f[2], v));
+                global.Store.set('netCfg', state.netCfg);
+                recompute(); render();
+              }
+            })
+          ]));
+        });
+
+      [['firmwareDrift', 'Report a Freshservice firmware version that no longer matches FortiManager'],
+       ['treatUnreportedAsIssue', 'Treat a device that has never reported in as something to look at']]
+        .forEach(function (f) {
+          netCard.appendChild(U.el('label', { class: 'check', style: { marginTop: '6px' } }, [
+            U.el('input', {
+              type: 'checkbox', checked: !!state.netCfg[f[0]],
+              onchange: function (e) {
+                state.netCfg[f[0]] = e.target.checked;
+                global.Store.set('netCfg', state.netCfg);
+                recompute(); render();
+              }
+            }),
+            f[1]
+          ]));
+        });
+
+      netCard.appendChild(U.el('div', { class: 'side-head', style: { marginTop: '14px' } }, 'Checks'));
+      NM.RULES.forEach(function (rule) {
+        netCard.appendChild(U.el('div', { style: { padding: '7px 0', borderBottom: '1px solid var(--grid)' } }, [
+          U.el('label', { class: 'check' }, [
+            U.el('input', {
+              type: 'checkbox', checked: NM.isEnabled(rule, state.netEnabledRules),
+              onchange: function (e) {
+                state.netEnabledRules[rule.code] = e.target.checked;
+                global.Store.set('netEnabledRules', state.netEnabledRules);
+                recompute(); render();
+              }
+            }),
+            U.el('span', { class: 'badge ' + rule.severity }, [U.el('span', { class: 'sev sev-' + rule.severity }), rule.label]),
+            U.el('span', { class: 'hint' }, U.num(state.netResult.tally[rule.code] || 0) + ' devices')
+          ]),
+          rule.hint ? U.el('div', { class: 'hint', style: { marginLeft: '24px' } }, rule.hint) : null
+        ]));
+      });
+
+      netCard.appendChild(U.el('div', { class: 'row', style: { marginTop: '12px' } }, [
+        U.el('button', { class: 'btn sm', onclick: function () { openSiteOverrides(); } },
+          'Site overrides (' + Object.keys(state.siteOverrides).length + ')'),
+        U.el('button', {
+          class: 'btn sm ghost',
+          title: 'Clear the learned Platform → Product, type and location mappings',
+          onclick: function () {
+            if (!confirm('Forget the Freshservice Product, Asset Type and Location mappings? ' +
+                         'They will be learned again from your Freshservice network export.')) return;
+            NX.LOOKUPS.forEach(function (l) { state.netConfig[l.id] = {}; });
+            persistNetConfig();
+            recompute(); render();
+            U.toast('Mappings cleared and re-learned.', 'ok');
+          }
+        }, 'Reset import mappings')
+      ]));
+      main.appendChild(netCard);
+    }
+
     var notesCard = U.el('div', { class: 'card' });
     var ns = global.Notes.stats();
     notesCard.appendChild(U.el('h2', {}, 'Device notes'));
@@ -2653,6 +3682,11 @@
   /* ==================================================================== */
 
   function init() {
+    // The network table shows the name you gave each FortiManager export
+    // rather than its file name.
+    NV.setEnvLabeller(envLabel);
+    NX.setEnvLabeller(envLabel);
+
     var theme = global.Store.get('theme', null);
     if (theme) document.documentElement.setAttribute('data-theme', theme);
 
@@ -2678,7 +3712,10 @@
     render();
     restoreWorkingSet().then(function (restored) {
       if (!restored) return;
-      setTab('dashboard');
+      /* Land on a tab the restored data can actually fill. A session with only
+         the network exports in it has no PC reconciliation, and the Dashboard
+         reads that result unconditionally. */
+      setTab(state.result ? 'dashboard' : (state.netResult ? 'network' : 'data'));
       U.toast('Picked up where you left off — ' +
         Object.keys(state.sources).map(function (id) {
           return S.SOURCES[id].short + ' ' + U.num(state.sources[id].records.length);
