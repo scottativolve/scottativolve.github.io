@@ -434,6 +434,18 @@ ambiguous about what it covers.
 
 **What to update.** For each field, choose whether to correct it and where the
 correct value comes from — Intune, a site verification return, or a fixed value.
+
+For the assigned user there is a second choice: whether to write the person's
+**email / UPN** or their **display name**. It defaults to the UPN, because
+Freshservice matches a requester on their address and a display name only lands
+if your instance is set up that way. Where Intune has no UPN for someone, the
+display name is used rather than nothing.
+
+A device already assigned to the right person is left alone whichever form you
+pick — `Joseph Sinclair` in Freshservice against `joseph.sinclair@…` in Intune
+is recognised as the same person and produces no change. If you want to
+*normalise* existing assignments to addresses rather than only fix wrong ones,
+turn off **Only include rows where the value actually changes**.
 The preview lists every proposed change with the current value beside the new
 one, and the reason it is being proposed. Nothing is included unless it would
 actually change, so a field where the two systems already agree produces no

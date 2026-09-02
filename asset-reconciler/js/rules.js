@@ -441,14 +441,24 @@
   }
 
   /* What would we propose to change in Freshservice for this row and field? */
-  function proposedValue(row, field, sourcePref) {
+  function proposedValue(row, field, sourcePref, opts) {
     var pick = sourcePref || 'auto';
     var ver = row.ver;
+    opts = opts || {};
 
     if (field === 'user') {
       if ((pick === 'verification' || pick === 'auto') && ver && !N.isBlank(ver.confirmedUser)) return ver.confirmedUser;
       if (pick === 'verification') return null;
-      return row.intune ? global.Norm.personDisplay(row.intune.primaryUser, row.intune.primaryUpn) || null : null;
+      if (!row.intune) return null;
+      // Freshservice matches a requester on their address, so the UPN is what
+      // makes an import land on the right person; the display name is offered
+      // for instances that are set up the other way round. Either falls back
+      // to the other rather than writing nothing.
+      if (opts.userValue === 'name') {
+        return N.personDisplay(row.intune.primaryUser, row.intune.primaryUpn) || null;
+      }
+      return N.personEmail(row.intune.primaryUpn, row.intune.primaryUser) ||
+             N.personDisplay(row.intune.primaryUser, row.intune.primaryUpn) || null;
     }
     if (field === 'location') {
       // A site's own answer beats an inference from the network, but the IP is

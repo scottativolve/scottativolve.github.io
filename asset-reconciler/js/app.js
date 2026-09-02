@@ -1630,6 +1630,27 @@
           })
         : null;
 
+      /* Which form of the person to write. Freshservice matches a requester on
+         their address, so the UPN is what makes the import land on the right
+         person - but an instance keyed on display names needs the other. */
+      var formBox = u.field === 'user' && fcfg.enabled && fcfg.source === 'intune'
+        ? U.el('div', { style: { marginTop: '4px' } }, [
+            U.el('select', {
+              style: { width: '100%' },
+              onchange: function (e) { cfg.userValue = e.target.value; persistFsConfig(); render(); }
+            }, [
+              U.el('option', { value: 'upn', selected: cfg.userValue !== 'name' },
+                'as their email / UPN'),
+              U.el('option', { value: 'name', selected: cfg.userValue === 'name' },
+                'as their display name')
+            ]),
+            U.el('div', { class: 'hint' },
+              cfg.userValue === 'name'
+                ? 'Freshservice usually matches a requester on their address; a display name only works if your instance is set up that way.'
+                : 'Falls back to the display name where Intune has no UPN.')
+          ])
+        : null;
+
       tbody.appendChild(U.el('tr', {}, [
         U.el('td', {}, U.el('label', { class: 'check' }, [
           U.el('input', {
@@ -1638,7 +1659,7 @@
           }),
           u.label
         ])),
-        U.el('td', {}, [sourceSel, manualBox]),
+        U.el('td', {}, [sourceSel, manualBox, formBox]),
         U.el('td', {}, U.el('input', {
           type: 'text', value: cfg.headers[u.field] || u.field, disabled: !fcfg.enabled,
           onchange: function (e) { cfg.headers[u.field] = e.target.value; persistFsConfig(); }

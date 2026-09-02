@@ -144,6 +144,7 @@
         os:        { enabled: false, source: 'intune' },
         osVersion: { enabled: false, source: 'intune' }
       },
+      userValue: 'upn',           // write the assigned user as an address, not a display name
       onlyChanged: true,
       requireIntuneMatch: true,
       skipRetired: true,
@@ -187,7 +188,7 @@
           // A fixed value only applies where the rule that motivated it fired.
           if (field === 'state' && row.issues.indexOf('state-conflict-active') < 0) return;
         } else {
-          proposed = R.proposedValue(row, field, fcfg.source);
+          proposed = R.proposedValue(row, field, fcfg.source, { userValue: cfg.userValue });
         }
         if (proposed === null || proposed === undefined || N.isBlank(proposed)) return;
 

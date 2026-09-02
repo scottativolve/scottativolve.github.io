@@ -178,6 +178,18 @@
     return '';
   }
 
+  /* The addressable form of a person - the opposite preference to
+     personDisplay, which deliberately avoids the email. Systems match people
+     on an address far more reliably than on a display name, so this is what
+     goes into an import. */
+  function personEmail() {
+    for (var i = 0; i < arguments.length; i++) {
+      var v = clean(arguments[i]);
+      if (v && v.indexOf('@') > 0) return v;
+    }
+    return '';
+  }
+
   /* ------------------------------------------------------- locations */
 
   var SEPARATORS = /\s*(?:>|»|\/|\\|\||::)\s*/;
@@ -238,6 +250,7 @@
     comparePeople: comparePeople,
     stripAccountSuffix: stripAccountSuffix,
     personDisplay: personDisplay,
+    personEmail: personEmail,
     location: location,
     locationKey: locationKey,
     text: text,
