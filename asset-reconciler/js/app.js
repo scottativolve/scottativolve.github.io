@@ -91,7 +91,14 @@
         }
 
         var saved = global.Store.getMapping(sourceId, parsed.headers);
-        var mapping = saved || S.autoMap(sourceId, parsed.headers);
+        var mapping, filled = [];
+        if (saved) {
+          var res = S.fillMapping(sourceId, parsed.headers, saved.mapping, saved.knownFields);
+          mapping = res.mapping;
+          filled = res.filled;
+        } else {
+          mapping = S.autoMap(sourceId, parsed.headers);
+        }
 
         state.sources[sourceId] = {
           id: sourceId,
@@ -99,7 +106,9 @@
           headers: parsed.headers,
           raw: parsed.rows,
           mapping: mapping,
+          knownFields: S.fieldKeys(sourceId),
           autoMapped: !saved,
+          filled: filled,
           loadedAt: new Date()
         };
         project(sourceId);
@@ -110,6 +119,13 @@
     Promise.all(jobs).then(function (results) {
       results.forEach(function (r) {
         U.toast(S.SOURCES[r.sourceId].label + ': ' + U.num(r.rows) + ' rows from ' + r.file, 'ok');
+        var f = state.sources[r.sourceId] && state.sources[r.sourceId].filled;
+        if (f && f.length) {
+          U.toast(S.SOURCES[r.sourceId].label + ': matched ' + f.length + ' column' +
+            (f.length === 1 ? '' : 's') + ' your saved mapping did not cover — ' +
+            f.map(function (x) { return x.label; }).join(', ') +
+            '. Check them under "Check columns".', 'ok', 11000);
+        }
       });
       recompute();
       if (state.tab === 'data') render();
@@ -160,7 +176,8 @@
       if (!src) return;
       payload.sources[id] = {
         fileName: src.fileName, headers: src.headers,
-        mapping: src.mapping, raw: src.raw
+        mapping: src.mapping, raw: src.raw,
+        knownFields: src.knownFields || S.fieldKeys(id)
       };
     });
     return payload;
@@ -183,15 +200,23 @@
 
   function restoreWorkingSet() {
     if (!state.persist || !global.DB.available) return Promise.resolve(false);
+    var restoredFills = [];
     return global.DB.load().then(function (payload) {
       if (!payload || !payload.sources || !Object.keys(payload.sources).length) return false;
       Object.keys(payload.sources).forEach(function (id) {
         var src = payload.sources[id];
         if (!src || !src.raw) return;
+        // A stored working set carries the mapping the build that saved it
+        // produced, so fields added since are missing from it. Fill those in
+        // rather than leaving their columns quietly blank.
+        var res = S.fillMapping(id, src.headers, src.mapping, src.knownFields);
         state.sources[id] = {
           id: id, fileName: src.fileName, headers: src.headers,
-          mapping: src.mapping, raw: src.raw
+          mapping: res.mapping, raw: src.raw,
+          knownFields: S.fieldKeys(id),
+          filled: res.filled
         };
+        if (res.filled.length) restoredFills.push({ source: id, filled: res.filled });
         project(id);
       });
       if (payload.cfg) state.cfg = global.Match.settings(payload.cfg);
@@ -200,6 +225,7 @@
       if (payload.fsConfig) state.fsConfig = mergeFsConfig(payload.fsConfig);
       state.restoredAt = payload.savedAt ? new Date(payload.savedAt) : null;
       state.savedAt = state.restoredAt;
+      state.restoredFills = restoredFills;
       recompute();
       return true;
     }).catch(function () { return false; });
@@ -623,6 +649,14 @@
       'The tool guessed these from your column headings. Change anything it got wrong — your choices are ' +
       'remembered for any future export with the same columns.'));
 
+    var unmapped = def.fields.filter(function (f) { return !working[f.key]; });
+    if (unmapped.length) {
+      body.appendChild(U.el('div', { class: 'hint', style: { marginBottom: '10px' } },
+        unmapped.length + ' field' + (unmapped.length === 1 ? '' : 's') + ' not matched to a column: ' +
+        unmapped.map(function (f) { return f.label; }).join(', ') +
+        '. Anything unmatched shows as blank in the views, so set it here if your export has it under another name.'));
+    }
+
     var table = U.el('table', { class: 'map-table' });
     table.appendChild(U.el('thead', {}, U.el('tr', {}, [
       U.el('th', {}, 'What the tool needs'),
@@ -654,6 +688,20 @@
     body.appendChild(table);
 
     modal(def.label + ' columns', body, [
+      {
+        label: 'Detect again', ghost: true,
+        action: function () {
+          // Throw away the remembered choices and re-read the headings. The
+          // way out of any mapping that has gone stale or wrong.
+          src.mapping = S.autoMap(sourceId, src.headers);
+          src.knownFields = S.fieldKeys(sourceId);
+          global.Store.saveMapping(sourceId, src.headers, src.mapping);
+          project(sourceId);
+          recompute();
+          render();
+          U.toast('Columns re-detected from the headings in ' + src.fileName + '.', 'ok');
+        }
+      },
       { label: 'Cancel', ghost: true },
       {
         label: 'Save mapping', primary: true, action: function () {
@@ -663,6 +711,7 @@
             return false;
           }
           src.mapping = working;
+          src.knownFields = S.fieldKeys(sourceId);
           global.Store.saveMapping(sourceId, src.headers, working);
           project(sourceId);
           recompute();
@@ -2635,6 +2684,14 @@
           return S.SOURCES[id].short + ' ' + U.num(state.sources[id].records.length);
         }).join(', ') +
         (state.restoredAt ? ', saved ' + U.fmtDate(state.restoredAt) : ''), 'ok', 7000);
+
+      // The tool has gained fields since this working set was stored; say which
+      // ones are now populated rather than leaving them to be noticed.
+      (state.restoredFills || []).forEach(function (r) {
+        U.toast(S.SOURCES[r.source].label + ': ' + r.filled.length + ' column' +
+          (r.filled.length === 1 ? '' : 's') + ' added since you loaded this file are now matched — ' +
+          r.filled.map(function (x) { return x.label; }).join(', ') + '.', 'ok', 12000);
+      });
     });
   }
 

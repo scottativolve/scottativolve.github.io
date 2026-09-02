@@ -58,6 +58,17 @@ columns** shows what was matched to what, with an example value from your data,
 so you can correct anything it got wrong. Corrections are remembered for any
 future export with the same columns.
 
+The dialog lists any field it could not match, since an unmatched field shows as
+blank in the views rather than announcing itself. **Detect again** throws away
+the remembered choices and re-reads the headings, which is the way out of a
+mapping that has gone stale.
+
+When the tool gains a new field, a mapping remembered from before — including
+the one inside a kept working set — says nothing about it. Those gaps are filled
+by re-detection on load and the new matches are named in a message, so a column
+added to the tool starts working without you re-importing. A field you
+deliberately left unmapped stays unmapped.
+
 ### 1. Freshservice assets
 
 Assets → filter to what you want → Export → CSV.

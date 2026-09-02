@@ -249,7 +249,43 @@
     });
   }
 
+  /* A mapping that came out of storage was written by whatever build saved it,
+     so it says nothing about fields added to the tool since. Left alone, those
+     fields stay unmapped for ever and their columns are silently blank while
+     everything else works.
+
+     Fill only the genuine gaps: a field the mapping already names is left
+     exactly as it is, a field the saving build knew about and deliberately left
+     unmapped stays unmapped, and a suggestion is ignored if another field has
+     already claimed that column. */
+  function fillMapping(sourceId, headers, mapping, knownFields) {
+    var out = Object.assign({}, mapping || {});
+    var auto = autoMap(sourceId, headers);
+    var filled = [];
+
+    var claimed = {};
+    Object.keys(out).forEach(function (k) { if (out[k]) claimed[out[k]] = true; });
+
+    fieldsOf(sourceId).forEach(function (f) {
+      if (out[f.key]) return;                                  // already decided
+      if (knownFields && knownFields.indexOf(f.key) >= 0) return;  // knowingly left out
+      var suggestion = auto[f.key];
+      if (!suggestion || claimed[suggestion]) return;
+      out[f.key] = suggestion;
+      claimed[suggestion] = true;
+      filled.push({ key: f.key, label: f.label, header: suggestion });
+    });
+
+    return { mapping: out, filled: filled };
+  }
+
+  function fieldKeys(sourceId) {
+    return fieldsOf(sourceId).map(function (f) { return f.key; });
+  }
+
   global.Schema = {
+    fillMapping: fillMapping,
+    fieldKeys: fieldKeys,
     SOURCES: SOURCES,
     autoMap: autoMap,
     detectSource: detectSource,

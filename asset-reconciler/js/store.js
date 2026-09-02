@@ -57,8 +57,24 @@
     return 'map.' + sourceId + '.' + h.toString(36);
   }
 
-  function getMapping(sourceId, headers) { return get(headerSignature(sourceId, headers), null); }
-  function saveMapping(sourceId, headers, mapping) { set(headerSignature(sourceId, headers), mapping); }
+  /* Stored alongside the mapping: the fields the tool had when it was saved.
+     Without that, a field left unmapped on purpose cannot be told apart from
+     one that did not exist yet. Entries written before this was recorded come
+     back with knownFields null, meaning "assume nothing". */
+  function getMapping(sourceId, headers) {
+    var raw = get(headerSignature(sourceId, headers), null);
+    if (!raw) return null;
+    if (raw.v === 2 && raw.mapping) return { mapping: raw.mapping, knownFields: raw.knownFields || null };
+    return { mapping: raw, knownFields: null };            // the older shape
+  }
+
+  function saveMapping(sourceId, headers, mapping) {
+    set(headerSignature(sourceId, headers), {
+      v: 2,
+      mapping: mapping,
+      knownFields: global.Schema.fieldKeys(sourceId)
+    });
+  }
 
   function clearAll() {
     if (HAS_LS) {
