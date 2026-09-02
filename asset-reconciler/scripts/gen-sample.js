@@ -316,6 +316,36 @@ for (let i = 0; i < 6; i++) {
   });
 });
 
+/* ---- rebuilt machines, left behind in every system ----------------------
+   The build names a device after its serial with a build-type prefix, so a
+   machine rebuilt under a different type appears twice with different names
+   and the same serial. The old entry is never cleaned up, so it sits in
+   Freshservice, Intune and Arctic Wolf looking like a separate device. */
+const REBUILD_PREFIXES = ['STD', 'SHR', 'IVOLVE'];
+for (let i = 0; i < 11; i++) {
+  const site = pick(SITES);
+  const d = newDevice(site);
+  const serial = d.serial;
+  const oldPrefix = pick(REBUILD_PREFIXES);
+  let newPrefix = pick(REBUILD_PREFIXES);
+  while (newPrefix === oldPrefix) newPrefix = pick(REBUILD_PREFIXES);
+
+  const oldName = oldPrefix + '-' + serial;
+  const newName = newPrefix + '-' + serial;
+  const oldAudit = daysAgo(int(120, 400));
+  const oldCheck = daysAgo(int(120, 400));
+
+  // the stale copy
+  pushFs({ ...d, name: oldName, audit: oldAudit },
+         { 'Display Name': oldName, 'Last Audit Date': ukDate(oldAudit) });
+  pushIntune({ ...d, name: oldName, checkIn: oldCheck },
+             { 'Device name': oldName, 'Last check-in': isoDate(oldCheck) });
+
+  // the live one
+  pushFs(d, { 'Display Name': newName });
+  pushIntune(d, { 'Device name': newName });
+}
+
 /* ---- Arctic Wolf vulnerability scan ------------------------------------
    Shaped like the real export: a UUID asset id, the device name, a risk score
    out of 10 and a count of open findings, with a scan date that is sometimes

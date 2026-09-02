@@ -300,6 +300,7 @@
     var tabs = [
       ['data', 'Data'],
       ['dashboard', 'Dashboard'],
+      ['dupes', 'Duplicates'],
       ['devices', 'Devices'],
       ['map', 'Map'],
       ['export', 'Freshservice import'],
@@ -451,6 +452,7 @@
       ({
         data: renderData,
         dashboard: renderDashboard,
+        dupes: renderDupes,
         devices: renderDevices,
         map: renderMap,
         export: renderExport,
@@ -721,6 +723,9 @@
         'ask the service', function () { setView('fix-location'); }),
       C.tile('Not checked in', res.tally['stale-intune'] || 0,
         'over ' + state.cfg.staleDays + ' days', function () { setView('stale'); }),
+      C.tile('Duplicate rows in the exports', DUPE_SOURCES.reduce(function (a, id) {
+        return a + global.Dupes.summarise(dupeGroupsFor(id)).toRemove;
+      }, 0), 'same serial more than once', function () { setTab('dupes'); }),
       C.tile('High vulnerability risk', res.tally['high-risk-score'] || 0,
         c.arcticWolf ? 'score ' + state.cfg.riskScoreThreshold + ' or above' : 'load an Arctic Wolf export',
         function () { setView('risk-score'); }),
@@ -855,6 +860,154 @@
         });
       }
     });
+  }
+
+  /* ==================================================================== */
+  /*  tab: duplicates within each source file                             */
+  /* ==================================================================== */
+
+  var DUPE_SOURCES = ['freshservice', 'intune', 'arcticwolf'];
+
+  function dupeGroupsFor(sourceId) {
+    var src = state.sources[sourceId];
+    if (!src || !src.records) return [];
+    return global.Dupes.findDuplicates(sourceId, src.records, state.cfg.namePrefixes);
+  }
+
+  function renderDupes(main) {
+    main.appendChild(U.el('div', { class: 'page-head' }, [
+      U.el('h1', {}, 'Duplicate entries in the source files'),
+      U.el('div', { class: 'sub' },
+        'Rows within one export that describe the same physical machine, matched on serial number. This is about ' +
+        'tidying each system, so the lists are per file rather than reconciled together.')
+    ]));
+
+    main.appendChild(U.el('div', { class: 'card' }, [
+      U.el('h2', {}, 'Build-type prefixes'),
+      U.el('p', { class: 'hint' },
+        'Where a build names a machine after its serial with a prefix — STD-5CD4092H17, SHR-5CD4092H17 — the ' +
+        'serial can be read back out of the name. That is what makes a rebuild under a different build type show ' +
+        'up as the duplicate it is, and it is the only way to group Arctic Wolf, which has no serial column at ' +
+        'all. Separate prefixes with a vertical bar.'),
+      U.el('input', {
+        type: 'text', style: { width: '340px' },
+        value: state.cfg.namePrefixes,
+        onchange: function (e) {
+          state.cfg.namePrefixes = e.target.value;
+          saveCfg();
+        }
+      }),
+      U.el('div', { class: 'hint', style: { marginTop: '6px' } },
+        'A record\u2019s own serial column is always used when it has one; this only fills the gap.')
+    ]));
+
+    var anyLoaded = false;
+
+    DUPE_SOURCES.forEach(function (sourceId) {
+      var src = state.sources[sourceId];
+      if (!src) return;
+      anyLoaded = true;
+
+      var def = S.SOURCES[sourceId];
+      var groups = dupeGroupsFor(sourceId);
+      var sum = global.Dupes.summarise(groups);
+
+      var card = U.el('div', { class: 'card' });
+      card.appendChild(U.el('header', {}, [
+        U.el('h2', {}, def.label),
+        U.el('span', { class: 'sub' }, src.fileName + ' · ' + U.num(src.records.length) + ' rows')
+      ]));
+
+      if (!groups.length) {
+        var can = global.Dupes.groupable(sourceId, src.records, state.cfg.namePrefixes);
+        card.appendChild(U.el('div', { class: 'empty' },
+          can.ok ? 'No serial appears more than once in this file.' : can.why));
+        main.appendChild(card);
+        return;
+      }
+
+      card.appendChild(U.el('div', { class: 'tiles', style: { marginBottom: '12px' } }, [
+        C.tile('Serials with copies', sum.serials),
+        C.tile('Rows to remove', sum.toRemove, 'keeping the most recent of each'),
+        C.tile('Need a decision', sum.ambiguous, sum.ambiguous ? 'dates equal or missing' : 'all clear-cut'),
+        C.tile('Renamed rebuilds', groups.filter(function (g) { return g.namesDiffer; }).length,
+          'same serial, different device name')
+      ]));
+
+      card.appendChild(U.el('div', { class: 'row', style: { marginBottom: '12px' } }, [
+        U.el('button', {
+          class: 'btn primary sm',
+          onclick: function () {
+            var rows = global.Dupes.exportRows(sourceId, groups, 'remove');
+            U.download('duplicates-to-remove-' + sourceId + '-' + U.todayStamp() + '.csv',
+              global.CSV.stringify(rows, Object.keys(rows[0])));
+            U.toast('Exported ' + U.num(rows.length) + ' rows to remove from ' + def.label + '.', 'ok');
+          }
+        }, 'Export the ' + U.num(sum.toRemove) + ' to remove'),
+        U.el('button', {
+          class: 'btn sm',
+          onclick: function () {
+            var rows = global.Dupes.exportRows(sourceId, groups, 'all');
+            U.download('duplicates-all-' + sourceId + '-' + U.todayStamp() + '.csv',
+              global.CSV.stringify(rows, Object.keys(rows[0])));
+          }
+        }, 'Export every copy, keeps included'),
+        U.el('span', { class: 'hint' },
+          'The removal list keeps the most recent entry for each serial and marks the rest.')
+      ]));
+
+      var wrap = U.el('div', { class: 'table-wrap' });
+      var t = U.el('table', { class: 'grid' });
+      t.appendChild(U.el('thead', {}, U.el('tr', {}, [
+        U.el('th', { class: 'nosort' }, 'Serial'),
+        U.el('th', { class: 'nosort' }, 'Device name'),
+        U.el('th', { class: 'nosort' }, 'Last seen'),
+        U.el('th', { class: 'nosort' }, 'Row'),
+        U.el('th', { class: 'nosort' }, 'Matched on'),
+        U.el('th', { class: 'nosort' }, 'Action')
+      ])));
+      var tb = U.el('tbody');
+
+      groups.slice(0, 200).forEach(function (g) {
+        g.entries.forEach(function (e, i) {
+          tb.appendChild(U.el('tr', {}, [
+            U.el('td', {}, i === 0
+              ? U.el('strong', {}, g.serial)
+              : U.el('span', { class: 'muted' }, '')),
+            U.el('td', {}, [
+              U.el('span', { style: { fontWeight: e.keep ? '600' : '400' } }, e.name || '—'),
+              g.namesDiffer && i === 0
+                ? U.el('span', { class: 'pill', style: { marginLeft: '6px' } }, 'renamed')
+                : null
+            ]),
+            U.el('td', { class: e.at ? '' : 'muted' },
+              e.at ? U.fmtDate(e.at) + ' (' + U.agoLabel(e.at) + ')' : 'no date'),
+            U.el('td', { class: 'num muted' }, String(e.row)),
+            U.el('td', { class: 'muted' }, e.keyFrom),
+            U.el('td', {}, e.keep
+              ? U.el('span', { class: 'badge ok' }, [U.el('span', { class: 'sev sev-ok' }), 'Keep'])
+              : U.el('span', { class: 'badge ' + (e.ambiguous ? 'medium' : 'high') }, [
+                  U.el('span', { class: 'sev sev-' + (e.ambiguous ? 'medium' : 'high') }),
+                  e.ambiguous ? 'Check' : 'Remove'
+                ]))
+          ]));
+        });
+      });
+      t.appendChild(tb);
+      wrap.appendChild(t);
+      card.appendChild(wrap);
+
+      if (groups.length > 200) {
+        card.appendChild(U.el('div', { class: 'hint', style: { marginTop: '8px' } },
+          'Showing the first 200 of ' + U.num(groups.length) + ' serials. The exports contain all of them.'));
+      }
+      main.appendChild(card);
+    });
+
+    if (!anyLoaded) {
+      main.appendChild(U.el('div', { class: 'card' },
+        U.el('div', { class: 'empty' }, 'Load a Freshservice, Intune or Arctic Wolf export to check it for duplicates.')));
+    }
   }
 
   /* ==================================================================== */

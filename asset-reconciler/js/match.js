@@ -15,7 +15,8 @@
     matchOnName: true,
     riskScoreThreshold: 9,      // Arctic Wolf score at or above this is "high"
     risksThreshold: 500,        // this many open risks on one device is "a lot"
-    scanStaleDays: 21           // no successful scan in this long is stale
+    scanStaleDays: 21,          // no successful scan in this long is stale
+    namePrefixes: 'STD|SHR|IVOLVE|LAP|DSK'   // build prefixes that precede a serial in a device name
   };
 
   function settings(overrides) {

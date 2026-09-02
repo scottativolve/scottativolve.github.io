@@ -290,6 +290,39 @@ view is also the way you hand a list to somebody who does not use the tool.
 
 ---
 
+## Duplicates within each export
+
+Reconciliation produces one row per physical device, which deliberately hides
+the fact that a file held that device twice. The **Duplicates** tab asks the
+opposite question: which rows in *this particular export* are stale copies that
+should be deleted from the system that produced it. The lists are therefore per
+file, not reconciled together.
+
+Rows are grouped on **serial number**. Where a build names a machine after its
+serial with a build-type prefix — `STD-5CD4092H17`, `SHR-5CD4092H17` — the
+serial is read back out of the name, which is what makes a machine rebuilt
+under a different build type show up as the duplicate it is rather than as two
+unrelated devices. It is also the only way to group Arctic Wolf, which carries
+no serial column at all.
+
+A record's own serial column is always used where it has one; the name is only
+the fallback. Set the prefixes at the top of the tab — leave the box empty and
+name-derivation is off entirely, which for Arctic Wolf means nothing can be
+grouped, and the tab says so rather than reporting a clean file.
+
+For each source you get the count of serials with copies, how many rows would
+go, how many need a human decision, and how many are renamed rebuilds. The
+table lists every copy with the date each system last saw it, and marks the
+most recent as **Keep** and the rest as **Remove**. Where the dates are equal or
+missing the entry is marked **Check** instead of guessed at.
+
+Two exports per source: the removal list on its own, and every copy including
+the keeps. Both carry the row number in the original export and a few
+identifying fields from that system, so a row can be found and deleted without
+cross-referencing anything.
+
+---
+
 ## Vulnerability risk
 
 Two views rank the estate once an Arctic Wolf export is loaded:
@@ -622,6 +655,7 @@ asset-reconciler/
 │   ├── schema.js           canonical fields and the column auto-mapper
 │   ├── normalize.js        name, serial, person and location normalisation
 │   ├── ipnet.js            IPv4 parsing and site-subnet matching
+│   ├── dupes.js            duplicate rows within each source file
 │   ├── match.js            the reconciliation engine
 │   ├── rules.js            the discrepancy checks
 │   ├── views.js            columns, the filter engine, built-in views
