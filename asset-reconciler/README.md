@@ -240,6 +240,24 @@ match.
 
 ---
 
+### Reading a file you have loaded
+
+**View file**, beside *Check columns* on each loaded source, shows the file
+exactly as it was parsed — every column under its own heading, with the field
+it feeds named underneath, before any mapping is applied. It is the answer to
+"is that really what the export said?".
+
+It is searchable across every column, paged, and can export just what you are
+looking at. Two details worth knowing:
+
+- FortiManager's **tree indentation is shown**, so the firewall / `FSW` / switch
+  structure is visible in the raw rows as well as in the reconciliation.
+- A source loaded from more than one file gets a **file selector**, and the
+  *Line* column is the line within that row's own file, so it points at the
+  right place in the right export.
+
+---
+
 ## How records are matched
 
 Two passes, in order:
@@ -304,10 +322,28 @@ Views are filtered lists down the left-hand side. The built-in ones cover the
 routine work — *Fix: assigned user*, *Fix: location*, *Missing from Intune*,
 *Stale devices*, *Status conflicts*, and so on.
 
-Press **+** next to Views to build your own from any field, any issue, and any
-combination of conditions ("region is North West **and** no user in
+**Both populations work the same way.** *Device views* and *Network views* are
+separate sections with separate lists, but the same builder, the same read-only
+inspection of built-ins, the same *Save as a copy*, and the same **+** for a new
+one. A network view filters on network columns and network checks — *Not in
+Freshservice*, *HA member out of sync*, *Site looks wrong* — rather than the PC
+ones.
+
+Press **+** next to either section to build your own from any field, any issue,
+and any combination of conditions ("region is North West **and** no user in
 Freshservice"). Saved views appear in the sidebar for whoever is using that
 browser.
+
+### Keeping the sidebar usable
+
+With thirty-odd views across the two populations the list gets long, so:
+
+- **Every section collapses.** Click its heading to fold it away; the tool
+  remembers which are closed.
+- **Star a view to make it a favourite.** Starred views from both populations
+  gather in a **Favourites** section at the top, tagged *PC* or *Net* so it is
+  clear which list each one belongs to. The section only appears once you have
+  starred something.
 
 **Every view can be opened and read.** The gear beside a view in the sidebar,
 or the button above the list, shows how it is defined, with a live count of how
@@ -328,8 +364,8 @@ Columns are separate from conditions: set them with the **Columns** button on
 the list, and they are remembered per view.
 
 To share a set of views with colleagues, use **Settings → Export configuration**
-and have them import the file. That carries your views, thresholds and import
-settings, and nothing else.
+and have them import the file. That carries your views (both populations),
+favourites, thresholds, site overrides and import settings, and nothing else.
 
 Every view can be exported to CSV with whatever columns you have chosen, so a
 view is also the way you hand a list to somebody who does not use the tool.

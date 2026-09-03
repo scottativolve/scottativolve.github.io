@@ -104,6 +104,9 @@
     netSelectedIds: [],
     netExportScope: 'view',
     netSiteFilter: null,        // a site picked off the map
+    netCustomViews: global.Store.get('netCustomViews', []),
+    favourites: global.Store.get('favourites', {}),          // 'pc:all' -> true
+    sideOpen: global.Store.get('sideOpen', {}),             // sidebar section -> false when closed
     netConfig: mergeNetConfig(global.Store.get('netConfig', {})),
     siteOverrides: global.Store.get('siteOverrides', {}),  // device name -> site code
     envLabels: global.Store.get('envLabels', {}),          // export file -> your name for it
@@ -354,6 +357,8 @@
       netCfg: state.netCfg,
       netEnabledRules: state.netEnabledRules,
       netConfig: state.netConfig,
+      netCustomViews: state.netCustomViews,
+      favourites: state.favourites,
       siteOverrides: state.siteOverrides,
       envLabels: state.envLabels,
       envOrder: state.envOrder,
@@ -415,6 +420,8 @@
       if (payload.netCfg) state.netCfg = NM.settings(payload.netCfg);
       if (payload.netEnabledRules) state.netEnabledRules = payload.netEnabledRules;
       if (payload.netConfig) state.netConfig = mergeNetConfig(payload.netConfig);
+      if (payload.netCustomViews) state.netCustomViews = payload.netCustomViews;
+      if (payload.favourites) state.favourites = payload.favourites;
       if (payload.siteOverrides) state.siteOverrides = payload.siteOverrides;
       if (payload.envLabels) state.envLabels = payload.envLabels;
       if (payload.envOrder) state.envOrder = payload.envOrder;
@@ -482,7 +489,11 @@
 
   /* ---------------------------------------------------- network views */
 
-  function netViews() { return NV.BUILT_IN; }
+  function netViews() {
+    return NV.BUILT_IN.concat(state.netCustomViews.map(function (v) {
+      return Object.assign({}, v, { isCustom: true });
+    }));
+  }
 
   function netViewById(id) {
     return netViews().filter(function (v) { return v.id === id; })[0] || NV.BUILT_IN[0];
@@ -619,110 +630,193 @@
     }, dark === 'dark' ? '☀' : '☾'));
   }
 
+  /* --------------------------------------------------------- sidebar */
+
+  /* Sections remember whether they are open. Default open, so nothing is
+     hidden from someone who has never touched the control. */
+  function sectionOpen(key) {
+    return state.sideOpen[key] !== false;
+  }
+
+  function toggleSection(key) {
+    state.sideOpen[key] = !sectionOpen(key);
+    global.Store.set('sideOpen', state.sideOpen);
+    render();
+  }
+
+  /* A collapsible sidebar section. add is an optional { title, onclick }
+     button that sits in the header alongside the collapse arrow. */
+  function sideSection(key, title, add) {
+    var open = sectionOpen(key);
+    var sec = U.el('div', { class: 'side-section' + (open ? '' : ' closed') });
+    var head = U.el('div', { class: 'side-head' });
+    head.appendChild(U.el('button', {
+      class: 'side-toggle',
+      'aria-expanded': open ? 'true' : 'false',
+      title: open ? 'Hide ' + title : 'Show ' + title,
+      onclick: function () { toggleSection(key); }
+    }, [
+      U.el('span', { class: 'caret' }, open ? '▾' : '▸'),
+      U.el('span', {}, title)
+    ]));
+    head.appendChild(U.el('div', { class: 'spacer' }));
+    if (add) {
+      head.appendChild(U.el('button', {
+        class: 'btn sm ghost', style: { padding: '0 4px' },
+        title: add.title,
+        onclick: function (e) { e.stopPropagation(); add.onclick(); }
+      }, add.label || '+'));
+    }
+    sec.appendChild(head);
+    var bodyEl = U.el('div', { class: 'side-body' });
+    sec.appendChild(bodyEl);
+    return { el: sec, body: open ? bodyEl : null, open: open };
+  }
+
+  function favKey(ctxKey, viewId) { return ctxKey + ':' + viewId; }
+
+  function isFavourite(ctxKey, viewId) { return !!state.favourites[favKey(ctxKey, viewId)]; }
+
+  function toggleFavourite(ctxKey, viewId) {
+    var k = favKey(ctxKey, viewId);
+    if (state.favourites[k]) delete state.favourites[k];
+    else state.favourites[k] = true;
+    global.Store.set('favourites', state.favourites);
+    render();
+  }
+
+  /* One row for one view, in whichever section it is being listed. */
+  function viewItem(ctx, v, opts) {
+    opts = opts || {};
+    var fav = isFavourite(ctx.key, v.id);
+    return U.el('button', {
+      class: 'side-item' + (ctx.currentId() === v.id && ctx.isActive() ? ' active' : ''),
+      // The name as well as the description: a long name is truncated in a
+      // 260px sidebar, and a favourite you cannot read is no use.
+      title: v.name + (v.description ? ' \u2014 ' + v.description : ''),
+      onclick: function () { ctx.open(v.id); }
+    }, [
+      U.el('span', { class: 'side-name' },
+        opts.showPopulation
+          ? [U.el('span', { class: 'side-tag' }, ctx.key === 'net' ? 'Net' : 'PC'), ' ', v.name]
+          : v.name),
+      U.el('span', { class: 'count' }, U.num(ctx.count(v))),
+      U.el('span', {
+        class: 'del star' + (fav ? ' on' : ''),
+        title: fav ? 'Remove from favourites' : 'Add to favourites',
+        onclick: function (e) { e.stopPropagation(); toggleFavourite(ctx.key, v.id); }
+      }, fav ? '★' : '☆'),
+      U.el('span', {
+        class: 'del',
+        title: v.isCustom ? 'Edit this view' : 'See how this view is defined',
+        onclick: function (e) {
+          e.stopPropagation();
+          openViewBuilder(ctx, v, v.isCustom ? 'edit' : 'inspect');
+        }
+      }, '⚙'),
+      v.isCustom ? U.el('span', {
+        class: 'del', title: 'Delete this view',
+        onclick: function (e) {
+          e.stopPropagation();
+          if (!confirm('Delete the view "' + v.name + '"? Devices and notes are not affected.')) return;
+          ctx.saveCustom(ctx.custom.filter(function (x) { return x.id !== v.id; }));
+          delete ctx.columnsById[v.id];
+          ctx.saveColumns();
+          delete state.favourites[favKey(ctx.key, v.id)];
+          global.Store.set('favourites', state.favourites);
+          if (ctx.currentId() === v.id) ctx.open(ctx.fallbackId);
+          render();
+        }
+      }, '✕') : null
+    ]);
+  }
+
   function renderSidebar() {
     var host = U.qs('#sidebar');
     U.clear(host);
 
     /* sources */
-    var sec = U.el('div', { class: 'side-section' });
-    sec.appendChild(U.el('div', { class: 'side-head' }, 'Sources'));
-    SOURCE_IDS.forEach(function (id) {
-      var src = state.sources[id];
-      var def = S.SOURCES[id];
-      sec.appendChild(U.el('button', {
-        class: 'side-item',
-        onclick: function () { setTab('data'); }
-      }, [
-        U.el('span', { class: 'dot', style: { background: src ? 'var(--good)' : 'var(--surface-3)' } }),
-        U.el('span', {}, def.short),
-        src ? U.el('span', { class: 'count' }, U.num(src.records ? src.records.length : 0)) : U.el('span', { class: 'count' }, '—')
-      ]));
-    });
-    host.appendChild(sec);
-
-    if (state.netResult) {
-      var nsec = U.el('div', { class: 'side-section' });
-      nsec.appendChild(U.el('div', { class: 'side-head' }, 'Network views'));
-      netViews().forEach(function (v) {
-        var n = netViewCount(v);
-        nsec.appendChild(U.el('button', {
-          class: 'side-item' + (state.netViewId === v.id && state.tab === 'network' ? ' active' : ''),
-          title: v.description || '',
-          onclick: function () { setNetView(v.id); }
+    var srcSec = sideSection('sources', 'Sources');
+    if (srcSec.body) {
+      SOURCE_IDS.forEach(function (id) {
+        var src = state.sources[id];
+        var def = S.SOURCES[id];
+        srcSec.body.appendChild(U.el('button', {
+          class: 'side-item',
+          onclick: function () { setTab('data'); }
         }, [
-          U.el('span', {}, v.name),
-          U.el('span', { class: 'count' }, U.num(n))
+          U.el('span', { class: 'dot', style: { background: src ? 'var(--good)' : 'var(--surface-3)' } }),
+          U.el('span', { class: 'side-name' }, def.short),
+          U.el('span', { class: 'count' }, src ? U.num(src.records ? src.records.length : 0) : '—')
         ]));
       });
-      host.appendChild(nsec);
+    }
+    host.appendChild(srcSec.el);
+
+    var contexts = [];
+    if (state.result) contexts.push(pcCtx());
+    if (state.netResult) contexts.push(netCtx());
+    if (!contexts.length) return;
+
+    /* Favourites first: the whole point is that the views someone uses every
+       day are not buried in a list of twenty. Starred views from both
+       populations sit together, tagged so it is clear which list is which. */
+    var starred = [];
+    contexts.forEach(function (ctx) {
+      ctx.all().forEach(function (v) {
+        if (isFavourite(ctx.key, v.id)) starred.push({ ctx: ctx, view: v });
+      });
+    });
+    if (starred.length) {
+      var favSec = sideSection('favourites', 'Favourites');
+      if (favSec.body) {
+        starred.forEach(function (f) {
+          favSec.body.appendChild(viewItem(f.ctx, f.view, { showPopulation: contexts.length > 1 }));
+        });
+      }
+      host.appendChild(favSec.el);
     }
 
-    if (!state.result) return;
-
-    /* views */
-    var vsec = U.el('div', { class: 'side-section' });
-    vsec.appendChild(U.el('div', { class: 'side-head' }, [
-      'Views',
-      U.el('button', {
-        class: 'btn sm ghost', style: { padding: '0 4px' },
-        title: 'Create a view with your own filter',
+    contexts.forEach(function (ctx) {
+      var sec = sideSection(ctx.key + '-views', ctx.label, {
+        title: 'Create a ' + ctx.noun + ' view with your own filter',
         // Wrapped, not passed by reference: the handler's first argument would
-        // otherwise be the click event, which openViewBuilder reads as a view
-        // to edit.
-        onclick: function () { openViewBuilder(); }
-      }, '+')
-    ]));
-    allViews().forEach(function (v) {
-      var n = viewCount(v);
-      vsec.appendChild(U.el('button', {
-        class: 'side-item' + (state.viewId === v.id && state.tab === 'devices' ? ' active' : ''),
-        title: v.description || '',
-        onclick: function () { setView(v.id); }
-      }, [
-        U.el('span', {}, v.name),
-        U.el('span', { class: 'count' }, U.num(n)),
-        U.el('span', {
-          class: 'del',
-          title: v.isCustom ? 'Edit this view' : 'See how this view is defined',
-          onclick: function (e) {
-            e.stopPropagation();
-            openViewBuilder(v, v.isCustom ? 'edit' : 'inspect');
-          }
-        }, '\u2699'),
-        v.isCustom ? U.el('span', {
-          class: 'del', title: 'Delete this view',
-          onclick: function (e) {
-            e.stopPropagation();
-            if (!confirm('Delete the view "' + v.name + '"? Devices and notes are not affected.')) return;
-            state.customViews = state.customViews.filter(function (x) { return x.id !== v.id; });
-            global.Store.set('customViews', state.customViews);
-            delete state.viewColumnsById[v.id];
-            global.Store.set('viewColumns', state.viewColumnsById);
-            if (state.viewId === v.id) state.viewId = 'attention';
-            render();
-          }
-        }, '✕') : null
-      ]));
+        // otherwise be the click event, which openViewBuilder reads as a view.
+        onclick: function () { openViewBuilder(ctx); }
+      });
+      if (sec.body) {
+        ctx.all().forEach(function (v) { sec.body.appendChild(viewItem(ctx, v)); });
+      }
+      host.appendChild(sec.el);
     });
-    host.appendChild(vsec);
 
     /* active filters */
-    if (state.siteFilter || state.issueFilter) {
-      var fsec = U.el('div', { class: 'side-section' });
-      fsec.appendChild(U.el('div', { class: 'side-head' }, 'Active filter'));
-      if (state.siteFilter) {
-        fsec.appendChild(U.el('button', {
-          class: 'side-item',
-          onclick: function () { state.siteFilter = null; render(); }
-        }, [U.el('span', {}, 'Site: ' + U.truncate(state.siteFilter.name, 18)), U.el('span', { class: 'del', style: { opacity: 1 } }, '✕')]));
+    var filters = [];
+    if (state.siteFilter) {
+      filters.push(['Site: ' + U.truncate(state.siteFilter.name, 18),
+                    function () { state.siteFilter = null; render(); }]);
+    }
+    if (state.issueFilter) {
+      filters.push([(R.BY_CODE[state.issueFilter] || {}).label || state.issueFilter,
+                    function () { state.issueFilter = null; render(); }]);
+    }
+    if (state.netSiteFilter) {
+      filters.push(['Network site: ' + U.truncate(state.netSiteFilter.name, 14),
+                    function () { state.netSiteFilter = null; render(); }]);
+    }
+    if (filters.length) {
+      var fsec = sideSection('filters', 'Active filter');
+      if (fsec.body) {
+        filters.forEach(function (f) {
+          fsec.body.appendChild(U.el('button', {
+            class: 'side-item', onclick: f[1]
+          }, [
+            U.el('span', { class: 'side-name' }, f[0]),
+            U.el('span', { class: 'del', style: { opacity: 1 } }, '✕')
+          ]));
+        });
       }
-      if (state.issueFilter) {
-        fsec.appendChild(U.el('button', {
-          class: 'side-item',
-          onclick: function () { state.issueFilter = null; render(); }
-        }, [U.el('span', {}, (R.BY_CODE[state.issueFilter] || {}).label || state.issueFilter), U.el('span', { class: 'del', style: { opacity: 1 } }, '✕')]));
-      }
-      host.appendChild(fsec);
+      host.appendChild(fsec.el);
     }
   }
 
@@ -808,6 +902,11 @@
     if (src) {
       wrap.appendChild(U.el('div', { class: 'row tight', style: { marginTop: '8px', justifyContent: 'center' } }, [
         U.el('button', { class: 'btn sm', onclick: function () { openMappingModal(sourceId); } }, 'Check columns'),
+        U.el('button', {
+          class: 'btn sm',
+          title: 'Read the file exactly as it was parsed, before any mapping',
+          onclick: function () { openFileViewer(sourceId); }
+        }, 'View file'),
         U.el('button', { class: 'btn sm ghost', onclick: function () { clearSource(sourceId); } }, 'Remove')
       ]));
       if (MULTI_FILE[sourceId] && src.files) {
@@ -846,6 +945,164 @@
       }
     }
     return wrap;
+  }
+
+  /* Read a loaded file as it was actually parsed.
+
+     This is the raw grid — every column the file has, under its own heading,
+     before any mapping — so a value that looks wrong in a view can be checked
+     against what the export really said. Paged, because a FortiManager export
+     is a thousand rows and no browser enjoys a thousand-row table. */
+  function openFileViewer(sourceId) {
+    var src = state.sources[sourceId];
+    if (!src) return;
+    var def = S.SOURCES[sourceId];
+    var indentKey = (global.CSV && global.CSV.INDENT) || '__indent';
+
+    var page = 0, pageSize = 50, query = '', envFilter = '';
+
+    /* The line each row sits on in the file it came from, counting the header
+       as line 1. Worked out once, because a filtered or searched page must
+       still point at the right line in the real file. */
+    var lineOf = new Map();
+    var perFile = {};
+    src.raw.forEach(function (r) {
+      var e = r.__env || '';
+      perFile[e] = (perFile[e] || 1) + 1;
+      lineOf.set(r, perFile[e]);
+    });
+
+    var body = U.el('div', { class: 'body' });
+
+    var info = U.el('div', { class: 'hint', style: { marginBottom: '8px' } });
+    body.appendChild(info);
+
+    var controls = U.el('div', { class: 'row', style: { marginBottom: '10px' } });
+    controls.appendChild(U.el('input', {
+      type: 'search', placeholder: 'Search every column\u2026', style: { minWidth: '220px' },
+      oninput: U.debounce(function (e) { query = e.target.value; page = 0; draw(); }, 180)
+    }));
+    if (MULTI_FILE[sourceId] && src.files && src.files.length > 1) {
+      var sel = U.el('select', {
+        onchange: function (e) { envFilter = e.target.value; page = 0; draw(); }
+      }, [U.el('option', { value: '' }, 'All files')].concat(src.files.map(function (f) {
+        var k = environmentKey(f);
+        return U.el('option', { value: k }, envLabel(k));
+      })));
+      controls.appendChild(sel);
+    }
+    controls.appendChild(U.el('div', { class: 'spacer' }));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm ghost',
+      title: 'Save exactly these rows and columns back out as a CSV',
+      onclick: function () {
+        var rows = filtered();
+        if (!rows.length) { U.toast('Nothing to export.', 'err'); return; }
+        U.download(sourceId + '-as-loaded-' + U.todayStamp() + '.csv',
+          global.CSV.stringify(rows.map(strip), src.headers));
+      }
+    }, 'Export what I am looking at'));
+    body.appendChild(controls);
+
+    var tableHost = U.el('div');
+    body.appendChild(tableHost);
+    var pager = U.el('div', { class: 'row', style: { marginTop: '10px' } });
+    body.appendChild(pager);
+
+    /* The synthetic indent key is ours, not the file's, so it never appears
+       as a column or in an export of the file. */
+    function strip(row) {
+      var out = {};
+      src.headers.forEach(function (h) { out[h] = row[h] === undefined ? '' : row[h]; });
+      return out;
+    }
+
+    function filtered() {
+      var rows = src.raw;
+      if (envFilter) rows = rows.filter(function (r) { return r.__env === envFilter; });
+      rows = rows.slice();
+      var q = query.toLowerCase().trim();
+      if (!q) return rows;
+      return rows.filter(function (r) {
+        for (var i = 0; i < src.headers.length; i++) {
+          var v = r[src.headers[i]];
+          if (v && String(v).toLowerCase().indexOf(q) >= 0) return true;
+        }
+        return false;
+      });
+    }
+
+    function draw() {
+      var rows = filtered();
+      var pages = Math.max(1, Math.ceil(rows.length / pageSize));
+      if (page >= pages) page = pages - 1;
+      var slice = rows.slice(page * pageSize, (page + 1) * pageSize);
+
+      U.clear(info);
+      info.appendChild(U.el('span', {},
+        (src.files && src.files.length > 1 ? src.files.length + ' files, ' : '') +
+        U.num(src.raw.length) + ' rows \u00b7 ' + src.headers.length + ' columns' +
+        (rows.length === src.raw.length ? '' : ' \u00b7 ' + U.num(rows.length) + ' matching')));
+
+      U.clear(tableHost);
+      if (!rows.length) {
+        tableHost.appendChild(U.el('div', { class: 'empty' }, 'Nothing in this file matches that.'));
+      } else {
+        var wrap = U.el('div', { class: 'table-wrap', style: { maxHeight: '52vh' } });
+        var table = U.el('table', { class: 'grid' });
+        var htr = U.el('tr');
+        htr.appendChild(U.el('th', {
+          class: 'nosort', style: { width: '52px' },
+          title: 'The line this row sits on in its own file, counting the header as line 1'
+        }, 'Line'));
+        src.headers.forEach(function (h) {
+          // Say which field a column feeds, so the mapping is visible here too.
+          var field = Object.keys(src.mapping).filter(function (k) { return src.mapping[k] === h; })[0];
+          var fdef = field ? S.fieldDef(sourceId, field) : null;
+          htr.appendChild(U.el('th', { class: 'nosort', title: fdef ? 'Read as: ' + fdef.label : 'Not mapped to any field' }, [
+            U.el('div', {}, h),
+            U.el('div', {
+              class: 'hint',
+              style: { fontWeight: '400', textTransform: 'none', letterSpacing: '0', fontSize: '10px' }
+            }, fdef ? fdef.label : '\u2014')
+          ]));
+        });
+        table.appendChild(U.el('thead', {}, htr));
+        var tbody = U.el('tbody');
+        slice.forEach(function (r) {
+          var tr = U.el('tr');
+          tr.appendChild(U.el('td', { class: 'num muted' }, String(lineOf.get(r) || '')));
+          src.headers.forEach(function (h, i) {
+            var v = r[h] === undefined || r[h] === null ? '' : String(r[h]);
+            // FortiManager's tree depth is the leading whitespace of the first
+            // column, which the parser records separately; show it back so the
+            // hierarchy is visible in the raw view too.
+            var pad = i === 0 ? Number(r[indentKey] || 0) : 0;
+            tr.appendChild(U.el('td', { style: pad ? { paddingLeft: (8 + pad * 7) + 'px' } : null },
+              v ? U.truncate(v, 60) : U.el('span', { class: 'muted' }, '\u2014')));
+          });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        tableHost.appendChild(wrap);
+      }
+
+      U.clear(pager);
+      pager.appendChild(U.el('button', {
+        class: 'btn sm', disabled: page === 0,
+        onclick: function () { page--; draw(); }
+      }, 'Previous'));
+      pager.appendChild(U.el('span', { class: 'hint' }, 'Page ' + (page + 1) + ' of ' + pages));
+      pager.appendChild(U.el('button', {
+        class: 'btn sm', disabled: page >= pages - 1,
+        onclick: function () { page++; draw(); }
+      }, 'Next'));
+    }
+    draw();
+
+    modal(def.label + ' \u2014 ' + (src.files && src.files.length > 1 ? src.files.join(', ') : src.fileName),
+      body, [{ label: 'Close', primary: true }], { wide: true });
   }
 
   function renderData(main) {
@@ -1404,13 +1661,13 @@
     controls.appendChild(search);
 
     controls.appendChild(U.el('button', {
-      class: 'btn sm', onclick: function () { openColumnPicker(view); }
+      class: 'btn sm', onclick: function () { openColumnPicker(pcCtx(), view, function () { return grid; }); }
     }, 'Columns'));
 
     controls.appendChild(U.el('button', {
       class: 'btn sm',
       title: view.isCustom ? 'Change this view\u2019s conditions' : 'See how this view is defined, and copy it',
-      onclick: function () { openViewBuilder(view, view.isCustom ? 'edit' : 'inspect'); }
+      onclick: function () { openViewBuilder(pcCtx(), view, view.isCustom ? 'edit' : 'inspect'); }
     }, view.isCustom ? 'Edit view' : 'View settings'));
 
     controls.appendChild(U.el('label', { class: 'check' }, [
@@ -1672,12 +1929,15 @@
 
   var previewHook = function () {};
 
-  function openColumnPicker(view) {
-    var chosen = grid.state.columns.slice();
+  /* One column picker for both populations: the registry and where the choice
+     is remembered come from the context. */
+  function openColumnPicker(ctx, view, gridOf) {
+    var VE = ctx.views;
+    var chosen = gridOf().state.columns.slice();
     var body = U.el('div', { class: 'body' });
     body.appendChild(U.el('p', { class: 'hint' }, 'Pick the columns this view shows. Exports use the same set.'));
     var wrap = U.el('div', { style: { columns: '2', columnGap: '24px' } });
-    V.COLUMNS.forEach(function (col) {
+    VE.COLUMNS.forEach(function (col) {
       wrap.appendChild(U.el('label', {
         class: 'check', style: { breakInside: 'avoid', marginBottom: '5px' }
       }, [
@@ -1696,102 +1956,28 @@
       {
         label: 'Reset to this view\u2019s columns', ghost: true,
         action: function () {
-          delete state.viewColumnsById[view.id];
-          global.Store.set('viewColumns', state.viewColumnsById);
+          delete ctx.columnsById[view.id];
+          ctx.saveColumns();
           render();
         }
       },
       { label: 'Cancel', ghost: true },
       { label: 'Apply', primary: true, action: function () {
         // Preserve the canonical column order rather than click order.
-        var ordered = V.COLUMNS.map(function (c) { return c.key; })
+        var ordered = VE.COLUMNS.map(function (c) { return c.key; })
           .filter(function (k) { return chosen.indexOf(k) >= 0; });
-        var next = ordered.length ? ordered : V.BASE_COLS.slice();
+        var next = ordered.length ? ordered : VE.BASE_COLS.slice();
         if (next.indexOf('notes') < 0) next.unshift('notes');
-        grid.setColumns(next);
-        state.viewColumns = next;
-        state.viewColumnsById[view.id] = next;
-        global.Store.set('viewColumns', state.viewColumnsById);
-        grid.render();
+        var live = gridOf();
+        live.setColumns(next);
+        if (ctx.key === 'net') state.netColumns = next; else state.viewColumns = next;
+        ctx.columnsById[view.id] = next;
+        ctx.saveColumns();
+        live.render();
       } }
     ]);
   }
 
-
-  /* ------------------------------------------------- network dialogs */
-
-  function openNetColumnPicker(view) {
-    var chosen = netGrid.state.columns.slice();
-    var body = U.el('div', { class: 'body' });
-    body.appendChild(U.el('p', { class: 'hint' }, 'Pick the columns this view shows. Exports use the same set.'));
-    var wrap = U.el('div', { style: { columns: '2', columnGap: '24px' } });
-    NV.COLUMNS.forEach(function (col) {
-      wrap.appendChild(U.el('label', {
-        class: 'check', style: { breakInside: 'avoid', marginBottom: '5px' }
-      }, [
-        U.el('input', {
-          type: 'checkbox', checked: chosen.indexOf(col.key) >= 0,
-          onchange: function (e) {
-            if (e.target.checked) { if (chosen.indexOf(col.key) < 0) chosen.push(col.key); }
-            else chosen = chosen.filter(function (k) { return k !== col.key; });
-          }
-        }),
-        col.label
-      ]));
-    });
-    body.appendChild(wrap);
-    modal('Columns', body, [
-      { label: 'Reset to this view’s columns', ghost: true, action: function () {
-        delete state.netColumnsById[view.id];
-        global.Store.set('netColumns', state.netColumnsById);
-        render();
-      } },
-      { label: 'Cancel', ghost: true },
-      { label: 'Apply', primary: true, action: function () {
-        var ordered = NV.COLUMNS.map(function (c) { return c.key; })
-          .filter(function (k) { return chosen.indexOf(k) >= 0; });
-        var next = ordered.length ? ordered : NV.BASE_COLS.slice();
-        if (next.indexOf('notes') < 0) next.unshift('notes');
-        netGrid.setColumns(next);
-        state.netColumns = next;
-        state.netColumnsById[view.id] = next;
-        global.Store.set('netColumns', state.netColumnsById);
-        netGrid.render();
-      } }
-    ]);
-  }
-
-  function openNetViewSettings(view) {
-    var body = U.el('div', { class: 'body' });
-    body.appendChild(U.el('p', {}, view.description || ''));
-    var kv = U.el('div', { class: 'kv two' });
-    function pair(k, v) {
-      kv.appendChild(U.el('div', { class: 'k' }, k));
-      kv.appendChild(U.el('div', {}, v));
-    }
-    pair('Rows', U.num(netViewCount(view)));
-    if (view.filter) {
-      pair('Match', view.filter.match === 'any' ? 'any of these' : 'all of these');
-      view.filter.conditions.forEach(function (c, i) {
-        var label;
-        if (c.field === '__issue') label = 'has the issue "' + ((NM.RULE_BY_CODE[c.value] || {}).label || c.value) + '"';
-        else if (c.field === '__anyIssue') label = 'has any issue at all';
-        else label = ((NV.COL_BY_KEY[c.field] || {}).label || c.field) + ' ' + c.op + (c.value ? ' "' + c.value + '"' : '');
-        pair('Condition ' + (i + 1), label);
-      });
-    } else {
-      pair('Filter', 'none — every network device');
-    }
-    if (view.sort) pair('Sorted by', ((NV.COL_BY_KEY[view.sort.key] || {}).label || view.sort.key) + ', ' + view.sort.dir);
-    body.appendChild(kv);
-    modal('View settings: ' + view.name, body, [{ label: 'Close', primary: true }]);
-  }
-
-  /* The site a device sits at is read from the number at the front of its
-     name. That is right for the great majority and wrong for a named handful —
-     a house number that looks like a site code, a campus firewall serving
-     several sites, kit with no number at all. Rather than making the parser
-     cleverer, and wrong in new ways, those cases are listed here. */
   function openSiteOverrides() {
     var body = U.el('div', { class: 'body' });
     var sites = siteIndex();
@@ -2226,12 +2412,13 @@
       }, 180)
     }));
     controls.appendChild(U.el('button', {
-      class: 'btn sm', onclick: function () { openNetColumnPicker(view); }
+      class: 'btn sm', onclick: function () { openColumnPicker(netCtx(), view, function () { return netGrid; }); }
     }, 'Columns'));
     controls.appendChild(U.el('button', {
-      class: 'btn sm', title: 'See how this view is defined',
-      onclick: function () { openNetViewSettings(view); }
-    }, 'View settings'));
+      class: 'btn sm',
+      title: view.isCustom ? 'Change this view\u2019s conditions' : 'See how this view is defined, and copy it',
+      onclick: function () { openViewBuilder(netCtx(), view, view.isCustom ? 'edit' : 'inspect'); }
+    }, view.isCustom ? 'Edit view' : 'View settings'));
     controls.appendChild(U.el('label', { class: 'check' }, [
       U.el('input', {
         type: 'checkbox', checked: false,
@@ -3326,7 +3513,11 @@
       U.el('button', {
         class: 'btn sm', onclick: function () {
           U.download('asset-reconciler-views.json',
-            JSON.stringify({ views: state.customViews, fsConfig: state.fsConfig, cfg: state.cfg }, null, 2),
+            JSON.stringify({
+              views: state.customViews, netViews: state.netCustomViews, favourites: state.favourites,
+              fsConfig: state.fsConfig, cfg: state.cfg, netConfig: state.netConfig,
+              siteOverrides: state.siteOverrides
+            }, null, 2),
             'application/json', { bom: false });
         }
       }, 'Export configuration'),
@@ -3348,7 +3539,73 @@
   /* mode: 'new' | 'edit' | 'inspect'
      Built-in views open read-only so their definition can be read and copied;
      a copy is an ordinary custom view and fully editable. */
-  function openViewBuilder(existing, mode) {
+  /* ------------------------------------------------- population contexts */
+
+  /* The view builder, the sidebar and the column picker are the same job for
+     PCs and for network assets: only the column registry, the rule registry
+     and where the answer is stored differ. Each population describes itself
+     here rather than the UI being written twice. */
+  function pcCtx() {
+    return {
+      key: 'pc',
+      label: 'Device views',
+      noun: 'device',
+      listName: 'device list',
+      tab: 'devices',
+      views: V,
+      rules: R,
+      result: state.result,
+      builtIn: V.BUILT_IN,
+      custom: state.customViews,
+      saveCustom: function (list) {
+        state.customViews = list;
+        global.Store.set('customViews', list);
+      },
+      columnsById: state.viewColumnsById,
+      saveColumns: function () { global.Store.set('viewColumns', state.viewColumnsById); },
+      all: allViews,
+      count: viewCount,
+      currentId: function () { return state.viewId; },
+      isActive: function () { return state.tab === 'devices'; },
+      open: setView,
+      fallbackId: 'attention',
+      codeDrivenHelp: 'This view is built from a rule in code rather than from conditions \u2014 it lists ' +
+        'Freshservice assets whose type is outside the computer types in Settings. A copy would not reproduce ' +
+        'it, so copying is disabled.'
+    };
+  }
+
+  function netCtx() {
+    return {
+      key: 'net',
+      label: 'Network views',
+      noun: 'network device',
+      listName: 'network list',
+      tab: 'network',
+      views: NV,
+      rules: NM,
+      result: state.netResult,
+      builtIn: NV.BUILT_IN,
+      custom: state.netCustomViews,
+      saveCustom: function (list) {
+        state.netCustomViews = list;
+        global.Store.set('netCustomViews', list);
+      },
+      columnsById: state.netColumnsById,
+      saveColumns: function () { global.Store.set('netColumns', state.netColumnsById); },
+      all: netViews,
+      count: netViewCount,
+      currentId: function () { return state.netViewId; },
+      isActive: function () { return state.tab === 'network'; },
+      open: setNetView,
+      fallbackId: 'net-new'
+    };
+  }
+
+  function ctxFor(key) { return key === 'net' ? netCtx() : pcCtx(); }
+
+  function openViewBuilder(ctx, existing, mode) {
+    var VE = ctx.views, RE = ctx.rules;
     mode = mode || (existing ? 'edit' : 'new');
     var readOnly = mode === 'inspect';
     // Drop any hook left by a previous dialog before this one wires its own.
@@ -3359,7 +3616,7 @@
         id: 'custom-' + Date.now().toString(36),
         name: '',
         description: '',
-        columns: V.BASE_COLS.slice(),
+        columns: VE.BASE_COLS.slice(),
         filter: { match: 'all', conditions: [{ field: '__anyIssue', op: 'is' }] }
       };
     }
@@ -3370,7 +3627,7 @@
         id: existing.id,
         name: existing.name,
         description: existing.description || '',
-        columns: (state.viewColumnsById[existing.id] || existing.columns || V.BASE_COLS).slice(),
+        columns: (ctx.columnsById[existing.id] || existing.columns || VE.BASE_COLS).slice(),
         filter: existing.filter
           ? JSON.parse(JSON.stringify(existing.filter))
           : { match: 'all', conditions: [] }
@@ -3396,12 +3653,12 @@
     }
     if (codeDriven) {
       body.appendChild(U.el('div', { class: 'hint', style: { marginBottom: '12px', color: 'var(--critical)' } },
-        'This view is built from a rule in code rather than from conditions — it lists Freshservice assets whose ' +
-        'type is outside the computer types in Settings. A copy would not reproduce it, so copying is disabled.'));
+        ctx.codeDrivenHelp || 'This view is built from a rule in code rather than from conditions, so a copy ' +
+        'would not reproduce it and copying is disabled.'));
     } else if (unfiltered) {
       body.appendChild(U.el('div', { class: 'hint', style: { marginBottom: '12px' } },
-        'This view has no conditions: it lists every reconciled device. A copy starts from that and you can add ' +
-        'conditions to narrow it.'));
+        'This view has no conditions: it lists every reconciled ' + ctx.noun + '. A copy starts from that and ' +
+        'you can add conditions to narrow it.'));
     }
     body.appendChild(U.el('div', { class: 'field', style: { marginBottom: '12px' } }, [
       U.el('label', {}, 'View name'),
@@ -3415,7 +3672,7 @@
     ]));
 
     body.appendChild(U.el('div', { class: 'row', style: { marginBottom: '10px' } }, [
-      U.el('span', {}, 'Show devices where'),
+      U.el('span', {}, 'Show ' + ctx.noun + 's where'),
       U.el('select', {
         onchange: function (e) { draft.filter.match = e.target.value; }
       }, [
@@ -3432,7 +3689,7 @@
         U.el('option', { value: '__anyIssue', selected: selected === '__anyIssue' }, 'Has any issue'),
         U.el('option', { value: '__issue', selected: selected === '__issue' }, 'Has a specific issue')
       ];
-      V.COLUMNS.forEach(function (c) {
+      VE.COLUMNS.forEach(function (c) {
         opts.push(U.el('option', { value: c.key, selected: selected === c.key }, c.label));
       });
       return opts;
@@ -3448,13 +3705,13 @@
         if (isIssue) {
           valueControl = U.el('select', {
             onchange: function (e) { cond.value = e.target.value; previewHook(); }
-          }, R.RULES.map(function (rule) {
+          }, RE.RULES.map(function (rule) {
             return U.el('option', { value: rule.code, selected: cond.value === rule.code }, rule.label);
           }));
         } else if (isAny) {
           valueControl = U.el('span', { class: 'hint' }, '');
         } else {
-          var opDef = V.OPERATORS.filter(function (o) { return o.op === cond.op; })[0];
+          var opDef = VE.OPERATORS.filter(function (o) { return o.op === cond.op; })[0];
           valueControl = (opDef && opDef.needsValue === false)
             ? U.el('span', { class: 'hint' }, '')
             : U.el('input', {
@@ -3477,7 +3734,7 @@
               ])
             : U.el('select', {
                 onchange: function (e) { cond.op = e.target.value; drawConditions(); }
-              }, V.OPERATORS.map(function (o) {
+              }, VE.OPERATORS.map(function (o) {
                 return U.el('option', { value: o.op, selected: cond.op === o.op }, o.label);
               }));
 
@@ -3486,7 +3743,7 @@
             onchange: function (e) {
               cond.field = e.target.value;
               cond.op = 'is';
-              cond.value = cond.field === '__issue' ? R.RULES[0].code : '';
+              cond.value = cond.field === '__issue' ? RE.RULES[0].code : '';
               drawConditions();
             }
           }, fieldOptions(cond.field)),
@@ -3511,20 +3768,20 @@
 
     var preview = U.el('div', { class: 'hint', style: { marginTop: '14px' } });
     function updatePreview() {
-      if (!state.result) { preview.textContent = ''; return; }
+      if (!ctx.result) { preview.textContent = ''; return; }
       if (codeDriven) {
-        preview.textContent = 'Matches ' + U.num(V.applyView(existing, state.result.rows).length) + ' devices.';
+        preview.textContent = 'Matches ' + U.num(VE.applyView(existing, ctx.result.rows).length) + ' ' + ctx.noun + 's.';
         return;
       }
-      var n = state.result.rows.filter(function (r) { return V.testFilter(r, draft.filter); }).length;
-      preview.textContent = U.num(n) + ' of ' + U.num(state.result.rows.length) + ' devices match right now.';
+      var n = ctx.result.rows.filter(function (r) { return VE.testFilter(r, draft.filter); }).length;
+      preview.textContent = U.num(n) + ' of ' + U.num(ctx.result.rows.length) + ' ' + ctx.noun + 's match right now.';
     }
     previewHook = updatePreview;      // called whenever a condition changes
     body.appendChild(preview);
     updatePreview();
 
     body.appendChild(U.el('div', { class: 'hint', style: { marginTop: '10px' } },
-      'Which columns this view shows is set with the Columns button on the device list, and is remembered ' +
+      'Which columns this view shows is set with the Columns button on the ' + ctx.listName + ', and is remembered ' +
       'per view.'));
 
     function saveDraft(asCopy) {
@@ -3534,15 +3791,13 @@
       }
       if (!draft.name.trim()) { U.toast('Give the view a name.', 'err'); return false; }
       draft.filter.conditions = (draft.filter.conditions || []).filter(function (c) { return c.field; });
-      state.customViews = state.customViews.filter(function (v) { return v.id !== draft.id; }).concat([draft]);
-      global.Store.set('customViews', state.customViews);
+      ctx.saveCustom(ctx.custom.filter(function (v) { return v.id !== draft.id; }).concat([draft]));
       if (asCopy) {
         // Carry the original's columns onto the copy so it looks the same.
-        state.viewColumnsById[draft.id] = draft.columns.slice();
-        global.Store.set('viewColumns', state.viewColumnsById);
+        ctx.columnsById[draft.id] = draft.columns.slice();
+        ctx.saveColumns();
       }
-      state.viewId = draft.id;
-      setTab('devices');
+      ctx.open(draft.id);
       U.toast(asCopy ? 'Copied to "' + draft.name + '" — edit it freely.'
                      : 'View updated.', 'ok', 6000);
     }
@@ -3572,7 +3827,6 @@
       U.qsa('input, select, textarea, button', body).forEach(function (el) { el.disabled = true; });
     }
   }
-
   function importConfig() {
     var input = U.el('input', {
       type: 'file', accept: '.json', style: { display: 'none' },
@@ -3586,6 +3840,19 @@
             if (json.views) {
               state.customViews = json.views;
               global.Store.set('customViews', state.customViews);
+            }
+            if (json.netViews) {
+              state.netCustomViews = json.netViews;
+              global.Store.set('netCustomViews', state.netCustomViews);
+            }
+            if (json.favourites) {
+              state.favourites = json.favourites;
+              global.Store.set('favourites', state.favourites);
+            }
+            if (json.netConfig) { state.netConfig = mergeNetConfig(json.netConfig); persistNetConfig(); }
+            if (json.siteOverrides) {
+              state.siteOverrides = json.siteOverrides;
+              global.Store.set('siteOverrides', state.siteOverrides);
             }
             if (json.cfg) { state.cfg = global.Match.settings(json.cfg); global.Store.set('cfg', state.cfg); }
             if (json.fsConfig) { state.fsConfig = mergeFsConfig(json.fsConfig); persistFsConfig(); }
@@ -3704,7 +3971,8 @@
   /*  modal helper                                                        */
   /* ==================================================================== */
 
-  function modal(title, bodyEl, buttons) {
+  function modal(title, bodyEl, buttons, opts) {
+    opts = opts || {};
     var back = U.el('div', { class: 'modal-back' });
     function close() {
       if (back.parentNode) document.body.removeChild(back);
@@ -3714,7 +3982,7 @@
     document.addEventListener('keydown', esc);
     back.addEventListener('click', function (e) { if (e.target === back) close(); });
 
-    var m = U.el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': title });
+    var m = U.el('div', { class: 'modal' + (opts.wide ? ' wide' : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': title });
     m.appendChild(U.el('header', {}, [
       U.el('h2', {}, title),
       U.el('div', { class: 'spacer' }),

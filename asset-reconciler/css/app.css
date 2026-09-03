@@ -266,6 +266,43 @@ a  { color: var(--accent); }
 }
 .side-item:hover .del { opacity: 1; }
 
+/* A view name gives up its space to the count and the row's controls rather
+   than pushing them off the edge. */
+.side-item .side-name {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Collapsible sections. The header is a button so the whole label is a
+   target, not just the arrow. */
+.side-toggle {
+  display: flex; align-items: center; gap: 5px;
+  border: 0; background: none; padding: 0; cursor: pointer;
+  font: inherit; letter-spacing: inherit; text-transform: inherit;
+  color: inherit;
+}
+.side-toggle:hover { color: var(--text-secondary); }
+.side-toggle .caret { font-size: 9px; width: 9px; line-height: 1; }
+.side-section.closed { margin-bottom: 8px; }
+
+/* A star has to be readable without hovering, or you cannot see which views
+   are favourites — which is the whole point of the section. */
+.side-item .star { opacity: 0.35; }
+.side-item .star.on { opacity: 1; color: var(--warning); }
+.side-item:hover .star { opacity: 0.7; }
+.side-item:hover .star.on { opacity: 1; }
+
+/* Which population a favourite came from, since the two lists sit together. */
+.side-tag {
+  display: inline-block;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em;
+  padding: 0 4px; margin-right: 2px;
+  border-radius: 3px;
+  background: var(--surface-3); color: var(--text-muted);
+  vertical-align: 1px;
+}
+.side-item.active .side-tag { background: var(--accent); color: var(--accent-ink); }
+
 /* ----------------------------------------------------------------- tabs */
 
 .tab {
@@ -580,6 +617,8 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
   border-bottom: 1px solid var(--border);
 }
 .modal > .body { padding: 18px; overflow: auto; }
+/* A raw file has as many columns as the file has; give it the window. */
+.modal.wide { width: min(1500px, 100%); }
 .modal > footer {
   display: flex; align-items: center; gap: 8px;
   padding: 12px 18px;
