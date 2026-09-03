@@ -557,20 +557,55 @@ Three things worth knowing:
 ## The map
 
 Each site is a dot, with the **area** of the dot proportional to the number of
-devices recorded there. Colour is switchable:
+devices recorded there.
+
+### Which population
+
+Both populations share the map. **Show** picks what the dots count:
+
+- **PCs** — the Freshservice/Intune reconciliation.
+- **Network assets** — firewalls, switches and access points, placed by the
+  site their FortiManager name resolves to.
+- **Both** — one dot per site sized by the combined total, with the popup
+  splitting it out.
+
+The selector only appears once both populations are loaded, and switching
+re-fits the view, because the two cover different sets of sites.
+
+### Colour
+
+The options depend on the population, since not all of them mean anything for
+both:
 
 - **Device count only** — one colour; size carries everything.
 - **Variance vs expected** — red where there are more devices than the lookup's
   `Expected Devices` says there should be, blue where there are fewer. This is
-  the view for finding services holding more kit than they should.
+  the view for finding services holding more kit than they should. Always
+  measured against the **PC** count, since the allowance is a PC allowance —
+  a variance that counted switches would be meaningless.
 - **Share of devices with issues** — darker where a higher proportion of that
   site's devices are flagged.
+- **Network kit not in Freshservice** — darker where more of the site's
+  network kit has no Freshservice record at all. This is the map for deciding
+  where the register is worst, and it goes straight to the import list.
 
-Clicking a dot filters the device table to that site.
+### Clicking a dot
+
+The popup always shows the split — how many PCs, how many network devices, and
+the network kit broken down into firewalls, switches and access points — plus
+how many of that site's network devices are missing from Freshservice.
+
+Because a dot can stand for two separate lists, it offers a button per
+population rather than guessing. **View N network** filters the Network tab to
+that site, shows a *Site: …* pill you can clear, and scopes the import builder
+to it — so building a Freshservice import for one site is three clicks from the
+map.
 
 Sites that cannot be drawn are never silently dropped — they are counted and
 listed underneath, split into "in the lookup but no coordinates" and "used in
-Freshservice but not in the lookup at all".
+Freshservice but not in the lookup at all". Network devices whose site could not
+be resolved at all are counted separately, with a pointer to the site
+overrides.
 
 ### Coordinates
 

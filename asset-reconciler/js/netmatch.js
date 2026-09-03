@@ -316,7 +316,12 @@
       lastAudit: a ? U.parseDate(a.lastAudit) : null
     };
     row.status = d && a ? 'matched' : (d ? 'forti-only' : 'fs-only');
-    row.locationKey = row.siteName ? N.locationKey(row.siteName) : N.locationKey(row.fsLocation);
+    /* The map groups on locationKey and names a site from location, so a
+       network row carries both under the names the map already reads. The
+       resolved site wins over the Freshservice one: it is the answer this
+       side of the tool is confident about. */
+    row.location = row.siteName || row.fsLocation || '';
+    row.locationKey = N.locationKey(row.location);
     return row;
   }
 

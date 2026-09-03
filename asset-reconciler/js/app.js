@@ -79,6 +79,7 @@
     tab: 'data',
     viewId: 'attention',
     mapMode: global.Store.get('mapMode', 'count'),
+    mapPopulation: global.Store.get('mapPopulation', 'pc'),
     siteFilter: null,
     issueFilter: null,
     includeOtherOnMap: false,
@@ -102,6 +103,7 @@
     netColumnsById: global.Store.get('netColumns', {}),
     netSelectedIds: [],
     netExportScope: 'view',
+    netSiteFilter: null,        // a site picked off the map
     netConfig: mergeNetConfig(global.Store.get('netConfig', {})),
     siteOverrides: global.Store.get('siteOverrides', {}),  // device name -> site code
     envLabels: global.Store.get('envLabels', {}),          // export file -> your name for it
@@ -489,6 +491,9 @@
   function netRowsForView(view, withSearch) {
     if (!state.netResult) return [];
     var rows = NV.applyView(view, state.netResult.rows);
+    if (state.netSiteFilter) {
+      rows = rows.filter(function (r) { return r.locationKey === state.netSiteFilter.key; });
+    }
     if (withSearch && state.netSearch) rows = NV.searchRows(rows, state.netSearch);
     return rows;
   }
@@ -496,6 +501,12 @@
   function netViewCount(view) {
     if (!state.netResult) return 0;
     try { return NV.applyView(view, state.netResult.rows).length; } catch (e) { return 0; }
+  }
+
+  /* Show one site's network kit, from a click on the map. */
+  function setNetSite(site) {
+    state.netSiteFilter = { key: site.key, name: site.name };
+    setNetView('net-all');
   }
 
   function netSelectedRows() {
@@ -565,7 +576,8 @@
     tabs.forEach(function (t) {
       // The two populations load independently: network exports alone should
       // open the Network tab without the PC reconciliation being present.
-      var needs = { network: !!state.netResult, data: true, settings: true };
+      var needs = { network: !!state.netResult, data: true, settings: true,
+                    map: !!(state.result || state.netResult) };
       var disabled = !(Object.prototype.hasOwnProperty.call(needs, t[0]) ? needs[t[0]] : !!state.result);
       host.appendChild(U.el('button', {
         class: 'tab' + (state.tab === t[0] ? ' active' : ''),
@@ -745,7 +757,9 @@
       }[state.tab] || renderData;
       var ready = state.tab === 'data' || state.tab === 'settings'
         ? true
-        : (state.tab === 'network' ? !!state.netResult : !!state.result);
+        : state.tab === 'network' ? !!state.netResult
+        : state.tab === 'map' ? !!(state.result || state.netResult)
+        : !!state.result;
       (ready ? page : renderData)(main);
     } finally {
       rendering = false;
@@ -2161,7 +2175,14 @@
 
     main.appendChild(U.el('div', { class: 'page-head' }, [
       U.el('h1', {}, view.name),
-      U.el('div', { class: 'sub' }, view.description || '')
+      U.el('div', { class: 'sub' }, view.description || ''),
+      state.netSiteFilter ? U.el('div', { class: 'row tight', style: { marginTop: '6px' } }, [
+        U.el('span', { class: 'pill' }, 'Site: ' + state.netSiteFilter.name),
+        U.el('button', {
+          class: 'btn sm ghost',
+          onclick: function () { state.netSiteFilter = null; render(); }
+        }, 'Clear filter')
+      ]) : null
     ]));
 
     if (state.netWarnings.length) {
@@ -2363,14 +2384,48 @@
   }
 
   function renderMap(main) {
-    var agg = global.EstateMap.aggregate(state.result.rows, { includeOther: state.includeOtherOnMap });
+    var M = global.EstateMap;
 
+    // Only offer a population there is data for, and never leave the selector
+    // pointing at an empty one.
+    var have = { pc: !!state.result, net: !!state.netResult };
+    have.both = have.pc && have.net;
+    var population = state.mapPopulation;
+    if (!have[population]) population = have.pc ? 'pc' : 'net';
+    state.mapPopulation = population;
+
+    var agg = M.aggregate({
+      pc: state.result ? state.result.rows : [],
+      net: state.netResult ? state.netResult.rows : []
+    }, { includeOther: state.includeOtherOnMap, population: population });
+
+    var modes = M.modesFor(population);
+    if (modes.indexOf(state.mapMode) < 0) state.mapMode = 'count';
+
+    var noun = M.POPULATIONS[population].noun;
     main.appendChild(U.el('div', { class: 'page-head' }, [
-      U.el('h1', {}, 'Where the devices are'),
-      U.el('div', { class: 'sub' }, 'Each dot is a site; the area of the dot is the number of devices recorded there.')
+      U.el('h1', {}, population === 'net' ? 'Where the network kit is' : 'Where the devices are'),
+      U.el('div', { class: 'sub' },
+        'Each dot is a site; the area of the dot is the number of ' + noun + 's recorded there.' +
+        (population === 'both' ? ' PCs and network assets are counted together, and the popup splits them out.' : ''))
     ]));
 
     var controls = U.el('div', { class: 'row no-print', style: { marginBottom: '12px' } }, [
+      have.both ? U.el('label', { class: 'field', style: { flexDirection: 'row', alignItems: 'center', gap: '8px' } }, [
+        U.el('span', {}, 'Show'),
+        U.el('select', {
+          onchange: function (e) {
+            state.mapPopulation = e.target.value;
+            global.Store.set('mapPopulation', state.mapPopulation);
+            // A different set of sites means the map should re-fit rather than
+            // hold a view framed around the other population.
+            M.reset();
+            render();
+          }
+        }, Object.keys(M.POPULATIONS).map(function (k) {
+          return U.el('option', { value: k, selected: population === k }, M.POPULATIONS[k].label);
+        }))
+      ]) : null,
       U.el('label', { class: 'field', style: { flexDirection: 'row', alignItems: 'center', gap: '8px' } }, [
         U.el('span', {}, 'Colour by'),
         U.el('select', {
@@ -2379,11 +2434,11 @@
             global.Store.set('mapMode', state.mapMode);
             drawMap(agg);
           }
-        }, Object.keys(global.EstateMap.COLOUR_MODES).map(function (k) {
-          return U.el('option', { value: k, selected: state.mapMode === k }, global.EstateMap.COLOUR_MODES[k].label);
+        }, modes.map(function (k) {
+          return U.el('option', { value: k, selected: state.mapMode === k }, M.COLOUR_MODES[k].label);
         }))
       ]),
-      U.el('label', { class: 'check' }, [
+      population === 'net' ? null : U.el('label', { class: 'check' }, [
         U.el('input', {
           type: 'checkbox', checked: state.includeOtherOnMap,
           onchange: function (e) { state.includeOtherOnMap = e.target.checked; render(); }
@@ -2430,7 +2485,12 @@
         agg.unmapped.length ? 'add a postcode or run the lookup' : 'all located'),
       C.tile('Locations not in the lookup', agg.unmatched.length,
         agg.unmatched.length ? 'add them to the lookup file' : 'all recognised'),
-      C.tile('Devices with no location', agg.unlocated.length)
+      C.tile(population === 'net' ? 'Network kit with no site' : 'Devices with no location',
+        agg.unlocated.length,
+        population === 'net' && agg.unlocated.length ? 'add a site override' : ''),
+      population === 'pc' ? null : C.tile('Network kit not in Freshservice',
+        agg.mappable.reduce(function (n, s) { return n + s.netMissing; }, 0),
+        'across the sites on the map', function () { setNetView('net-new'); })
     ]);
     main.appendChild(stats);
 
@@ -2463,7 +2523,11 @@
   function drawMap(agg) {
     global.EstateMap.render('map', agg, {
       mode: state.mapMode,
-      onSelect: function (site) {
+      population: state.mapPopulation,
+      /* The popup says which population its button meant, because a dot on
+         the combined map stands for two separate lists. */
+      onSelect: function (site, which) {
+        if (which === 'net') { setNetSite(site); return; }
         state.siteFilter = { key: site.key, name: site.name };
         setView('all');
       }

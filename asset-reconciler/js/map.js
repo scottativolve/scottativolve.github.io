@@ -1,7 +1,11 @@
 /* Estate map: one dot per site, area proportional to the device count.
 
    Radius scales with the square root of the count so that area - not radius -
-   carries magnitude, which is how people actually read bubble size. */
+   carries magnitude, which is how people actually read bubble size.
+
+   Two populations share the map. PCs and network assets are reconciled apart
+   from each other but they sit in the same buildings, so a site's dot can
+   count either or both, and the popup always breaks the total down. */
 (function (global) {
   'use strict';
 
@@ -32,41 +36,85 @@
   function clearVarCache() { varCache = {}; }
 
   var COLOUR_MODES = {
-    count:    { label: 'Device count only', legend: 'One colour: size carries the count' },
-    variance: { label: 'Variance vs expected', legend: 'Red = more devices than expected, blue = fewer' },
-    issues:   { label: 'Share of devices with issues', legend: 'Darker = a higher proportion flagged' }
+    count:      { label: 'Device count only', legend: 'One colour: size carries the count' },
+    variance:   { label: 'Variance vs expected', legend: 'Red = more devices than expected, blue = fewer',
+                  populations: ['pc', 'both'] },
+    issues:     { label: 'Share of devices with issues', legend: 'Darker = a higher proportion flagged' },
+    netMissing: { label: 'Network kit not in Freshservice',
+                  legend: 'Darker = more of the site\u2019s network kit has no Freshservice record',
+                  populations: ['net', 'both'] }
   };
+
+  var POPULATIONS = {
+    pc:   { label: 'PCs', noun: 'device' },
+    net:  { label: 'Network assets', noun: 'network device' },
+    both: { label: 'Both', noun: 'device' }
+  };
+
+  /* Which colour modes make sense for the population on screen. */
+  function modesFor(population) {
+    return Object.keys(COLOUR_MODES).filter(function (k) {
+      var p = COLOUR_MODES[k].populations;
+      return !p || p.indexOf(population) >= 0;
+    });
+  }
 
   /* Roll reconciled rows up to sites. Rows whose location resolves to a row in
      the lookup get mapped; the rest are reported separately so nothing is
-     silently dropped off the visual. */
-  function aggregate(rows, opts) {
+     silently dropped off the visual.
+
+     sets is { pc: rows, net: rows }; an array is read as the PC rows alone so
+     older callers keep working. opts.population decides which of the two the
+     dot size and colour describe, but both are always counted, because the
+     popup shows the split whichever is being sized. */
+  function aggregate(sets, opts) {
     opts = opts || {};
+    if (Array.isArray(sets)) sets = { pc: sets };
+    var population = opts.population || 'pc';
+    var lists = [
+      { kind: 'pc', rows: sets.pc || [] },
+      { kind: 'net', rows: sets.net || [] }
+    ];
+
     var groups = new Map();
     var unlocated = [];       // no location at all
     var unmatched = new Map();// a location, but not in the lookup
     var unmapped = [];        // in the lookup, but no coordinates
 
-    rows.forEach(function (r) {
-      if (!opts.includeOther && r.fs && !r.inScope) return;
-      if (!r.locationKey) { unlocated.push(r); return; }
-      if (!r.site) {
-        if (!unmatched.has(r.locationKey)) unmatched.set(r.locationKey, { name: r.location, rows: [] });
-        unmatched.get(r.locationKey).rows.push(r);
-        return;
-      }
-      var key = r.locationKey;
-      if (!groups.has(key)) {
-        groups.set(key, {
-          key: key,
-          name: N.clean(r.site.location) || r.location,
-          site: r.site,
-          rows: [],
-          region: N.clean(r.site.region),
-          expected: typeof r.site.expected === 'number' ? r.site.expected : null
-        });
-      }
-      groups.get(key).rows.push(r);
+    lists.forEach(function (list) {
+      var counts = population === 'both' || population === list.kind;
+      list.rows.forEach(function (r) {
+        // The scope filter is a PC idea: a Freshservice record that is not a
+        // computer was never going to be in Intune. Network rows are all in
+        // scope for the network reconciliation by definition.
+        if (list.kind === 'pc' && !opts.includeOther && r.fs && !r.inScope) return;
+        if (!r.locationKey) { if (counts) unlocated.push(r); return; }
+        if (!r.site) {
+          if (!counts) return;
+          if (!unmatched.has(r.locationKey)) unmatched.set(r.locationKey, { name: r.location, rows: [] });
+          unmatched.get(r.locationKey).rows.push(r);
+          return;
+        }
+        var key = r.locationKey;
+        if (!groups.has(key)) {
+          groups.set(key, {
+            key: key,
+            name: N.clean(r.site.location) || N.clean(r.site.name) || r.location,
+            site: r.site,
+            rows: [], pcRows: [], netRows: [],
+            region: N.clean(r.site.region),
+            expected: typeof r.site.expected === 'number' ? r.site.expected : null
+          });
+        }
+        var g = groups.get(key);
+        (list.kind === 'pc' ? g.pcRows : g.netRows).push(r);
+        if (counts) g.rows.push(r);
+      });
+    });
+
+    // A site that only holds the population we are not showing has no dot.
+    Array.from(groups.keys()).forEach(function (k) {
+      if (!groups.get(k).rows.length) groups.delete(k);
     });
 
     var sites = [];
@@ -75,6 +123,11 @@
       var high = g.rows.filter(function (r) { return r.severity === 'high'; }).length;
       var lat = typeof g.site.lat === 'number' ? g.site.lat : null;
       var lon = typeof g.site.lon === 'number' ? g.site.lon : null;
+      var kinds = {};
+      g.netRows.forEach(function (r) { kinds[r.kind || 'Other'] = (kinds[r.kind || 'Other'] || 0) + 1; });
+      var netForti = g.netRows.filter(function (r) { return !!r.forti; });
+      var netMissing = netForti.filter(function (r) { return !r.fs; }).length;
+
       var s = {
         key: g.key,
         name: g.name,
@@ -82,11 +135,18 @@
         region: g.region,
         rows: g.rows,
         count: g.rows.length,
+        pcRows: g.pcRows, netRows: g.netRows,
+        pcCount: g.pcRows.length, netCount: g.netRows.length,
+        kinds: kinds,
+        netMissing: netMissing,
+        netMissingRate: netForti.length ? netMissing / netForti.length : 0,
         issues: issues,
         high: high,
         issueRate: g.rows.length ? issues / g.rows.length : 0,
+        // Expected devices is a PC allowance, so a variance against a total
+        // that includes switches would be nonsense.
         expected: g.expected,
-        variance: g.expected === null ? null : g.rows.length - g.expected,
+        variance: g.expected === null ? null : g.pcRows.length - g.expected,
         lat: lat, lon: lon,
         address: global.Geo.addressOf(g.site)
       };
@@ -119,15 +179,21 @@
       if (v > 0) return mag > 0.5 ? 'var(--div-pos-strong)' : 'var(--div-pos)';
       return mag > 0.5 ? 'var(--div-neg-strong)' : 'var(--div-neg)';
     }
-    if (mode === 'issues') {
-      var r = site.issueRate;
-      if (r >= 0.6) return 'var(--seq-700)';
-      if (r >= 0.4) return 'var(--seq-550)';
-      if (r >= 0.2) return 'var(--seq-400)';
-      if (r > 0)    return 'var(--seq-250)';
-      return 'var(--seq-100)';
+    if (mode === 'issues') return ramp(site.issueRate);
+    if (mode === 'netMissing') {
+      // A site with no network kit at all has nothing to be missing.
+      if (!site.netCount) return 'var(--text-muted)';
+      return ramp(site.netMissingRate);
     }
     return 'var(--series-1)';
+  }
+
+  function ramp(r) {
+    if (r >= 0.6) return 'var(--seq-700)';
+    if (r >= 0.4) return 'var(--seq-550)';
+    if (r >= 0.2) return 'var(--seq-400)';
+    if (r > 0)    return 'var(--seq-250)';
+    return 'var(--seq-100)';
   }
 
   /* Re-rendering the Map tab replaces the #map element, which would leave the
@@ -182,6 +248,8 @@
     layer = global.L.layerGroup().addTo(m);
 
     var mode = opts.mode || 'count';
+    var population = opts.population || 'pc';
+    if (modesFor(population).indexOf(mode) < 0) mode = 'count';
     var pts = agg.mappable;
     if (!pts.length) {
       if (legendCtl) { m.removeControl(legendCtl); legendCtl = null; }
@@ -207,32 +275,75 @@
         fillOpacity: 0.78
       });
 
+      /* Plain words in the popup: "2 switches" reads better than the
+         product name, and the naive de-camel-casing turned FortiGate into
+         "Forti Gate". */
+      var KIND_WORDS = {
+        FortiGate: ['firewall', 'firewalls'],
+        FortiSwitch: ['switch', 'switches'],
+        FortiAP: ['access point', 'access points']
+      };
+      var KIND_ORDER = ['FortiGate', 'FortiSwitch', 'FortiAP'];
+      var kindBits = Object.keys(s.kinds).sort(function (a, b) {
+        var ia = KIND_ORDER.indexOf(a), ib = KIND_ORDER.indexOf(b);
+        return (ia < 0 ? 9 : ia) - (ib < 0 ? 9 : ib) || (a < b ? -1 : 1);
+      }).map(function (k) {
+        var n = s.kinds[k];
+        var w = KIND_WORDS[k];
+        return U.num(n) + ' ' + (w ? w[n === 1 ? 0 : 1] : k);
+      });
+
       var lines = [
         '<h4>' + U.escapeHtml(s.name) + '</h4>',
         s.address ? '<div style="color:var(--text-secondary)">' + U.escapeHtml(s.address) + '</div>' : '',
         s.region ? '<div style="color:var(--text-muted)">' + U.escapeHtml(s.region) + '</div>' : '',
-        '<div style="margin-top:8px"><strong>' + U.num(s.count) + '</strong> device' + (s.count === 1 ? '' : 's'),
-        s.expected !== null ? ' · expected <strong>' + U.num(s.expected) + '</strong>' : '',
+        '<div style="margin-top:8px"><strong>' + U.num(s.count) + '</strong> ' +
+          (population === 'net' ? 'network device' : 'device') + (s.count === 1 ? '' : 's'),
+        s.expected !== null && population !== 'net'
+          ? ' \u00b7 expected <strong>' + U.num(s.expected) + '</strong>' : '',
         '</div>',
-        s.variance !== null && s.variance !== 0
+        // Always show the split, whichever population is being sized: the
+        // point of one map is seeing both without switching.
+        population === 'both'
+          ? '<div style="color:var(--text-secondary)">' + U.num(s.pcCount) + ' PC' + (s.pcCount === 1 ? '' : 's') +
+            ' \u00b7 ' + U.num(s.netCount) + ' network</div>'
+          : '',
+        kindBits.length && population !== 'pc'
+          ? '<div style="color:var(--text-secondary)">' + U.escapeHtml(kindBits.join(' \u00b7 ')) + '</div>' : '',
+        s.variance !== null && s.variance !== 0 && population !== 'net'
           ? '<div style="color:' + (s.variance > 0 ? 'var(--div-pos-strong)' : 'var(--div-neg-strong)') + ';font-weight:600">' +
-            (s.variance > 0 ? '+' : '') + s.variance + ' vs expected</div>'
+            (s.variance > 0 ? '+' : '') + s.variance + ' PCs vs expected</div>'
+          : '',
+        s.netMissing && population !== 'pc'
+          ? '<div style="font-weight:600"><strong>' + U.num(s.netMissing) + '</strong> network device' +
+            (s.netMissing === 1 ? '' : 's') + ' not in Freshservice</div>'
           : '',
         '<div>' + U.num(s.issues) + ' flagged (' + Math.round(s.issueRate * 100) + '%)' +
-          (s.high ? ' · <strong>' + s.high + '</strong> high severity' : '') + '</div>'
+          (s.high ? ' \u00b7 <strong>' + s.high + '</strong> high severity' : '') + '</div>'
       ].join('');
 
       var content = U.el('div');
       content.innerHTML = lines;
-      var btn = U.el('button', {
-        class: 'btn sm primary',
-        style: { marginTop: '10px' },
-        onclick: function () { if (opts.onSelect) opts.onSelect(s); }
-      }, 'View these ' + s.count + ' devices');
-      content.appendChild(btn);
+      // With both populations on one dot, "view these devices" is two
+      // different lists, so offer whichever ones exist rather than guessing.
+      var actions = U.el('div', { class: 'row tight', style: { marginTop: '10px' } });
+      if (s.pcCount && population !== 'net') {
+        actions.appendChild(U.el('button', {
+          class: 'btn sm primary',
+          onclick: function () { if (opts.onSelect) opts.onSelect(s, 'pc'); }
+        }, population === 'both' ? 'View ' + s.pcCount + ' PCs' : 'View these ' + s.count + ' devices'));
+      }
+      if (s.netCount && population !== 'pc') {
+        actions.appendChild(U.el('button', {
+          class: 'btn sm' + (population === 'net' ? ' primary' : ''),
+          onclick: function () { if (opts.onSelect) opts.onSelect(s, 'net'); }
+        }, population === 'both' ? 'View ' + s.netCount + ' network' : 'View these ' + s.count + ' devices'));
+      }
+      content.appendChild(actions);
 
       marker.bindPopup(content, { maxWidth: 300 });
-      marker.bindTooltip(s.name + ' · ' + s.count + ' device' + (s.count === 1 ? '' : 's'), { direction: 'top' });
+      marker.bindTooltip(s.name + ' \u00b7 ' + s.count + ' ' +
+        (population === 'net' ? 'network device' : 'device') + (s.count === 1 ? '' : 's'), { direction: 'top' });
       marker.addTo(layer);
     });
 
@@ -261,12 +372,17 @@
       div.appendChild(sizeRow);
 
       if (mode !== 'count') {
-        div.appendChild(U.el('div', { class: 'lg-title' }, mode === 'variance' ? 'Variance' : 'Issue rate'));
+        var titles = { variance: 'Variance', issues: 'Issue rate',
+                       netMissing: 'Network kit not in Freshservice' };
+        div.appendChild(U.el('div', { class: 'lg-title' }, titles[mode] || 'Colour'));
+        var bands = [['var(--seq-100)', 'None'], ['var(--seq-250)', 'Under 20%'], ['var(--seq-400)', '20\u201340%'],
+                     ['var(--seq-550)', '40\u201360%'], ['var(--seq-700)', 'Over 60%']];
         var swatches = mode === 'variance'
           ? [['var(--div-neg-strong)', 'Well under'], ['var(--div-neg)', 'Under'], ['var(--div-mid)', 'On target'],
              ['var(--div-pos)', 'Over'], ['var(--div-pos-strong)', 'Well over']]
-          : [['var(--seq-100)', 'None flagged'], ['var(--seq-250)', 'Under 20%'], ['var(--seq-400)', '20–40%'],
-             ['var(--seq-550)', '40–60%'], ['var(--seq-700)', 'Over 60%']];
+          : mode === 'netMissing'
+          ? [['var(--seq-100)', 'All recorded']].concat(bands.slice(1))
+          : [['var(--seq-100)', 'None flagged']].concat(bands.slice(1));
         swatches.forEach(function (s) {
           div.appendChild(U.el('div', { class: 'lg-row' }, [
             U.el('span', { class: 'lg-sw', style: { background: s[0] } }),
@@ -311,6 +427,8 @@
     invalidate: invalidate,
     reset: reset,
     COLOUR_MODES: COLOUR_MODES,
+    POPULATIONS: POPULATIONS,
+    modesFor: modesFor,
     radiusFor: radiusFor
   };
 })(window);
