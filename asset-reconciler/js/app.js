@@ -80,6 +80,7 @@
     viewId: 'attention',
     mapMode: global.Store.get('mapMode', 'count'),
     mapPopulation: global.Store.get('mapPopulation', 'pc'),
+    mapExpanded: false,
     siteFilter: null,
     issueFilter: null,
     includeOtherOnMap: false,
@@ -218,7 +219,9 @@
         }
       });
       recompute();
-      if (state.tab === 'data') render();
+      // Always redraw: the counts, the tab states and the sidebar all change,
+      // whichever tab happens to be showing.
+      render();
       if (state.tab === 'data') {
         /* Only leave the Data tab when a population has just become complete.
            Jumping away after the first FortiManager export also took the drop
@@ -656,7 +659,7 @@
       title: open ? 'Hide ' + title : 'Show ' + title,
       onclick: function () { toggleSection(key); }
     }, [
-      U.el('span', { class: 'caret' }, open ? '▾' : '▸'),
+      U.el('span', { class: 'caret' }, caretIcon()),
       U.el('span', {}, title)
     ]));
     head.appendChild(U.el('div', { class: 'spacer' }));
@@ -671,6 +674,22 @@
     var bodyEl = U.el('div', { class: 'side-body' });
     sec.appendChild(bodyEl);
     return { el: sec, body: open ? bodyEl : null, open: open };
+  }
+
+  /* One chevron, rotated by CSS when the section is closed. */
+  function caretIcon() {
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 12 12');
+    svg.setAttribute('aria-hidden', 'true');
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M2 4.5 L6 8.5 L10 4.5');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', 'currentColor');
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(path);
+    return svg;
   }
 
   function favKey(ctxKey, viewId) { return ctxKey + ':' + viewId; }
@@ -2271,20 +2290,48 @@
           blanks.map(function (b) { return b.label + ' on ' + U.num(b.rows) + ' rows'; }).join('; ')));
       }
       if (canExport) {
-        status.appendChild(note('ok', 'Ready to export',
-          'Every required column has a value on every row.'));
+        var parts = NX.splitByAssetType(rows, cfg);
+        status.appendChild(note('ok',
+          'Ready \u2014 ' + parts.length + ' file' + (parts.length === 1 ? '' : 's'),
+          'Freshservice imports one asset type at a time, so this is written as ' +
+          (parts.length === 1 ? 'a single file' : 'one file per type') + ': ' +
+          parts.map(function (g) { return g.type + ' (' + U.num(g.rows.length) + ')'; }).join(', ') + '.'));
+
+        // A button per type as well as the lot, because a browser asked for
+        // several downloads at once will often prompt about it.
+        if (parts.length > 1) {
+          var each = U.el('div', { class: 'row tight', style: { margin: '0 0 10px' } });
+          each.appendChild(U.el('span', { class: 'hint' }, 'Or one at a time:'));
+          parts.forEach(function (g) {
+            each.appendChild(U.el('button', {
+              class: 'btn sm',
+              onclick: function () { downloadPart(g); }
+            }, g.type + ' (' + U.num(g.rows.length) + ')'));
+          });
+          status.appendChild(each);
+        }
       }
 
       // First few lines exactly as they will be written.
       if (rows.length) {
-        var csv = NX.toImportCsv(rows.slice(0, 4), cfg);
-        preview.appendChild(U.el('div', { class: 'side-head' }, 'First rows, as they will be written'));
+        var firstPart = NX.splitByAssetType(rows, cfg)[0];
+        var csv = NX.toImportCsv(firstPart.rows.slice(0, 4), cfg);
+        preview.appendChild(U.el('div', { class: 'side-head' },
+          'First rows of the ' + firstPart.type + ' file, as they will be written'));
         preview.appendChild(U.el('pre', {
           style: {
             overflowX: 'auto', fontSize: '11px', background: 'var(--surface-2)',
             padding: '8px', border: '1px solid var(--grid)', maxHeight: '150px'
           }
         }, csv));
+      }
+    }
+
+    function downloadPart(g, quiet) {
+      U.download('freshservice-network-import-' + NX.typeSlug(g.type) + '-' + U.todayStamp() + '.csv',
+        NX.toImportCsv(g.rows, cfg));
+      if (!quiet) {
+        U.toast(U.num(g.rows.length) + ' ' + g.type + ' row' + (g.rows.length === 1 ? '' : 's') + ' written.', 'ok');
       }
     }
 
@@ -2308,15 +2355,18 @@
         if (!rows.length) { U.toast('Nothing to export.', 'err'); return; }
         U.download('network-import-manifest-' + U.todayStamp() + '.csv', NX.toManifestCsv(rows, cfg));
       } },
-      { label: 'Download import file', primary: true, keepOpen: true, action: function () {
+      { label: 'Download import files', primary: true, keepOpen: true, action: function () {
         if (!canExport) {
-          U.toast('Fill in the highlighted mappings first — an import missing Product or Asset Type ' +
+          U.toast('Fill in the highlighted mappings first \u2014 an import missing Product or Asset Type ' +
                   'is rejected by Freshservice.', 'err', 9000);
           return;
         }
         persistNetConfig();
-        U.download('freshservice-network-import-' + U.todayStamp() + '.csv', NX.toImportCsv(rows, cfg));
-        U.toast('Import file written for ' + U.num(rows.length) + ' devices.', 'ok');
+        var parts = NX.splitByAssetType(rows, cfg);
+        // Spaced out: a burst of downloads is what browsers block as one.
+        parts.forEach(function (g, i) { setTimeout(function () { downloadPart(g, true); }, i * 400); });
+        U.toast(parts.length + ' import file' + (parts.length === 1 ? '' : 's') + ' written for ' +
+          U.num(rows.length) + ' devices \u2014 one per asset type.', 'ok', 8000);
       } }
     ]);
   }
@@ -2664,7 +2714,16 @@
       return;
     }
 
-    main.appendChild(U.el('div', { id: 'map', class: 'card', style: { padding: '0', overflow: 'hidden' } }));
+    /* The map sits in a shell so the expand control can float over it, and so
+       expanding is one class rather than a second layout. */
+    var shell = U.el('div', { class: 'map-shell' + (state.mapExpanded ? ' expanded' : '') });
+    shell.appendChild(U.el('div', { id: 'map', class: 'card', style: { padding: '0', overflow: 'hidden' } }));
+    shell.appendChild(U.el('button', {
+      class: 'btn sm map-expand',
+      title: state.mapExpanded ? 'Back to the page (Esc)' : 'Fill the window',
+      onclick: function () { toggleMapExpanded(); }
+    }, state.mapExpanded ? '\u2715  Close' : '\u2921  Expand'));
+    main.appendChild(shell);
 
     var stats = U.el('div', { class: 'tiles', style: { marginTop: '16px' } }, [
       C.tile('Sites on the map', agg.mappable.length),
@@ -2705,6 +2764,14 @@
     }
 
     requestAnimationFrame(function () { drawMap(agg); });
+  }
+
+  /* Expanding is a class on the shell, so Leaflet keeps its layers and its
+     pan — it only has to be told the container changed size. */
+  function toggleMapExpanded() {
+    state.mapExpanded = !state.mapExpanded;
+    render();
+    global.EstateMap.invalidate();
   }
 
   function drawMap(agg) {
@@ -4014,6 +4081,13 @@
   /* ==================================================================== */
 
   function init() {
+    // Escape is the way out of anything full-screen; the modals already use it.
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && state.mapExpanded && !U.qs('.modal-back')) {
+        toggleMapExpanded();
+      }
+    });
+
     // The network table shows the name you gave each FortiManager export
     // rather than its file name.
     NV.setEnvLabeller(envLabel);

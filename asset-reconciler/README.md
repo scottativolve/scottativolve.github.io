@@ -608,6 +608,16 @@ Both populations share the map. **Show** picks what the dots count:
 The selector only appears once both populations are loaded, and switching
 re-fits the view, because the two cover different sets of sites.
 
+The map opens on **Great Britain**, fitted corner to corner rather than set to
+a fixed zoom, so it is framed correctly whatever size the window is. It fills
+the height the window gives it, and **Expand** takes the whole window (Escape
+comes back).
+
+It is also **always light, whatever theme the rest of the tool is in**.
+Inverting the tiles for dark mode turned motorways white and water black, which
+made the geography harder to read rather than easier — and the dark sequential
+ramps are tuned for a dark ground they would no longer be sitting on.
+
 ### Colour
 
 The options depend on the population, since not all of them mean anything for
@@ -741,6 +751,14 @@ with a dropdown of your real site codes. Clearing that list is the one piece of
 manual setup the network side needs.
 
 ### Building the network import
+
+**One file per asset type.** Freshservice imports assets one type at a time, so
+a single file holding routers, switches and access points cannot be uploaded at
+all. The builder splits the rows by the Asset Type they will carry, sorts each
+by site, and names the file for the type —
+`freshservice-network-import-switch-2026-09-04.csv`. **Download import files**
+writes them all; there is also a button per type if you would rather take them
+one at a time.
 
 Most network rows *create* an asset rather than correct one, so Workspace,
 Name, Asset Type and Product must all be present — and three of those have to

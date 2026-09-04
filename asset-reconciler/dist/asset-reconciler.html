@@ -954,13 +954,28 @@ a  { color: var(--accent); }
 /* Collapsible sections. The header is a button so the whole label is a
    target, not just the arrow. */
 .side-toggle {
-  display: flex; align-items: center; gap: 5px;
-  border: 0; background: none; padding: 0; cursor: pointer;
+  display: flex; align-items: center; gap: 7px;
+  border: 0; background: none; padding: 2px 4px; margin-left: -4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
   font: inherit; letter-spacing: inherit; text-transform: inherit;
   color: inherit;
 }
-.side-toggle:hover { color: var(--text-secondary); }
-.side-toggle .caret { font-size: 9px; width: 9px; line-height: 1; }
+.side-toggle:hover { color: var(--text-primary); background: var(--surface-2); }
+
+/* A chevron drawn rather than typed: the text arrow rendered at about nine
+   pixels and was easy to miss entirely. This is a real target you can see. */
+.side-toggle .caret {
+  width: 18px; height: 18px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  transition: transform 0.12s ease;
+}
+.side-toggle .caret svg { width: 11px; height: 11px; display: block; }
+.side-toggle[aria-expanded="false"] .caret { transform: rotate(-90deg); }
+.side-toggle:hover .caret { background: var(--accent); color: var(--accent-ink); }
 .side-section.closed { margin-bottom: 8px; }
 
 /* A star has to be readable without hovering, or you cannot see which views
@@ -1215,8 +1230,63 @@ table.grid td.chips .badge { margin: 1px 2px 1px 0; }
 
 /* ------------------------------------------------------------ map + viz */
 
-#map { height: 560px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface-2); }
-.leaflet-container { font: inherit; background: var(--surface-2); }
+/* The map fills what the window gives it rather than sitting in a fixed
+   letterbox at the top of the page, with a floor so it stays usable on a
+   laptop and a ceiling so a tall monitor does not push the figures below it
+   out of reach. */
+.map-shell { position: relative; }
+#map {
+  height: clamp(440px, calc(100vh - 330px), 1000px);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: #eef0ec;
+}
+
+/* Expanded: the map takes the window. */
+.map-shell.expanded {
+  position: fixed; inset: 0; z-index: 850;
+  padding: 0; margin: 0;
+}
+.map-shell.expanded #map { height: 100%; border-radius: 0; border: 0; }
+.map-expand {
+  position: absolute; top: 10px; right: 10px; z-index: 700;
+  box-shadow: var(--shadow);
+}
+
+/* The map is held light whatever the app theme.
+
+   Inverting the tiles for dark mode turned motorways white and water black,
+   which made the geography harder to read rather than easier, and the dark
+   sequential ramps are tuned for a dark ground they no longer sit on. So the
+   light tokens are re-declared here: both the stylesheet below and the colours
+   map.js resolves off this element then come out light. */
+#map {
+  color-scheme: light;
+  --surface-1:      #fcfcfb;
+  --surface-2:      #f2f1ed;
+  --surface-3:      #e8e7e1;
+  --text-primary:   #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted:     #898781;
+  --grid:           #e1e0d9;
+  --border:         rgba(11, 11, 11, 0.10);
+  --border-strong:  rgba(11, 11, 11, 0.20);
+  --series-1:       #2a78d6;
+  --seq-100:        #cde2fb;
+  --seq-250:        #86b6ef;
+  --seq-400:        #3987e5;
+  --seq-550:        #1c5cab;
+  --seq-700:        #0d366b;
+  --div-neg-strong: #1c5cab;
+  --div-neg:        #86b6ef;
+  --div-mid:        #f0efec;
+  --div-pos:        #ec8f8f;
+  --div-pos-strong: #e34948;
+  --accent:         #2a78d6;
+  --accent-ink:     #ffffff;
+  color: var(--text-primary);
+}
+.leaflet-container { font: inherit; background: #eef0ec; }
 .leaflet-popup-content-wrapper, .leaflet-popup-tip {
   background: var(--surface-1); color: var(--text-primary);
   box-shadow: var(--shadow);
@@ -1225,10 +1295,6 @@ table.grid td.chips .badge { margin: 1px 2px 1px 0; }
 .leaflet-popup-content h4 { margin-bottom: 4px; font-size: 13.5px; }
 .leaflet-bar a { background: var(--surface-1); color: var(--text-primary); border-color: var(--border); }
 .leaflet-bar a:hover { background: var(--surface-2); }
-:root[data-theme="dark"] .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9); }
-@media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9); }
-}
 
 .map-legend {
   background: var(--surface-1);
@@ -5383,6 +5449,12 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
 
   var U = global.U, N = global.Norm;
 
+  /* Great Britain, corner to corner: the Isles of Scilly to the far north of
+     Scotland. Fitting these bounds rather than setting a zoom means the view
+     is right whatever size the map is on the day, which a fixed zoom is not. */
+  var GB_BOUNDS = [[49.85, -8.30], [58.80, 1.90]];
+  var BIRMINGHAM = [52.4862, -1.8904];
+
   var map = null;
   var layer = null;
   var legendCtl = null;
@@ -5394,11 +5466,14 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
      against the live theme before handing them over. */
   var varCache = {};
   function cssVar(name) {
-    var key = name + '|' + (document.documentElement.getAttribute('data-theme') || 'auto');
-    if (varCache[key]) return varCache[key];
-    var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    // Read the tokens off the map itself, not the document: the map is held
+    // light whatever the app theme, and the dark ramps would be invisible on
+    // a light ground.
+    var host = (map && map.getContainer && map.getContainer()) || document.documentElement;
+    if (varCache[name]) return varCache[name];
+    var v = getComputedStyle(host).getPropertyValue(name).trim();
     if (!v) v = '#2a78d6';
-    varCache[key] = v;
+    varCache[name] = v;
     return v;
   }
   function resolve(c) {
@@ -5590,13 +5665,28 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
 
     map = global.L.map(host, { scrollWheelZoom: true, zoomControl: true, preferCanvas: false });
     if (savedView) map.setView(savedView.center, savedView.zoom);
-    else map.setView([54.0, -2.4], 6);
+    else fitBritain(map);
 
     global.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
     return map;
+  }
+
+  /* Open on Great Britain rather than the whole world. fitBounds needs a laid
+     out container to measure, so fall back to Birmingham at a sensible zoom
+     when the map is still zero-sized — the fit runs again once it is not. */
+  function fitBritain(m) {
+    try {
+      var size = m.getSize();
+      if (size.x > 40 && size.y > 40) {
+        m.fitBounds(global.L.latLngBounds(GB_BOUNDS), { padding: [8, 8] });
+        return true;
+      }
+    } catch (e) { /* not laid out yet */ }
+    m.setView(BIRMINGHAM, 6);
+    return false;
   }
 
   function render(elId, agg, opts) {
@@ -5625,7 +5715,10 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
     var pts = agg.mappable;
     if (!pts.length) {
       if (legendCtl) { m.removeControl(legendCtl); legendCtl = null; }
-      setTimeout(function () { m.invalidateSize(); }, 60);
+      setTimeout(function () {
+        m.invalidateSize();
+        if (!savedView) fitBritain(m);
+      }, 60);
       return;
     }
 
@@ -5774,7 +5867,7 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
       lastFit = sig;
       try {
         m.fitBounds(global.L.latLngBounds(pts.map(function (s) { return [s.lat, s.lon]; })).pad(0.12));
-      } catch (e) { /* single point or bad coords: leave the default view */ }
+      } catch (e) { fitBritain(m); }
     }
     setTimeout(function () { m.invalidateSize(); }, 60);
   }
@@ -5798,6 +5891,7 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
     render: render,
     invalidate: invalidate,
     reset: reset,
+    fitBritain: function () { if (map) fitBritain(map); },
     COLOUR_MODES: COLOUR_MODES,
     POPULATIONS: POPULATIONS,
     modesFor: modesFor,
@@ -7628,6 +7722,35 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
     return global.CSV.stringify(out, headers);
   }
 
+  /* Freshservice imports one asset type at a time, so a single file holding
+     routers, switches and access points cannot be uploaded at all. Split the
+     rows by the Asset Type they will carry — the mapped Freshservice value,
+     not our internal kind, because that is what the import is keyed on — and
+     sort within each so a file reads by site. */
+  function splitByAssetType(rows, config) {
+    var groups = {};
+    (rows || []).forEach(function (r) {
+      var type = cellValue(r, 'assetType', config) || '(no asset type)';
+      (groups[type] = groups[type] || []).push(r);
+    });
+    return Object.keys(groups).sort().map(function (type) {
+      return {
+        type: type,
+        rows: groups[type].slice().sort(function (a, b) {
+          var sa = (a.siteCode || '') + (a.siteName || ''), sb = (b.siteCode || '') + (b.siteName || '');
+          if (sa !== sb) return sa < sb ? -1 : 1;
+          return String(a.name || '') < String(b.name || '') ? -1 : 1;
+        })
+      };
+    });
+  }
+
+  /* A safe, readable filename fragment for an asset type. */
+  function typeSlug(type) {
+    return String(type || 'asset').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'asset';
+  }
+
   /* A record of what the import claimed, for the change log. */
   function toManifestCsv(rows, config) {
     var headers = ['Device name', 'Type', 'Serial', 'Platform', 'Site code', 'Site',
@@ -7661,6 +7784,8 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
     missingRequired: missingRequired,
     header: header,
     toImportCsv: toImportCsv,
+    splitByAssetType: splitByAssetType,
+    typeSlug: typeSlug,
     toManifestCsv: toManifestCsv
   };
 })(window);
@@ -7767,6 +7892,7 @@ window.SampleData = {
     viewId: 'attention',
     mapMode: global.Store.get('mapMode', 'count'),
     mapPopulation: global.Store.get('mapPopulation', 'pc'),
+    mapExpanded: false,
     siteFilter: null,
     issueFilter: null,
     includeOtherOnMap: false,
@@ -7905,7 +8031,9 @@ window.SampleData = {
         }
       });
       recompute();
-      if (state.tab === 'data') render();
+      // Always redraw: the counts, the tab states and the sidebar all change,
+      // whichever tab happens to be showing.
+      render();
       if (state.tab === 'data') {
         /* Only leave the Data tab when a population has just become complete.
            Jumping away after the first FortiManager export also took the drop
@@ -8343,7 +8471,7 @@ window.SampleData = {
       title: open ? 'Hide ' + title : 'Show ' + title,
       onclick: function () { toggleSection(key); }
     }, [
-      U.el('span', { class: 'caret' }, open ? '▾' : '▸'),
+      U.el('span', { class: 'caret' }, caretIcon()),
       U.el('span', {}, title)
     ]));
     head.appendChild(U.el('div', { class: 'spacer' }));
@@ -8358,6 +8486,22 @@ window.SampleData = {
     var bodyEl = U.el('div', { class: 'side-body' });
     sec.appendChild(bodyEl);
     return { el: sec, body: open ? bodyEl : null, open: open };
+  }
+
+  /* One chevron, rotated by CSS when the section is closed. */
+  function caretIcon() {
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 12 12');
+    svg.setAttribute('aria-hidden', 'true');
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M2 4.5 L6 8.5 L10 4.5');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', 'currentColor');
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(path);
+    return svg;
   }
 
   function favKey(ctxKey, viewId) { return ctxKey + ':' + viewId; }
@@ -9958,20 +10102,48 @@ window.SampleData = {
           blanks.map(function (b) { return b.label + ' on ' + U.num(b.rows) + ' rows'; }).join('; ')));
       }
       if (canExport) {
-        status.appendChild(note('ok', 'Ready to export',
-          'Every required column has a value on every row.'));
+        var parts = NX.splitByAssetType(rows, cfg);
+        status.appendChild(note('ok',
+          'Ready \u2014 ' + parts.length + ' file' + (parts.length === 1 ? '' : 's'),
+          'Freshservice imports one asset type at a time, so this is written as ' +
+          (parts.length === 1 ? 'a single file' : 'one file per type') + ': ' +
+          parts.map(function (g) { return g.type + ' (' + U.num(g.rows.length) + ')'; }).join(', ') + '.'));
+
+        // A button per type as well as the lot, because a browser asked for
+        // several downloads at once will often prompt about it.
+        if (parts.length > 1) {
+          var each = U.el('div', { class: 'row tight', style: { margin: '0 0 10px' } });
+          each.appendChild(U.el('span', { class: 'hint' }, 'Or one at a time:'));
+          parts.forEach(function (g) {
+            each.appendChild(U.el('button', {
+              class: 'btn sm',
+              onclick: function () { downloadPart(g); }
+            }, g.type + ' (' + U.num(g.rows.length) + ')'));
+          });
+          status.appendChild(each);
+        }
       }
 
       // First few lines exactly as they will be written.
       if (rows.length) {
-        var csv = NX.toImportCsv(rows.slice(0, 4), cfg);
-        preview.appendChild(U.el('div', { class: 'side-head' }, 'First rows, as they will be written'));
+        var firstPart = NX.splitByAssetType(rows, cfg)[0];
+        var csv = NX.toImportCsv(firstPart.rows.slice(0, 4), cfg);
+        preview.appendChild(U.el('div', { class: 'side-head' },
+          'First rows of the ' + firstPart.type + ' file, as they will be written'));
         preview.appendChild(U.el('pre', {
           style: {
             overflowX: 'auto', fontSize: '11px', background: 'var(--surface-2)',
             padding: '8px', border: '1px solid var(--grid)', maxHeight: '150px'
           }
         }, csv));
+      }
+    }
+
+    function downloadPart(g, quiet) {
+      U.download('freshservice-network-import-' + NX.typeSlug(g.type) + '-' + U.todayStamp() + '.csv',
+        NX.toImportCsv(g.rows, cfg));
+      if (!quiet) {
+        U.toast(U.num(g.rows.length) + ' ' + g.type + ' row' + (g.rows.length === 1 ? '' : 's') + ' written.', 'ok');
       }
     }
 
@@ -9995,15 +10167,18 @@ window.SampleData = {
         if (!rows.length) { U.toast('Nothing to export.', 'err'); return; }
         U.download('network-import-manifest-' + U.todayStamp() + '.csv', NX.toManifestCsv(rows, cfg));
       } },
-      { label: 'Download import file', primary: true, keepOpen: true, action: function () {
+      { label: 'Download import files', primary: true, keepOpen: true, action: function () {
         if (!canExport) {
-          U.toast('Fill in the highlighted mappings first — an import missing Product or Asset Type ' +
+          U.toast('Fill in the highlighted mappings first \u2014 an import missing Product or Asset Type ' +
                   'is rejected by Freshservice.', 'err', 9000);
           return;
         }
         persistNetConfig();
-        U.download('freshservice-network-import-' + U.todayStamp() + '.csv', NX.toImportCsv(rows, cfg));
-        U.toast('Import file written for ' + U.num(rows.length) + ' devices.', 'ok');
+        var parts = NX.splitByAssetType(rows, cfg);
+        // Spaced out: a burst of downloads is what browsers block as one.
+        parts.forEach(function (g, i) { setTimeout(function () { downloadPart(g, true); }, i * 400); });
+        U.toast(parts.length + ' import file' + (parts.length === 1 ? '' : 's') + ' written for ' +
+          U.num(rows.length) + ' devices \u2014 one per asset type.', 'ok', 8000);
       } }
     ]);
   }
@@ -10351,7 +10526,16 @@ window.SampleData = {
       return;
     }
 
-    main.appendChild(U.el('div', { id: 'map', class: 'card', style: { padding: '0', overflow: 'hidden' } }));
+    /* The map sits in a shell so the expand control can float over it, and so
+       expanding is one class rather than a second layout. */
+    var shell = U.el('div', { class: 'map-shell' + (state.mapExpanded ? ' expanded' : '') });
+    shell.appendChild(U.el('div', { id: 'map', class: 'card', style: { padding: '0', overflow: 'hidden' } }));
+    shell.appendChild(U.el('button', {
+      class: 'btn sm map-expand',
+      title: state.mapExpanded ? 'Back to the page (Esc)' : 'Fill the window',
+      onclick: function () { toggleMapExpanded(); }
+    }, state.mapExpanded ? '\u2715  Close' : '\u2921  Expand'));
+    main.appendChild(shell);
 
     var stats = U.el('div', { class: 'tiles', style: { marginTop: '16px' } }, [
       C.tile('Sites on the map', agg.mappable.length),
@@ -10392,6 +10576,14 @@ window.SampleData = {
     }
 
     requestAnimationFrame(function () { drawMap(agg); });
+  }
+
+  /* Expanding is a class on the shell, so Leaflet keeps its layers and its
+     pan — it only has to be told the container changed size. */
+  function toggleMapExpanded() {
+    state.mapExpanded = !state.mapExpanded;
+    render();
+    global.EstateMap.invalidate();
   }
 
   function drawMap(agg) {
@@ -11701,6 +11893,13 @@ window.SampleData = {
   /* ==================================================================== */
 
   function init() {
+    // Escape is the way out of anything full-screen; the modals already use it.
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && state.mapExpanded && !U.qs('.modal-back')) {
+        toggleMapExpanded();
+      }
+    });
+
     // The network table shows the name you gave each FortiManager export
     // rather than its file name.
     NV.setEnvLabeller(envLabel);

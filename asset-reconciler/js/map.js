@@ -11,6 +11,12 @@
 
   var U = global.U, N = global.Norm;
 
+  /* Great Britain, corner to corner: the Isles of Scilly to the far north of
+     Scotland. Fitting these bounds rather than setting a zoom means the view
+     is right whatever size the map is on the day, which a fixed zoom is not. */
+  var GB_BOUNDS = [[49.85, -8.30], [58.80, 1.90]];
+  var BIRMINGHAM = [52.4862, -1.8904];
+
   var map = null;
   var layer = null;
   var legendCtl = null;
@@ -22,11 +28,14 @@
      against the live theme before handing them over. */
   var varCache = {};
   function cssVar(name) {
-    var key = name + '|' + (document.documentElement.getAttribute('data-theme') || 'auto');
-    if (varCache[key]) return varCache[key];
-    var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    // Read the tokens off the map itself, not the document: the map is held
+    // light whatever the app theme, and the dark ramps would be invisible on
+    // a light ground.
+    var host = (map && map.getContainer && map.getContainer()) || document.documentElement;
+    if (varCache[name]) return varCache[name];
+    var v = getComputedStyle(host).getPropertyValue(name).trim();
     if (!v) v = '#2a78d6';
-    varCache[key] = v;
+    varCache[name] = v;
     return v;
   }
   function resolve(c) {
@@ -218,13 +227,28 @@
 
     map = global.L.map(host, { scrollWheelZoom: true, zoomControl: true, preferCanvas: false });
     if (savedView) map.setView(savedView.center, savedView.zoom);
-    else map.setView([54.0, -2.4], 6);
+    else fitBritain(map);
 
     global.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
     return map;
+  }
+
+  /* Open on Great Britain rather than the whole world. fitBounds needs a laid
+     out container to measure, so fall back to Birmingham at a sensible zoom
+     when the map is still zero-sized — the fit runs again once it is not. */
+  function fitBritain(m) {
+    try {
+      var size = m.getSize();
+      if (size.x > 40 && size.y > 40) {
+        m.fitBounds(global.L.latLngBounds(GB_BOUNDS), { padding: [8, 8] });
+        return true;
+      }
+    } catch (e) { /* not laid out yet */ }
+    m.setView(BIRMINGHAM, 6);
+    return false;
   }
 
   function render(elId, agg, opts) {
@@ -253,7 +277,10 @@
     var pts = agg.mappable;
     if (!pts.length) {
       if (legendCtl) { m.removeControl(legendCtl); legendCtl = null; }
-      setTimeout(function () { m.invalidateSize(); }, 60);
+      setTimeout(function () {
+        m.invalidateSize();
+        if (!savedView) fitBritain(m);
+      }, 60);
       return;
     }
 
@@ -402,7 +429,7 @@
       lastFit = sig;
       try {
         m.fitBounds(global.L.latLngBounds(pts.map(function (s) { return [s.lat, s.lon]; })).pad(0.12));
-      } catch (e) { /* single point or bad coords: leave the default view */ }
+      } catch (e) { fitBritain(m); }
     }
     setTimeout(function () { m.invalidateSize(); }, 60);
   }
@@ -426,6 +453,7 @@
     render: render,
     invalidate: invalidate,
     reset: reset,
+    fitBritain: function () { if (map) fitBritain(map); },
     COLOUR_MODES: COLOUR_MODES,
     POPULATIONS: POPULATIONS,
     modesFor: modesFor,

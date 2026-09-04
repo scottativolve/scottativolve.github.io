@@ -276,13 +276,28 @@ a  { color: var(--accent); }
 /* Collapsible sections. The header is a button so the whole label is a
    target, not just the arrow. */
 .side-toggle {
-  display: flex; align-items: center; gap: 5px;
-  border: 0; background: none; padding: 0; cursor: pointer;
+  display: flex; align-items: center; gap: 7px;
+  border: 0; background: none; padding: 2px 4px; margin-left: -4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
   font: inherit; letter-spacing: inherit; text-transform: inherit;
   color: inherit;
 }
-.side-toggle:hover { color: var(--text-secondary); }
-.side-toggle .caret { font-size: 9px; width: 9px; line-height: 1; }
+.side-toggle:hover { color: var(--text-primary); background: var(--surface-2); }
+
+/* A chevron drawn rather than typed: the text arrow rendered at about nine
+   pixels and was easy to miss entirely. This is a real target you can see. */
+.side-toggle .caret {
+  width: 18px; height: 18px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  transition: transform 0.12s ease;
+}
+.side-toggle .caret svg { width: 11px; height: 11px; display: block; }
+.side-toggle[aria-expanded="false"] .caret { transform: rotate(-90deg); }
+.side-toggle:hover .caret { background: var(--accent); color: var(--accent-ink); }
 .side-section.closed { margin-bottom: 8px; }
 
 /* A star has to be readable without hovering, or you cannot see which views
@@ -537,8 +552,63 @@ table.grid td.chips .badge { margin: 1px 2px 1px 0; }
 
 /* ------------------------------------------------------------ map + viz */
 
-#map { height: 560px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface-2); }
-.leaflet-container { font: inherit; background: var(--surface-2); }
+/* The map fills what the window gives it rather than sitting in a fixed
+   letterbox at the top of the page, with a floor so it stays usable on a
+   laptop and a ceiling so a tall monitor does not push the figures below it
+   out of reach. */
+.map-shell { position: relative; }
+#map {
+  height: clamp(440px, calc(100vh - 330px), 1000px);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: #eef0ec;
+}
+
+/* Expanded: the map takes the window. */
+.map-shell.expanded {
+  position: fixed; inset: 0; z-index: 850;
+  padding: 0; margin: 0;
+}
+.map-shell.expanded #map { height: 100%; border-radius: 0; border: 0; }
+.map-expand {
+  position: absolute; top: 10px; right: 10px; z-index: 700;
+  box-shadow: var(--shadow);
+}
+
+/* The map is held light whatever the app theme.
+
+   Inverting the tiles for dark mode turned motorways white and water black,
+   which made the geography harder to read rather than easier, and the dark
+   sequential ramps are tuned for a dark ground they no longer sit on. So the
+   light tokens are re-declared here: both the stylesheet below and the colours
+   map.js resolves off this element then come out light. */
+#map {
+  color-scheme: light;
+  --surface-1:      #fcfcfb;
+  --surface-2:      #f2f1ed;
+  --surface-3:      #e8e7e1;
+  --text-primary:   #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted:     #898781;
+  --grid:           #e1e0d9;
+  --border:         rgba(11, 11, 11, 0.10);
+  --border-strong:  rgba(11, 11, 11, 0.20);
+  --series-1:       #2a78d6;
+  --seq-100:        #cde2fb;
+  --seq-250:        #86b6ef;
+  --seq-400:        #3987e5;
+  --seq-550:        #1c5cab;
+  --seq-700:        #0d366b;
+  --div-neg-strong: #1c5cab;
+  --div-neg:        #86b6ef;
+  --div-mid:        #f0efec;
+  --div-pos:        #ec8f8f;
+  --div-pos-strong: #e34948;
+  --accent:         #2a78d6;
+  --accent-ink:     #ffffff;
+  color: var(--text-primary);
+}
+.leaflet-container { font: inherit; background: #eef0ec; }
 .leaflet-popup-content-wrapper, .leaflet-popup-tip {
   background: var(--surface-1); color: var(--text-primary);
   box-shadow: var(--shadow);
@@ -547,10 +617,6 @@ table.grid td.chips .badge { margin: 1px 2px 1px 0; }
 .leaflet-popup-content h4 { margin-bottom: 4px; font-size: 13.5px; }
 .leaflet-bar a { background: var(--surface-1); color: var(--text-primary); border-color: var(--border); }
 .leaflet-bar a:hover { background: var(--surface-2); }
-:root[data-theme="dark"] .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9); }
-@media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9); }
-}
 
 .map-legend {
   background: var(--surface-1);

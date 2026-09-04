@@ -244,6 +244,35 @@
     return global.CSV.stringify(out, headers);
   }
 
+  /* Freshservice imports one asset type at a time, so a single file holding
+     routers, switches and access points cannot be uploaded at all. Split the
+     rows by the Asset Type they will carry — the mapped Freshservice value,
+     not our internal kind, because that is what the import is keyed on — and
+     sort within each so a file reads by site. */
+  function splitByAssetType(rows, config) {
+    var groups = {};
+    (rows || []).forEach(function (r) {
+      var type = cellValue(r, 'assetType', config) || '(no asset type)';
+      (groups[type] = groups[type] || []).push(r);
+    });
+    return Object.keys(groups).sort().map(function (type) {
+      return {
+        type: type,
+        rows: groups[type].slice().sort(function (a, b) {
+          var sa = (a.siteCode || '') + (a.siteName || ''), sb = (b.siteCode || '') + (b.siteName || '');
+          if (sa !== sb) return sa < sb ? -1 : 1;
+          return String(a.name || '') < String(b.name || '') ? -1 : 1;
+        })
+      };
+    });
+  }
+
+  /* A safe, readable filename fragment for an asset type. */
+  function typeSlug(type) {
+    return String(type || 'asset').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'asset';
+  }
+
   /* A record of what the import claimed, for the change log. */
   function toManifestCsv(rows, config) {
     var headers = ['Device name', 'Type', 'Serial', 'Platform', 'Site code', 'Site',
@@ -277,6 +306,8 @@
     missingRequired: missingRequired,
     header: header,
     toImportCsv: toImportCsv,
+    splitByAssetType: splitByAssetType,
+    typeSlug: typeSlug,
     toManifestCsv: toManifestCsv
   };
 })(window);
