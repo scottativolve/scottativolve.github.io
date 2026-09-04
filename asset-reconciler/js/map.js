@@ -11,11 +11,18 @@
 
   var U = global.U, N = global.Norm;
 
-  /* Great Britain, corner to corner: the Isles of Scilly to the far north of
-     Scotland. Fitting these bounds rather than setting a zoom means the view
-     is right whatever size the map is on the day, which a fixed zoom is not. */
-  var GB_BOUNDS = [[49.85, -8.30], [58.80, 1.90]];
+  /* Where the estate actually is: England and Wales, corner to corner — the
+     Isles of Scilly to the Northumberland coast, Pembrokeshire to Kent.
+     Fitting these bounds rather than setting a zoom means the framing is right
+     whatever size the map is on the day, which a fixed zoom is not. */
+  var HOME_BOUNDS = [[49.85, -5.80], [55.90, 1.85]];
   var BIRMINGHAM = [52.4862, -1.8904];
+
+  /* How far out the map will let you go. Generous enough that a site geocoded
+     slightly wrong is still reachable, tight enough that you cannot end up
+     looking at the Pacific and wondering where the dots went. */
+  var MAX_BOUNDS = [[48.0, -12.0], [61.5, 4.0]];
+  var MIN_ZOOM = 5;
 
   var map = null;
   var layer = null;
@@ -225,29 +232,44 @@
       map = null; layer = null; legendCtl = null;
     }
 
-    map = global.L.map(host, { scrollWheelZoom: true, zoomControl: true, preferCanvas: false });
+    map = global.L.map(host, {
+      scrollWheelZoom: true, zoomControl: true, preferCanvas: false,
+      minZoom: MIN_ZOOM,
+      maxBounds: global.L.latLngBounds(MAX_BOUNDS),
+      // Soft rather than hard: a drag past the edge springs back instead of
+      // stopping dead, which feels broken.
+      maxBoundsViscosity: 0.7
+    });
     if (savedView) map.setView(savedView.center, savedView.zoom);
-    else fitBritain(map);
+    else fitHome(map);
 
     global.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
+      minZoom: MIN_ZOOM,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
     return map;
   }
 
-  /* Open on Great Britain rather than the whole world. fitBounds needs a laid
-     out container to measure, so fall back to Birmingham at a sensible zoom
-     when the map is still zero-sized — the fit runs again once it is not. */
-  function fitBritain(m) {
+  /* Is the container laid out enough for fitBounds to measure it?
+
+     This matters more than it looks: fitBounds on a zero-sized container
+     computes a zoom of 0 and shows the whole world, which is exactly how the
+     map ended up global despite every fit being aimed at England. */
+  function measurable(m) {
     try {
       var size = m.getSize();
-      if (size.x > 40 && size.y > 40) {
-        m.fitBounds(global.L.latLngBounds(GB_BOUNDS), { padding: [8, 8] });
-        return true;
-      }
-    } catch (e) { /* not laid out yet */ }
-    m.setView(BIRMINGHAM, 6);
+      return size.x > 40 && size.y > 40;
+    } catch (e) { return false; }
+  }
+
+  /* Open on England and Wales rather than the whole world. */
+  function fitHome(m) {
+    if (measurable(m)) {
+      m.fitBounds(global.L.latLngBounds(HOME_BOUNDS), { padding: [8, 8] });
+      return true;
+    }
+    m.setView(BIRMINGHAM, 7);
     return false;
   }
 
@@ -279,7 +301,7 @@
       if (legendCtl) { m.removeControl(legendCtl); legendCtl = null; }
       setTimeout(function () {
         m.invalidateSize();
-        if (!savedView) fitBritain(m);
+        if (!savedView) fitHome(m);
       }, 60);
       return;
     }
@@ -423,13 +445,28 @@
     // Fit once per distinct set of points, so re-colouring doesn't yank the view.
     // A map rebuilt from scratch with no remembered view needs the fit too.
     var sig = pts.length + ':' + pts.map(function (s) { return s.key; }).join(',');
-    if (sig !== lastFit || !savedView) {
-      lastFit = sig;
+    var wantFit = sig !== lastFit || !savedView;
+    if (wantFit) lastFit = sig;
+
+    /* The fit has to happen after the container has a size. Leaflet renders
+       the Map tab before the browser has laid it out, and fitBounds on a
+       zero-sized container resolves to zoom 0 — the whole world, which is what
+       this map kept opening on however carefully the bounds were chosen. So
+       measure first, tell Leaflet the size, and only then fit. */
+    function settle() {
+      m.invalidateSize();
+      if (!wantFit) return;
+      if (!measurable(m)) return false;
       try {
         m.fitBounds(global.L.latLngBounds(pts.map(function (s) { return [s.lat, s.lon]; })).pad(0.12));
-      } catch (e) { fitBritain(m); }
+      } catch (e) { fitHome(m); }
+      return true;
     }
-    setTimeout(function () { m.invalidateSize(); }, 60);
+    if (settle() === false) {
+      // Still not laid out: show home rather than the world, and try again.
+      fitHome(m);
+      setTimeout(settle, 120);
+    }
   }
 
   function invalidate() {
@@ -451,7 +488,7 @@
     render: render,
     invalidate: invalidate,
     reset: reset,
-    fitBritain: function () { if (map) fitBritain(map); },
+    fitHome: function () { if (map) fitHome(map); },
     COLOUR_MODES: COLOUR_MODES,
     POPULATIONS: POPULATIONS,
     modesFor: modesFor,

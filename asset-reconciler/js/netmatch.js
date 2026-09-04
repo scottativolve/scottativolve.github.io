@@ -230,6 +230,18 @@
     sites = sites || {};
     var forti = fortiDevices || [], fs = fsRecords || [];
 
+    /* The same sites, reachable by name. A device with a FortiManager side
+       finds its site through the code in its name; one that only exists in
+       Freshservice — a Ubiquiti access point, say — has only the location the
+       register recorded, and without this it resolved to no site at all. The
+       map then left it off the count while the site filter behind the dot
+       still found it, so a dot said two devices and opened six. */
+    var sitesByName = {};
+    Object.keys(sites).forEach(function (code) {
+      var key = N.locationKey(sites[code].name);
+      if (key && !sitesByName[key]) sitesByName[key] = sites[code];
+    });
+
     // Index both sides on serial, then on name for the rows with no serial.
     var fortiBySerial = groupBy(forti, function (d) { return d.serialKey; });
     var fortiByName = groupBy(forti, function (d) { return N.deviceName(d.name); });
@@ -254,7 +266,7 @@
         if (matches.length) matchedBy = 'name';
       }
       matches.forEach(function (a) { seenFs[a._row] = true; });
-      rows.push(build(++id, group, matches, matchedBy, sites));
+      rows.push(build(++id, group, matches, matchedBy, sitesByName));
     });
 
     fs.forEach(function (a) {
@@ -263,7 +275,7 @@
       var group = key ? (fsBySerial[key] || [a]) : [a];
       if (key && group[0] !== a) return;
       if (!key && (fsByName[N.deviceName(a.name)] || [])[0] !== a) return;
-      rows.push(build(++id, [], group, '', sites));
+      rows.push(build(++id, [], group, '', sitesByName));
     });
 
     return {
@@ -278,7 +290,7 @@
     };
   }
 
-  function build(id, fortiGroup, fsGroup, matchedBy, sites) {
+  function build(id, fortiGroup, fsGroup, matchedBy, sitesByName) {
     var d = fortiGroup[0] || null;
     var a = fsGroup[0] || null;
     var envs = distinct(fortiGroup.map(function (x) { return x.env; }).filter(Boolean));
@@ -308,6 +320,7 @@
       siteName: d ? d.siteName : '',
       siteSource: d ? d.siteSource : '',
       site: d ? d.site : null,
+      // filled in below for a row with no FortiManager side
 
       firmware: d ? d.firmwareVersion : '',
       firmwareText: d ? d.firmwareText : '',
@@ -335,6 +348,18 @@
       lastAudit: a ? U.parseDate(a.lastAudit) : null
     };
     row.status = d && a ? 'matched' : (d ? 'forti-only' : 'fs-only');
+
+    /* No FortiManager side means no site code to resolve from, so fall back to
+       matching the Freshservice location against the site list by name. */
+    if (!d && a) {
+      var found = sitesByName[N.locationKey(a.location)];
+      if (found) {
+        row.site = found;
+        row.siteCode = found.code;
+        row.siteName = found.name;
+        row.siteSource = 'freshservice';
+      }
+    }
     /* The map groups on locationKey and names a site from location, so a
        network row carries both under the names the map already reads. The
        resolved site wins over the Freshservice one: it is the answer this

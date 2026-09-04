@@ -608,10 +608,11 @@ Both populations share the map. **Show** picks what the dots count:
 The selector only appears once both populations are loaded, and switching
 re-fits the view, because the two cover different sets of sites.
 
-The map opens on **Great Britain**, fitted corner to corner rather than set to
-a fixed zoom, so it is framed correctly whatever size the window is. It fills
-the height the window gives it, and **Expand** takes the whole window (Escape
-comes back).
+The map opens on **England and Wales**, fitted corner to corner rather than set
+to a fixed zoom, so it is framed correctly whatever size the window is. It will
+not zoom out past the British Isles — there is nothing out there to see. It
+fills the height the window gives it, and **Expand** takes the whole window
+(Escape comes back).
 
 It is also **always light, whatever theme the rest of the tool is in**.
 Inverting the tiles for dark mode turned motorways white and water black, which
@@ -738,6 +739,9 @@ first-class network assets here:
   *Access points* view alongside the FortiAPs.
 - **Vendor** and **Platform / product** come from the Freshservice record, so
   the real make and model are what you see.
+- They are placed on the **map** like anything else: a device that exists only
+  in Freshservice takes its site from the location on the record, matched
+  against the site list by name.
 - **Forti family** is a separate column, holding FortiManager's own word for
   the product line, and is blank for anything it does not manage.
 
