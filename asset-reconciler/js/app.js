@@ -66,6 +66,16 @@
     NX.LOOKUPS.forEach(function (l) {
       out[l.id] = Object.assign({}, saved[l.id] || {});
     });
+    /* The device-type keys used to be Fortinet product lines, which was wrong
+       for the Ubiquiti and other kit in the register. Carry a mapping saved
+       under the old key across to the new one rather than making anyone type
+       it again. */
+    var RENAMED = { FortiGate: 'Firewall', FortiSwitch: 'Switch', FortiAP: 'Access point' };
+    Object.keys(RENAMED).forEach(function (was) {
+      var now = RENAMED[was];
+      if (out.assetTypes[was] && !out.assetTypes[now]) out.assetTypes[now] = out.assetTypes[was];
+      delete out.assetTypes[was];
+    });
     return out;
   }
 
@@ -2580,6 +2590,7 @@
       ['Device name', f ? f.name : '', a ? a.name : ''],
       ['Serial number', f ? f.serial : '', a ? a.serial : ''],
       ['Type', row.kind, a ? a.assetType : ''],
+      ['Vendor', f ? f.vendor : '', a ? a.vendor : ''],
       ['Platform / product', f ? f.platform : '', a ? a.product : ''],
       ['Firmware', f ? f.firmwareText : '', a ? (a.firmwareVersion || a.firmware) : ''],
       ['Location', row.siteName, a ? a.location : ''],

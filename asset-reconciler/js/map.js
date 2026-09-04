@@ -302,15 +302,13 @@
         fillOpacity: 0.78
       });
 
-      /* Plain words in the popup: "2 switches" reads better than the
-         product name, and the naive de-camel-casing turned FortiGate into
-         "Forti Gate". */
+      /* Plain words in the popup, pluralised. */
       var KIND_WORDS = {
-        FortiGate: ['firewall', 'firewalls'],
-        FortiSwitch: ['switch', 'switches'],
-        FortiAP: ['access point', 'access points']
+        Firewall: ['firewall', 'firewalls'],
+        Switch: ['switch', 'switches'],
+        'Access point': ['access point', 'access points']
       };
-      var KIND_ORDER = ['FortiGate', 'FortiSwitch', 'FortiAP'];
+      var KIND_ORDER = ['Firewall', 'Switch', 'Access point'];
       var kindBits = Object.keys(s.kinds).sort(function (a, b) {
         var ia = KIND_ORDER.indexOf(a), ib = KIND_ORDER.indexOf(b);
         return (ia < 0 ? 9 : ia) - (ib < 0 ? 9 : ib) || (a < b ? -1 : 1);

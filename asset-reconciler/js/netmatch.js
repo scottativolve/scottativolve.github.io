@@ -37,7 +37,23 @@
       label: 'Not in FortiManager',
       severity: 'high',
       hint: 'Freshservice holds this device but no FortiManager environment manages it — it may have been replaced or decommissioned.',
-      test: function (r) { return !!r.fs && !r.forti && !r.fsRetired; }
+      test: function (r) {
+        // Kit from a vendor FortiManager does not manage was never going to be
+        // in there, so it is not evidence of a replacement. Reported on its own
+        // below instead, and only when we are sure: a blank vendor still counts
+        // as possibly-Fortinet rather than quietly disappearing from the list.
+        return !!r.fs && !r.forti && !r.fsRetired && !isOtherVendor(r);
+      }
+    },
+    {
+      code: 'other-vendor',
+      label: 'Not a Fortinet device',
+      severity: 'low',
+      hint: 'On a Freshservice record, made by someone FortiManager does not manage — a Ubiquiti access point, say. Nothing is wrong with it; it simply cannot be reconciled against FortiManager.',
+      test: function (r) { return isOtherVendor(r); },
+      detail: function (r) {
+        return N.clean(r.vendor) + (r.platform ? ' \u00b7 ' + r.platform : '');
+      }
     },
     {
       code: 'retired-but-managed',
@@ -283,6 +299,9 @@
       name: d ? d.name : (a ? a.name : ''),
       serial: d ? d.serial : (a ? a.serial : ''),
       kind: d ? d.kind : kindFromFs(a),
+      // FortiManager's own product line, blank for anything it does not manage.
+      family: d ? d.family : '',
+      vendor: vendorOf(d, a),
       platform: d ? d.platform : (a ? a.product : ''),
 
       siteCode: d ? d.siteCode : '',
@@ -325,15 +344,46 @@
     return row;
   }
 
-  /* Freshservice's own asset type, when there is no FortiManager side to
-     take the kind from. */
+  /* What a Freshservice-only record is, when there is no FortiManager side to
+     take the kind from.
+
+     Deliberately vendor-neutral, and it falls back to Freshservice's own words
+     rather than forcing a device into a bucket: the register holds Ubiquiti
+     access points and anything else bought over the years, and labelling those
+     with a Fortinet product line — which this used to do — was simply untrue. */
   function kindFromFs(a) {
     if (!a) return '';
     var t = (a.assetType || a.ciType || '').toLowerCase();
-    if (t.indexOf('access point') >= 0 || t.indexOf('wireless') >= 0) return 'FortiAP';
-    if (t.indexOf('switch') >= 0) return 'FortiSwitch';
-    if (t.indexOf('firewall') >= 0 || t.indexOf('router') >= 0) return 'FortiGate';
-    return a.assetType || '';
+    if (t.indexOf('access point') >= 0 || t.indexOf('wireless') >= 0 || t.indexOf('wifi') >= 0 ||
+        t.indexOf('wi-fi') >= 0) return 'Access point';
+    if (t.indexOf('switch') >= 0) return 'Switch';
+    if (t.indexOf('firewall') >= 0 || t.indexOf('router') >= 0 || t.indexOf('gateway') >= 0) return 'Firewall';
+    return N.clean(a.assetType) || N.clean(a.ciType) || '';
+  }
+
+  /* Who made it. FortiManager only manages Fortinet hardware, so a row with a
+     FortiManager side is Fortinet whatever Freshservice says; otherwise it is
+     whatever the register recorded. */
+  function vendorOf(d, a) {
+    if (d) return d.vendor || 'Fortinet';
+    return a ? N.clean(a.vendor) : '';
+  }
+
+  /* Is this something FortiManager could never have managed?
+
+     Only says yes when there is real evidence — a vendor that is named and is
+     not Fortinet, or a product that is named and is plainly not a Fortinet
+     one. A record with neither filled in stays in the replaced list, because
+     an empty Vendor column is far more likely to mean nobody typed it than to
+     mean the device came from somewhere else. */
+  function isOtherVendor(r) {
+    if (r.forti) return false;                 // FortiManager manages it; settled
+    if (!r.fs) return false;
+    var vendor = N.clean(r.vendor).toLowerCase();
+    if (vendor) return vendor.indexOf('forti') < 0;
+    var product = N.clean(r.platform).toLowerCase();
+    if (!product) return false;
+    return !/forti|fgt|fap|fsw/.test(product);
   }
 
   function groupBy(list, keyFn) {
@@ -390,6 +440,7 @@
     SEVERITY_ORDER: SEVERITY_ORDER,
     settings: settings,
     isEnabled: isEnabled,
+    isOtherVendor: isOtherVendor,
     reconcile: reconcile,
     apply: apply
   };

@@ -727,6 +727,29 @@ it means a column you gain in a later export simply appears.
 A serial found in both environments is flagged rather than merged: expected
 mid-migration, worth a look otherwise.
 
+### Kit that is not Fortinet
+
+The network register holds more than FortiManager manages — Ubiquiti UniFi
+access points, and whatever else has been bought over the years. Those are
+first-class network assets here:
+
+- **Type** is what a device *is* — *Firewall*, *Switch*, *Access point* — not a
+  Fortinet product line, so a UniFi AP is an access point and appears in the
+  *Access points* view alongside the FortiAPs.
+- **Vendor** and **Platform / product** come from the Freshservice record, so
+  the real make and model are what you see.
+- **Forti family** is a separate column, holding FortiManager's own word for
+  the product line, and is blank for anything it does not manage.
+
+They are also kept out of *Possibly replaced*, which would otherwise fill up
+with kit FortiManager was never going to have. **Other vendors** lists them
+instead — which, while UniFi is being replaced, is the list of what is left to
+do. A record with no Vendor and no Product stays in *Possibly replaced*: an
+empty column far more often means nobody filled it in than that the device came
+from somewhere else.
+
+---
+
 ### Which site a device is at
 
 The site comes from the number at the front of the device name, zero-padded to

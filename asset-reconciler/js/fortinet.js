@@ -13,10 +13,21 @@
   /* Section labels FortiManager uses for the two managed-device families.
      Anything else at that depth is a grouping row we do not recognise —
      a Security Fabric group, for instance — and we say so rather than
-     assuming its children are switches. */
-  var SECTIONS = { FSW: 'FortiSwitch', FAP: 'FortiAP' };
+     assuming its children are switches.
 
-  var GATE = 'FortiGate';
+     Each carries two names. family is FortiManager's own word for the product
+     line; kind is what the device *is*, in words that do not name a vendor,
+     because the network population also holds kit no FortiManager has ever
+     seen — Ubiquiti access points, for one — and calling those a FortiAP would
+     be plainly wrong. */
+  var SECTIONS = {
+    FSW: { family: 'FortiSwitch', kind: 'Switch' },
+    FAP: { family: 'FortiAP', kind: 'Access point' }
+  };
+
+  var GATE = { family: 'FortiGate', kind: 'Firewall' };
+
+  var VENDOR = 'Fortinet';
 
   /* ------------------------------------------------------------ firmware */
 
@@ -217,7 +228,8 @@
             var s = ha.serials[i] || { serial: '', role: '' };
             var mem = ha.members[i] || { name: '', role: '', sync: '' };
             out.push(device(rec, {
-              kind: GATE,
+              kind: GATE.kind,
+              family: GATE.family,
               name: mem.name || s.serial || name,
               serial: s.serial,
               env: env,
@@ -228,7 +240,10 @@
             }));
           }
         } else {
-          out.push(device(rec, { kind: GATE, name: name, serial: String(rec.serial || '').trim(), env: env, parent: '' }));
+          out.push(device(rec, {
+            kind: GATE.kind, family: GATE.family, name: name,
+            serial: String(rec.serial || '').trim(), env: env, parent: ''
+          }));
         }
         return;
       }
@@ -248,7 +263,8 @@
       }
 
       out.push(device(rec, {
-        kind: SECTIONS[section] || label(section),
+        kind: (SECTIONS[section] || {}).kind || label(section),
+        family: (SECTIONS[section] || {}).family || label(section),
         name: name,
         serial: String(rec.serial || '').trim(),
         env: env || sectionEnv,
@@ -297,6 +313,8 @@
     var fw = firmware(rec.firmware);
     var d = {
       kind: over.kind,
+      family: over.family || over.kind,
+      vendor: VENDOR,
       name: over.name,
       serial: over.serial,
       serialKey: N.serial(over.serial),
@@ -332,6 +350,8 @@
 
   global.Fortinet = {
     SECTIONS: SECTIONS,
+    GATE: GATE,
+    VENDOR: VENDOR,
     flatten: flatten,
     firmware: firmware,
     sameFirmware: sameFirmware,

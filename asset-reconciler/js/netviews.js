@@ -5,7 +5,7 @@
 
   var U = global.U, N = global.Norm;
 
-  var KIND_ORDER = { FortiGate: 1, FortiSwitch: 2, FortiAP: 3 };
+  var KIND_ORDER = { Firewall: 1, Switch: 2, 'Access point': 3 };
 
   /* Rows carry the export file they came from, which is unique but unreadable.
      The app supplies the name the user gave that environment. */
@@ -29,7 +29,9 @@
         return r.status === 'matched' ? 'both' : (r.status === 'forti-only' ? 'FortiManager only' : 'Freshservice only');
       } },
     { key: 'serial',     label: 'Serial',       width: 150, get: function (r) { return r.serial; } },
-    { key: 'platform',   label: 'Platform',     width: 160, get: function (r) { return r.platform; } },
+    { key: 'platform',   label: 'Platform / product', width: 180, get: function (r) { return r.platform; } },
+    { key: 'vendor',     label: 'Vendor',       width: 110, get: function (r) { return r.vendor; } },
+    { key: 'family',     label: 'Forti family', width: 120, get: function (r) { return r.family; } },
     { key: 'env',        label: 'Environment',  width: 130,
       get: function (r) { return r.envs.map(envLabel).join(', '); } },
 
@@ -91,9 +93,16 @@
       ['missing-from-fs'],
       ['name', 'kind', 'serial', 'platform', 'siteCode', 'siteName', 'env', 'firmware', 'parent']),
     issueView('net-replaced', 'Possibly replaced',
-      'On a Freshservice record but managed by neither FortiManager environment — replaced, decommissioned, or never removed.',
+      'Fortinet kit on a Freshservice record that neither FortiManager environment manages \u2014 replaced, ' +
+      'decommissioned, or never removed. Devices from other vendors are listed separately, since FortiManager ' +
+      'was never going to have them.',
       ['missing-from-forti'],
-      ['fsName', 'kind', 'serial', 'fsProduct', 'fsLocation', 'fsState', 'lastAudit', 'fsTag']),
+      ['fsName', 'kind', 'vendor', 'serial', 'fsProduct', 'fsLocation', 'fsState', 'lastAudit', 'fsTag']),
+    issueView('net-other-vendor', 'Other vendors',
+      'Network kit in Freshservice that FortiManager does not manage \u2014 Ubiquiti access points and anything ' +
+      'else. Nothing is wrong with these; this is the list of what is still to be replaced.',
+      ['other-vendor'],
+      ['fsName', 'kind', 'vendor', 'fsProduct', 'fsLocation', 'fsState', 'lastAudit', 'fsTag']),
     issueView('net-retired-managed', 'Retired but still managed',
       'Freshservice says retired or disposed; FortiManager is still managing it.',
       ['retired-but-managed'],
@@ -129,25 +138,25 @@
     {
       id: 'net-firewalls',
       name: 'Firewalls',
-      description: 'Every FortiGate, one row per physical unit.',
+      description: 'Every firewall, one row per physical unit \u2014 an HA pair is two.',
       columns: ['name', 'severity', 'status', 'serial', 'platform', 'siteName', 'firmware', 'configStatus', 'ipForti'],
-      filter: { match: 'all', conditions: [{ field: 'kind', op: 'is', value: 'FortiGate' }] },
+      filter: { match: 'all', conditions: [{ field: 'kind', op: 'is', value: 'Firewall' }] },
       sort: { key: 'siteCode', dir: 'asc' }
     },
     {
       id: 'net-switches',
       name: 'Switches',
-      description: 'Every FortiSwitch, with the firewall it sits under.',
+      description: 'Every switch, with the firewall it sits under.',
       columns: ['name', 'severity', 'status', 'serial', 'platform', 'siteName', 'parent', 'firmware'],
-      filter: { match: 'all', conditions: [{ field: 'kind', op: 'is', value: 'FortiSwitch' }] },
+      filter: { match: 'all', conditions: [{ field: 'kind', op: 'is', value: 'Switch' }] },
       sort: { key: 'siteCode', dir: 'asc' }
     },
     {
       id: 'net-aps',
       name: 'Access points',
-      description: 'Every FortiAP, with the firewall it sits under.',
-      columns: ['name', 'severity', 'status', 'serial', 'platform', 'siteName', 'parent', 'firmware'],
-      filter: { match: 'all', conditions: [{ field: 'kind', op: 'is', value: 'FortiAP' }] },
+      description: 'Every access point, whoever made it, with the firewall it sits under.',
+      columns: ['name', 'severity', 'status', 'vendor', 'serial', 'platform', 'siteName', 'parent', 'firmware'],
+      filter: { match: 'all', conditions: [{ field: 'kind', op: 'is', value: 'Access point' }] },
       sort: { key: 'siteCode', dir: 'asc' }
     },
     {
