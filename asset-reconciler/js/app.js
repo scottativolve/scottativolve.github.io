@@ -1001,12 +1001,12 @@
       lineOf.set(r, perFile[e]);
     });
 
-    var body = U.el('div', { class: 'body' });
+    var body = U.el('div', { class: 'body fill' });
 
-    var info = U.el('div', { class: 'hint', style: { marginBottom: '8px' } });
+    var info = U.el('div', { class: 'hint', style: { marginBottom: '8px', flex: 'none' } });
     body.appendChild(info);
 
-    var controls = U.el('div', { class: 'row', style: { marginBottom: '10px' } });
+    var controls = U.el('div', { class: 'row', style: { marginBottom: '10px', flex: 'none' } });
     controls.appendChild(U.el('input', {
       type: 'search', placeholder: 'Search every column\u2026', style: { minWidth: '220px' },
       oninput: U.debounce(function (e) { query = e.target.value; page = 0; draw(); }, 180)
@@ -1033,9 +1033,9 @@
     }, 'Export what I am looking at'));
     body.appendChild(controls);
 
-    var tableHost = U.el('div');
+    var tableHost = U.el('div', { class: 'grow' });
     body.appendChild(tableHost);
-    var pager = U.el('div', { class: 'row', style: { marginTop: '10px' } });
+    var pager = U.el('div', { class: 'row', style: { marginTop: '10px', flex: 'none' } });
     body.appendChild(pager);
 
     /* The synthetic indent key is ours, not the file's, so it never appears
@@ -1077,8 +1077,8 @@
       if (!rows.length) {
         tableHost.appendChild(U.el('div', { class: 'empty' }, 'Nothing in this file matches that.'));
       } else {
-        var wrap = U.el('div', { class: 'table-wrap', style: { maxHeight: '52vh' } });
-        var table = U.el('table', { class: 'grid' });
+        var wrap = U.el('div', { class: 'table-wrap' });
+        var table = U.el('table', { class: 'grid raw' });
         var htr = U.el('tr');
         htr.appendChild(U.el('th', {
           class: 'nosort', style: { width: '52px' },

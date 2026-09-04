@@ -247,8 +247,10 @@ exactly as it was parsed — every column under its own heading, with the field
 it feeds named underneath, before any mapping is applied. It is the answer to
 "is that really what the export said?".
 
-It is searchable across every column, paged, and can export just what you are
-looking at. Two details worth knowing:
+It opens centred and sized to your window, with one row per line and the table
+scrolling sideways for as many columns as the file has. It is searchable across
+every column, paged, and can export just what you are looking at. Two details
+worth knowing:
 
 - FortiManager's **tree indentation is shown**, so the firewall / `FSW` / switch
   structure is visible in the raw rows as well as in the reconciliation.

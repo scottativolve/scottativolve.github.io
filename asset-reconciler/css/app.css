@@ -667,6 +667,14 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
   display: grid; place-items: center;
   z-index: 500;
   padding: 20px;
+  /* Without an explicit track the grid column sizes to its content, and the
+     file viewer's table is as wide as the file has columns — 3255px for a
+     FortiManager export. The dialog's own width: 100% then resolved against
+     that track rather than the window, and centring a 1500px box in a 3255px
+     track put its left edge at x=917: off the right of the screen, with no way
+     to reach it. minmax(0, 1fr) pins both tracks to the window. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 .modal {
   background: var(--surface-1);
@@ -674,7 +682,11 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
   border-radius: var(--radius);
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.28);
   width: min(860px, 100%);
-  max-height: 88vh;
+  /* A grid item will not shrink below its content's intrinsic width unless it
+     is told it may. */
+  min-width: 0;
+  max-width: 100%;
+  max-height: 100%;
   display: flex; flex-direction: column;
 }
 .modal > header {
@@ -682,9 +694,22 @@ svg.chart .hit:hover + .bar, svg.chart .bar.hot { opacity: 0.82; }
   padding: 14px 18px;
   border-bottom: 1px solid var(--border);
 }
-.modal > .body { padding: 18px; overflow: auto; }
+.modal > .body { padding: 18px; overflow: auto; min-width: 0; }
 /* A raw file has as many columns as the file has; give it the window. */
-.modal.wide { width: min(1500px, 100%); }
+.modal.wide { width: min(1600px, 100%); height: min(900px, 100%); }
+
+/* The file viewer fills the dialog and scrolls its table inside it, rather
+   than the dialog growing to fit a table that is never going to fit. */
+.modal > .body.fill { display: flex; flex-direction: column; min-height: 0; }
+.modal > .body.fill > .grow { flex: 1 1 auto; min-height: 0; display: flex; }
+.modal > .body.fill > .grow .table-wrap { flex: 1 1 auto; max-height: none; min-width: 0; }
+
+/* A raw file reads as a grid of values, so every column is as wide as its
+   own content and the table scrolls sideways. Letting the browser share the
+   width out instead wrapped "01-Alexandra-House-SW-01" over four lines. */
+table.grid.raw { table-layout: auto; }
+table.grid.raw th, table.grid.raw td { white-space: nowrap; }
+table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis; }
 .modal > footer {
   display: flex; align-items: center; gap: 8px;
   padding: 12px 18px;
