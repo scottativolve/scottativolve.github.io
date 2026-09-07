@@ -13,6 +13,12 @@
       short: 'FS',
       hint: 'Assets export (Assets → Export → CSV)',
       signature: ['asset tag', 'used by', 'asset state', 'asset type', 'display name', 'last audit date', 'display id', 'usage type'],
+      /* A PC export never carries a Printer Type column, and without ruling it
+         out the printer export scored 21.6 here against 22.0 as a printer —
+         too close for the tool to place, so it asked every time. Only that one
+         column is safe to rely on: Ports and Firmware Version can plausibly
+         appear on a fuller CMDB export of any asset type. */
+      anti: ['printer type'],
       fields: [
         { key: 'name',         label: 'Device name',      required: true,  aliases: ['display name', 'name', 'asset name', 'device name', 'hostname', 'host name', 'computer name', 'machine name'] },
         { key: 'assetTag',     label: 'Asset tag',        aliases: ['asset tag', 'asset id', 'tag', 'asset code'] },
@@ -131,7 +137,8 @@
       hint: 'Network assets export (routers, switches, access points)',
       signature: ['physical subtype', 'virtual subtype', 'availability zone', 'ports',
                   'subnet mask', 'discovery enabled', 'book value'],
-      anti: ['last login by', 'used by email', 'operating system', 'compliance', 'jailbroken', 'config status'],
+      anti: ['last login by', 'used by email', 'operating system', 'compliance', 'jailbroken',
+             'config status', 'printer type'],
       fields: [
         { key: 'name',        label: 'Device name',    required: true, aliases: ['name', 'display name', 'device name', 'hostname', 'asset name'] },
         { key: 'serial',      label: 'Serial number',  aliases: ['serial number', 'serial no', 'serial'] },
@@ -157,6 +164,66 @@
         { key: 'acquired',    label: 'Acquisition date', type: 'date', aliases: ['acquisition date', 'acquired'] },
         { key: 'endOfLife',   label: 'End of life',    aliases: ['end of life', 'eol'] },
         { key: 'description', label: 'Description',    aliases: ['description', 'comments'] }
+      ]
+    },
+
+    onestop: {
+      id: 'onestop',
+      label: 'OneStop printers',
+      short: 'OneStop',
+      hint: 'Printer export from the managed print service (device list with meter reads)',
+      signature: ['cont num', 'site num', 'mono', 'colour', 'nrd', 'pac', 'mon', 'site postcode'],
+      anti: ['asset state', 'workspace', 'compliance', 'primary user upn', 'config status'],
+      fields: [
+        { key: 'serial',     label: 'Serial number',   required: true, aliases: ['serial', 'serial number', 'serial no'] },
+        { key: 'assetTag',   label: 'Asset tag',       aliases: ['asset', 'asset tag', 'asset id', 'tag'] },
+        { key: 'model',      label: 'Model',           aliases: ['model', 'device model', 'product'] },
+        { key: 'contract',   label: 'Contract',        aliases: ['cont num', 'contract number', 'contract'] },
+        { key: 'siteNum',    label: 'Site number',     aliases: ['site num', 'site number', 'site ref'] },
+        { key: 'siteName',   label: 'Site name',       aliases: ['site name', 'site', 'customer site'] },
+        { key: 'location',   label: 'Location in building', aliases: ['location', 'room', 'position', 'placement'] },
+        { key: 'ipAddress',  label: 'IP address',      aliases: ['ip', 'ip address', 'ipv4 address'] },
+        { key: 'mac',        label: 'MAC address',     aliases: ['mac address', 'mac', 'physical address'] },
+        { key: 'lastSeen',   label: 'Last reported',   type: 'date', aliases: ['last updated', 'last seen', 'last contact', 'last report'] },
+        { key: 'mono',       label: 'Mono pages',      type: 'number', aliases: ['mono', 'mono pages', 'black pages', 'bw'] },
+        { key: 'colour',     label: 'Colour pages',    type: 'number', aliases: ['colour', 'color', 'colour pages', 'color pages'] },
+        { key: 'monitored',  label: 'Monitored',       aliases: ['mon', 'monitored'] },
+        { key: 'proactive',  label: 'Proactive consumables', aliases: ['pac', 'proactive consumables', 'proactive'] },
+        { key: 'nrd',        label: 'NRD',             aliases: ['nrd'] },
+        { key: 'postcode',   label: 'Site postcode',   aliases: ['site postcode', 'postcode', 'post code'] }
+      ]
+    },
+
+    fsprinter: {
+      id: 'fsprinter',
+      label: 'Freshservice printers',
+      short: 'FS print',
+      hint: 'Printer assets export',
+      signature: ['printer type', 'physical subtype', 'availability zone', 'discovery enabled',
+                  'book value', 'subnet mask'],
+      anti: ['firmware version', 'ports', 'last login by', 'used by email', 'operating system',
+             'compliance', 'jailbroken', 'config status', 'mono'],
+      fields: [
+        { key: 'name',        label: 'Device name',    required: true, aliases: ['name', 'display name', 'device name', 'asset name'] },
+        { key: 'serial',      label: 'Serial number',  aliases: ['serial number', 'serial no', 'serial'] },
+        { key: 'assetTag',    label: 'Asset tag',      aliases: ['asset tag', 'asset id', 'tag'] },
+        { key: 'assetType',   label: 'Asset type',     aliases: ['asset type', 'asset type name', 'ci type'] },
+        { key: 'printerType', label: 'Printer type',   aliases: ['printer type'] },
+        { key: 'state',       label: 'Asset state',    aliases: ['asset state', 'state', 'asset status'] },
+        { key: 'usageType',   label: 'Usage type',     aliases: ['usage type'] },
+        { key: 'location',    label: 'Location',       aliases: ['location', 'location name', 'site'] },
+        { key: 'department',  label: 'Department',     aliases: ['department', 'department name'] },
+        { key: 'product',     label: 'Product',        aliases: ['product', 'product name', 'model'] },
+        { key: 'vendor',      label: 'Vendor',         aliases: ['vendor', 'manufacturer', 'make'] },
+        { key: 'ipAddress',   label: 'IP address',     aliases: ['ip address', 'ip', 'ipv4 address'] },
+        { key: 'mac',         label: 'MAC address',    aliases: ['mac address', 'mac', 'physical address'] },
+        { key: 'subnetMask',  label: 'Subnet mask',    aliases: ['subnet mask', 'netmask'] },
+        { key: 'impact',      label: 'Impact',         aliases: ['impact'] },
+        { key: 'workspace',   label: 'Workspace',      aliases: ['workspace'] },
+        { key: 'description', label: 'Description',    aliases: ['description', 'comments'] },
+        { key: 'lastAudit',   label: 'Last audit',     type: 'date', aliases: ['last audit date', 'last audit', 'last seen'] },
+        { key: 'createdAt',   label: 'Created',        type: 'date', aliases: ['created at', 'created time', 'created'] },
+        { key: 'updatedAt',   label: 'Updated',        type: 'date', aliases: ['updated at', 'last updated at', 'updated'] }
       ]
     },
 

@@ -12,6 +12,7 @@ It handles **two separate populations**, reconciled independently:
 |---|---|---|
 | **PCs** | Freshservice ↔ Intune ↔ Arctic Wolf | who has it, where is it, is it stale, is it at risk |
 | **Network assets** | FortiManager ↔ Freshservice | what has been added since, what has been replaced, what firmware is recorded |
+| **Printers** | OneStop ↔ Freshservice | which fields are wrong, which are silent, which are worth questioning |
 
 They share the site list, the map, the notes and the duplicate finder, but they
 have their own tabs, views, checks and import builder — a firewall and a laptop
@@ -43,6 +44,7 @@ not a server, and it can be switched off or wiped from Settings. See
 - [Building the Freshservice import](#building-the-freshservice-import)
 - [The map](#the-map)
 - [Network assets](#network-assets)
+- [Printers](#printers)
 - [Other asset types](#other-asset-types)
 - [Settings and what is stored](#settings-and-what-is-stored)
 - [Where to host it](#where-to-host-it)
@@ -186,6 +188,17 @@ The network asset export, which has a different column set from the PC one
 separate export from the PC file — the tool tells the two apart by their
 columns, but a single export containing both makes the PC reconciliation report
 switches as missing from Intune.
+
+### 7. OneStop printers (optional)
+
+The device list from the managed print service, with meter reads. See
+[Printers](#printers).
+
+### 8. Freshservice printers (optional)
+
+The printer assets export. It shares almost every column with the network one,
+so `Printer Type` is what tells them apart — without it the tool cannot place
+the file and will ask you to.
 
 ### Locating devices by IP address
 
@@ -604,10 +617,12 @@ Both populations share the map. **Show** picks what the dots count:
 - **PCs** — the Freshservice/Intune reconciliation.
 - **Network assets** — firewalls, switches and access points, placed by the
   site their FortiManager name resolves to.
-- **Both** — one dot per site sized by the combined total, with the popup
-  splitting it out.
+- **Printers** — placed by their location name, with a colour mode for how
+  many of a site's printers have gone silent.
+- **Everything** — one dot per site sized by the combined total, with the popup
+  splitting it three ways.
 
-The selector only appears once both populations are loaded, and switching
+The selector only offers the populations you have loaded, and switching
 re-fits the view, because the two cover different sets of sites.
 
 The map opens on **England and Wales**, fitted corner to corner rather than set
@@ -800,6 +815,74 @@ a value Freshservice accepts for that platform, so it is adopted. In practice
 that fills nearly all of them on the first run, and the boxes it cannot fill
 are highlighted. The export button refuses to run while any required mapping is
 blank, and shows the first rows exactly as they will be written.
+
+---
+
+## Printers
+
+Printers come from **OneStop**, the managed print service's monitoring app — it
+reads the meters and ships toner when one runs low — reconciled against the
+Freshservice printer export.
+
+Unlike the network side there is nothing much to discover: every printer on the
+contract is already in Freshservice. What is wrong is the **fields**, so almost
+every view here is something to put right, and the import updates records that
+already exist rather than creating new ones.
+
+### Which side wins, and why it differs per field
+
+Neither system is right about everything, so authority is assigned field by
+field:
+
+| Field | Authority | Because |
+|---|---|---|
+| Serial, IP, MAC | **OneStop** | it polls the device |
+| Meter reads, monitoring flags | **OneStop** | they only exist there |
+| Location | **Freshservice** | it names the building where OneStop names the campus |
+| Product spelling | **your own records** | the majority spelling for that model wins |
+| Asset state | **derived** | In Stock plus pages on the meter means In Use |
+
+The product rule is worth spelling out: rather than imposing a convention, it
+takes whichever spelling most of your own Freshservice records already use for
+that model. Inventing one instead flagged thirteen records for a capital letter
+and would have "corrected" the majority to my own preference.
+
+### What it finds
+
+The checks that matter most on real data:
+
+- **Marked In Stock but printing** — the state is stale, and the page count is
+  the evidence
+- **No serial on the FS record** — the serial is in the Name field and nowhere
+  else, so nothing can key on it
+- **IP address out of date** — OneStop polls the printer, so its address is
+  current
+- **Not reporting** — on the contract but silent, so no meter reads and no
+  toner
+- **Monitoring switched off** / **no proactive consumables** — nobody is
+  watching these run low
+- **Worth questioning** — barely used, at a closed or non-care site, on a
+  legacy address, or not a printer at all
+
+### Sites
+
+Printers carry no site code, so the site comes from the location name, with the
+postcode as a tiebreak — and a postcode that covers a whole campus settles
+nothing, so it is left unresolved rather than guessed. Site names ending in
+" SL" match with or without the suffix, since Freshservice writes the same place
+both ways.
+
+Where the two systems both resolve to a site and the sites differ, that is a
+real disagreement and gets its own check. Where they merely word the same place
+differently, that is off by default.
+
+### The correction import
+
+The file carries the Name that Freshservice matches on plus only the columns
+being corrected. **A blank cell is left alone by Freshservice**, so each column
+is written only on the rows whose problem it fixes, and a printer with nothing
+to correct is left out of the file entirely. A change log is available alongside
+it, one row per field changed, with what it was, what it becomes, and why.
 
 ---
 

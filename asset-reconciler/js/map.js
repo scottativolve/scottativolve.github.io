@@ -58,14 +58,24 @@
     issues:     { label: 'Share of devices with issues', legend: 'Darker = a higher proportion flagged' },
     netMissing: { label: 'Network kit not in Freshservice',
                   legend: 'Darker = more of the site\u2019s network kit has no Freshservice record',
-                  populations: ['net', 'both'] }
+                  populations: ['net', 'both'] },
+    printSilent: { label: 'Printers not reporting',
+                   legend: 'Darker = more of the site\u2019s printers are silent',
+                   populations: ['print', 'both'] }
   };
 
+  /* Which populations a dot can count. members lists the row sets that
+     contribute; a single-population choice is just a set of one. */
   var POPULATIONS = {
-    pc:   { label: 'PCs', noun: 'device' },
-    net:  { label: 'Network assets', noun: 'network device' },
-    both: { label: 'Both', noun: 'device' }
+    pc:    { label: 'PCs',             noun: 'device',         members: ['pc'] },
+    net:   { label: 'Network assets',  noun: 'network device', members: ['net'] },
+    print: { label: 'Printers',        noun: 'printer',        members: ['print'] },
+    both:  { label: 'Everything',      noun: 'device',         members: ['pc', 'net', 'print'] }
   };
+
+  function members(population) {
+    return (POPULATIONS[population] || POPULATIONS.pc).members;
+  }
 
   /* Which colour modes make sense for the population on screen. */
   function modesFor(population) {
@@ -87,10 +97,10 @@
     opts = opts || {};
     if (Array.isArray(sets)) sets = { pc: sets };
     var population = opts.population || 'pc';
-    var lists = [
-      { kind: 'pc', rows: sets.pc || [] },
-      { kind: 'net', rows: sets.net || [] }
-    ];
+    var counting = members(population);
+    var lists = ['pc', 'net', 'print'].map(function (k) {
+      return { kind: k, rows: sets[k] || [] };
+    });
 
     var groups = new Map();
     var unlocated = [];       // no location at all
@@ -98,7 +108,7 @@
     var unmapped = [];        // in the lookup, but no coordinates
 
     lists.forEach(function (list) {
-      var counts = population === 'both' || population === list.kind;
+      var counts = counting.indexOf(list.kind) >= 0;
       list.rows.forEach(function (r) {
         // The scope filter is a PC idea: a Freshservice record that is not a
         // computer was never going to be in Intune. Network rows are all in
@@ -117,13 +127,13 @@
             key: key,
             name: N.clean(r.site.location) || N.clean(r.site.name) || r.location,
             site: r.site,
-            rows: [], pcRows: [], netRows: [],
+            rows: [], pcRows: [], netRows: [], printRows: [],
             region: N.clean(r.site.region),
             expected: typeof r.site.expected === 'number' ? r.site.expected : null
           });
         }
         var g = groups.get(key);
-        (list.kind === 'pc' ? g.pcRows : g.netRows).push(r);
+        g[list.kind + 'Rows'].push(r);
         if (counts) g.rows.push(r);
       });
     });
@@ -144,6 +154,10 @@
       var netForti = g.netRows.filter(function (r) { return !!r.forti; });
       var netMissing = netForti.filter(function (r) { return !r.fs; }).length;
 
+      var printOn = g.printRows.filter(function (r) { return !!r.os; });
+      var printSilent = printOn.filter(function (r) { return !r.reporting; }).length;
+      var pages = g.printRows.reduce(function (n, r) { return n + (r.pages || 0); }, 0);
+
       var s = {
         key: g.key,
         name: g.name,
@@ -151,11 +165,14 @@
         region: g.region,
         rows: g.rows,
         count: g.rows.length,
-        pcRows: g.pcRows, netRows: g.netRows,
-        pcCount: g.pcRows.length, netCount: g.netRows.length,
+        pcRows: g.pcRows, netRows: g.netRows, printRows: g.printRows,
+        pcCount: g.pcRows.length, netCount: g.netRows.length, printCount: g.printRows.length,
         kinds: kinds,
         netMissing: netMissing,
         netMissingRate: netForti.length ? netMissing / netForti.length : 0,
+        printSilent: printSilent,
+        printSilentRate: printOn.length ? printSilent / printOn.length : 0,
+        pages: pages,
         issues: issues,
         high: high,
         issueRate: g.rows.length ? issues / g.rows.length : 0,
@@ -200,6 +217,10 @@
       // A site with no network kit at all has nothing to be missing.
       if (!site.netCount) return 'var(--text-muted)';
       return ramp(site.netMissingRate);
+    }
+    if (mode === 'printSilent') {
+      if (!site.printCount) return 'var(--text-muted)';
+      return ramp(site.printSilentRate);
     }
     return 'var(--series-1)';
   }
@@ -353,7 +374,15 @@
         // point of one map is seeing both without switching.
         population === 'both'
           ? '<div style="color:var(--text-secondary)">' + U.num(s.pcCount) + ' PC' + (s.pcCount === 1 ? '' : 's') +
-            ' \u00b7 ' + U.num(s.netCount) + ' network</div>'
+            ' \u00b7 ' + U.num(s.netCount) + ' network \u00b7 ' + U.num(s.printCount) + ' printer' +
+            (s.printCount === 1 ? '' : 's') + '</div>'
+          : '',
+        s.printCount && population !== 'pc' && population !== 'net'
+          ? '<div style="color:var(--text-secondary)">' + U.num(s.pages) + ' pages printed in their lifetimes</div>'
+          : '',
+        s.printSilent && population !== 'pc' && population !== 'net'
+          ? '<div style="font-weight:600"><strong>' + U.num(s.printSilent) + '</strong> printer' +
+            (s.printSilent === 1 ? '' : 's') + ' not reporting</div>'
           : '',
         kindBits.length && population !== 'pc'
           ? '<div style="color:var(--text-secondary)">' + U.escapeHtml(kindBits.join(' \u00b7 ')) + '</div>' : '',
@@ -380,11 +409,17 @@
           onclick: function () { if (opts.onSelect) opts.onSelect(s, 'pc'); }
         }, population === 'both' ? 'View ' + s.pcCount + ' PCs' : 'View these ' + s.count + ' devices'));
       }
-      if (s.netCount && population !== 'pc') {
+      if (s.netCount && population !== 'pc' && population !== 'print') {
         actions.appendChild(U.el('button', {
           class: 'btn sm' + (population === 'net' ? ' primary' : ''),
           onclick: function () { if (opts.onSelect) opts.onSelect(s, 'net'); }
         }, population === 'both' ? 'View ' + s.netCount + ' network' : 'View these ' + s.count + ' devices'));
+      }
+      if (s.printCount && population !== 'pc' && population !== 'net') {
+        actions.appendChild(U.el('button', {
+          class: 'btn sm' + (population === 'print' ? ' primary' : ''),
+          onclick: function () { if (opts.onSelect) opts.onSelect(s, 'print'); }
+        }, population === 'both' ? 'View ' + s.printCount + ' printers' : 'View these ' + s.count + ' printers'));
       }
       content.appendChild(actions);
 
@@ -420,7 +455,8 @@
 
       if (mode !== 'count') {
         var titles = { variance: 'Variance', issues: 'Issue rate',
-                       netMissing: 'Network kit not in Freshservice' };
+                       netMissing: 'Network kit not in Freshservice',
+                       printSilent: 'Printers not reporting' };
         div.appendChild(U.el('div', { class: 'lg-title' }, titles[mode] || 'Colour'));
         var bands = [['var(--seq-100)', 'None'], ['var(--seq-250)', 'Under 20%'], ['var(--seq-400)', '20\u201340%'],
                      ['var(--seq-550)', '40\u201360%'], ['var(--seq-700)', 'Over 60%']];
@@ -429,6 +465,8 @@
              ['var(--div-pos)', 'Over'], ['var(--div-pos-strong)', 'Well over']]
           : mode === 'netMissing'
           ? [['var(--seq-100)', 'All recorded']].concat(bands.slice(1))
+          : mode === 'printSilent'
+          ? [['var(--seq-100)', 'All reporting']].concat(bands.slice(1))
           : [['var(--seq-100)', 'None flagged']].concat(bands.slice(1));
         swatches.forEach(function (s) {
           div.appendChild(U.el('div', { class: 'lg-row' }, [
@@ -492,6 +530,7 @@
     COLOUR_MODES: COLOUR_MODES,
     POPULATIONS: POPULATIONS,
     modesFor: modesFor,
+    members: members,
     radiusFor: radiusFor
   };
 })(window);

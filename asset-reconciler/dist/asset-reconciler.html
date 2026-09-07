@@ -1950,6 +1950,12 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
       short: 'FS',
       hint: 'Assets export (Assets → Export → CSV)',
       signature: ['asset tag', 'used by', 'asset state', 'asset type', 'display name', 'last audit date', 'display id', 'usage type'],
+      /* A PC export never carries a Printer Type column, and without ruling it
+         out the printer export scored 21.6 here against 22.0 as a printer —
+         too close for the tool to place, so it asked every time. Only that one
+         column is safe to rely on: Ports and Firmware Version can plausibly
+         appear on a fuller CMDB export of any asset type. */
+      anti: ['printer type'],
       fields: [
         { key: 'name',         label: 'Device name',      required: true,  aliases: ['display name', 'name', 'asset name', 'device name', 'hostname', 'host name', 'computer name', 'machine name'] },
         { key: 'assetTag',     label: 'Asset tag',        aliases: ['asset tag', 'asset id', 'tag', 'asset code'] },
@@ -2068,7 +2074,8 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
       hint: 'Network assets export (routers, switches, access points)',
       signature: ['physical subtype', 'virtual subtype', 'availability zone', 'ports',
                   'subnet mask', 'discovery enabled', 'book value'],
-      anti: ['last login by', 'used by email', 'operating system', 'compliance', 'jailbroken', 'config status'],
+      anti: ['last login by', 'used by email', 'operating system', 'compliance', 'jailbroken',
+             'config status', 'printer type'],
       fields: [
         { key: 'name',        label: 'Device name',    required: true, aliases: ['name', 'display name', 'device name', 'hostname', 'asset name'] },
         { key: 'serial',      label: 'Serial number',  aliases: ['serial number', 'serial no', 'serial'] },
@@ -2094,6 +2101,66 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
         { key: 'acquired',    label: 'Acquisition date', type: 'date', aliases: ['acquisition date', 'acquired'] },
         { key: 'endOfLife',   label: 'End of life',    aliases: ['end of life', 'eol'] },
         { key: 'description', label: 'Description',    aliases: ['description', 'comments'] }
+      ]
+    },
+
+    onestop: {
+      id: 'onestop',
+      label: 'OneStop printers',
+      short: 'OneStop',
+      hint: 'Printer export from the managed print service (device list with meter reads)',
+      signature: ['cont num', 'site num', 'mono', 'colour', 'nrd', 'pac', 'mon', 'site postcode'],
+      anti: ['asset state', 'workspace', 'compliance', 'primary user upn', 'config status'],
+      fields: [
+        { key: 'serial',     label: 'Serial number',   required: true, aliases: ['serial', 'serial number', 'serial no'] },
+        { key: 'assetTag',   label: 'Asset tag',       aliases: ['asset', 'asset tag', 'asset id', 'tag'] },
+        { key: 'model',      label: 'Model',           aliases: ['model', 'device model', 'product'] },
+        { key: 'contract',   label: 'Contract',        aliases: ['cont num', 'contract number', 'contract'] },
+        { key: 'siteNum',    label: 'Site number',     aliases: ['site num', 'site number', 'site ref'] },
+        { key: 'siteName',   label: 'Site name',       aliases: ['site name', 'site', 'customer site'] },
+        { key: 'location',   label: 'Location in building', aliases: ['location', 'room', 'position', 'placement'] },
+        { key: 'ipAddress',  label: 'IP address',      aliases: ['ip', 'ip address', 'ipv4 address'] },
+        { key: 'mac',        label: 'MAC address',     aliases: ['mac address', 'mac', 'physical address'] },
+        { key: 'lastSeen',   label: 'Last reported',   type: 'date', aliases: ['last updated', 'last seen', 'last contact', 'last report'] },
+        { key: 'mono',       label: 'Mono pages',      type: 'number', aliases: ['mono', 'mono pages', 'black pages', 'bw'] },
+        { key: 'colour',     label: 'Colour pages',    type: 'number', aliases: ['colour', 'color', 'colour pages', 'color pages'] },
+        { key: 'monitored',  label: 'Monitored',       aliases: ['mon', 'monitored'] },
+        { key: 'proactive',  label: 'Proactive consumables', aliases: ['pac', 'proactive consumables', 'proactive'] },
+        { key: 'nrd',        label: 'NRD',             aliases: ['nrd'] },
+        { key: 'postcode',   label: 'Site postcode',   aliases: ['site postcode', 'postcode', 'post code'] }
+      ]
+    },
+
+    fsprinter: {
+      id: 'fsprinter',
+      label: 'Freshservice printers',
+      short: 'FS print',
+      hint: 'Printer assets export',
+      signature: ['printer type', 'physical subtype', 'availability zone', 'discovery enabled',
+                  'book value', 'subnet mask'],
+      anti: ['firmware version', 'ports', 'last login by', 'used by email', 'operating system',
+             'compliance', 'jailbroken', 'config status', 'mono'],
+      fields: [
+        { key: 'name',        label: 'Device name',    required: true, aliases: ['name', 'display name', 'device name', 'asset name'] },
+        { key: 'serial',      label: 'Serial number',  aliases: ['serial number', 'serial no', 'serial'] },
+        { key: 'assetTag',    label: 'Asset tag',      aliases: ['asset tag', 'asset id', 'tag'] },
+        { key: 'assetType',   label: 'Asset type',     aliases: ['asset type', 'asset type name', 'ci type'] },
+        { key: 'printerType', label: 'Printer type',   aliases: ['printer type'] },
+        { key: 'state',       label: 'Asset state',    aliases: ['asset state', 'state', 'asset status'] },
+        { key: 'usageType',   label: 'Usage type',     aliases: ['usage type'] },
+        { key: 'location',    label: 'Location',       aliases: ['location', 'location name', 'site'] },
+        { key: 'department',  label: 'Department',     aliases: ['department', 'department name'] },
+        { key: 'product',     label: 'Product',        aliases: ['product', 'product name', 'model'] },
+        { key: 'vendor',      label: 'Vendor',         aliases: ['vendor', 'manufacturer', 'make'] },
+        { key: 'ipAddress',   label: 'IP address',     aliases: ['ip address', 'ip', 'ipv4 address'] },
+        { key: 'mac',         label: 'MAC address',    aliases: ['mac address', 'mac', 'physical address'] },
+        { key: 'subnetMask',  label: 'Subnet mask',    aliases: ['subnet mask', 'netmask'] },
+        { key: 'impact',      label: 'Impact',         aliases: ['impact'] },
+        { key: 'workspace',   label: 'Workspace',      aliases: ['workspace'] },
+        { key: 'description', label: 'Description',    aliases: ['description', 'comments'] },
+        { key: 'lastAudit',   label: 'Last audit',     type: 'date', aliases: ['last audit date', 'last audit', 'last seen'] },
+        { key: 'createdAt',   label: 'Created',        type: 'date', aliases: ['created at', 'created time', 'created'] },
+        { key: 'updatedAt',   label: 'Updated',        type: 'date', aliases: ['updated at', 'last updated at', 'updated'] }
       ]
     },
 
@@ -5521,14 +5588,24 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     issues:     { label: 'Share of devices with issues', legend: 'Darker = a higher proportion flagged' },
     netMissing: { label: 'Network kit not in Freshservice',
                   legend: 'Darker = more of the site\u2019s network kit has no Freshservice record',
-                  populations: ['net', 'both'] }
+                  populations: ['net', 'both'] },
+    printSilent: { label: 'Printers not reporting',
+                   legend: 'Darker = more of the site\u2019s printers are silent',
+                   populations: ['print', 'both'] }
   };
 
+  /* Which populations a dot can count. members lists the row sets that
+     contribute; a single-population choice is just a set of one. */
   var POPULATIONS = {
-    pc:   { label: 'PCs', noun: 'device' },
-    net:  { label: 'Network assets', noun: 'network device' },
-    both: { label: 'Both', noun: 'device' }
+    pc:    { label: 'PCs',             noun: 'device',         members: ['pc'] },
+    net:   { label: 'Network assets',  noun: 'network device', members: ['net'] },
+    print: { label: 'Printers',        noun: 'printer',        members: ['print'] },
+    both:  { label: 'Everything',      noun: 'device',         members: ['pc', 'net', 'print'] }
   };
+
+  function members(population) {
+    return (POPULATIONS[population] || POPULATIONS.pc).members;
+  }
 
   /* Which colour modes make sense for the population on screen. */
   function modesFor(population) {
@@ -5550,10 +5627,10 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     opts = opts || {};
     if (Array.isArray(sets)) sets = { pc: sets };
     var population = opts.population || 'pc';
-    var lists = [
-      { kind: 'pc', rows: sets.pc || [] },
-      { kind: 'net', rows: sets.net || [] }
-    ];
+    var counting = members(population);
+    var lists = ['pc', 'net', 'print'].map(function (k) {
+      return { kind: k, rows: sets[k] || [] };
+    });
 
     var groups = new Map();
     var unlocated = [];       // no location at all
@@ -5561,7 +5638,7 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     var unmapped = [];        // in the lookup, but no coordinates
 
     lists.forEach(function (list) {
-      var counts = population === 'both' || population === list.kind;
+      var counts = counting.indexOf(list.kind) >= 0;
       list.rows.forEach(function (r) {
         // The scope filter is a PC idea: a Freshservice record that is not a
         // computer was never going to be in Intune. Network rows are all in
@@ -5580,13 +5657,13 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
             key: key,
             name: N.clean(r.site.location) || N.clean(r.site.name) || r.location,
             site: r.site,
-            rows: [], pcRows: [], netRows: [],
+            rows: [], pcRows: [], netRows: [], printRows: [],
             region: N.clean(r.site.region),
             expected: typeof r.site.expected === 'number' ? r.site.expected : null
           });
         }
         var g = groups.get(key);
-        (list.kind === 'pc' ? g.pcRows : g.netRows).push(r);
+        g[list.kind + 'Rows'].push(r);
         if (counts) g.rows.push(r);
       });
     });
@@ -5607,6 +5684,10 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
       var netForti = g.netRows.filter(function (r) { return !!r.forti; });
       var netMissing = netForti.filter(function (r) { return !r.fs; }).length;
 
+      var printOn = g.printRows.filter(function (r) { return !!r.os; });
+      var printSilent = printOn.filter(function (r) { return !r.reporting; }).length;
+      var pages = g.printRows.reduce(function (n, r) { return n + (r.pages || 0); }, 0);
+
       var s = {
         key: g.key,
         name: g.name,
@@ -5614,11 +5695,14 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
         region: g.region,
         rows: g.rows,
         count: g.rows.length,
-        pcRows: g.pcRows, netRows: g.netRows,
-        pcCount: g.pcRows.length, netCount: g.netRows.length,
+        pcRows: g.pcRows, netRows: g.netRows, printRows: g.printRows,
+        pcCount: g.pcRows.length, netCount: g.netRows.length, printCount: g.printRows.length,
         kinds: kinds,
         netMissing: netMissing,
         netMissingRate: netForti.length ? netMissing / netForti.length : 0,
+        printSilent: printSilent,
+        printSilentRate: printOn.length ? printSilent / printOn.length : 0,
+        pages: pages,
         issues: issues,
         high: high,
         issueRate: g.rows.length ? issues / g.rows.length : 0,
@@ -5663,6 +5747,10 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
       // A site with no network kit at all has nothing to be missing.
       if (!site.netCount) return 'var(--text-muted)';
       return ramp(site.netMissingRate);
+    }
+    if (mode === 'printSilent') {
+      if (!site.printCount) return 'var(--text-muted)';
+      return ramp(site.printSilentRate);
     }
     return 'var(--series-1)';
   }
@@ -5816,7 +5904,15 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
         // point of one map is seeing both without switching.
         population === 'both'
           ? '<div style="color:var(--text-secondary)">' + U.num(s.pcCount) + ' PC' + (s.pcCount === 1 ? '' : 's') +
-            ' \u00b7 ' + U.num(s.netCount) + ' network</div>'
+            ' \u00b7 ' + U.num(s.netCount) + ' network \u00b7 ' + U.num(s.printCount) + ' printer' +
+            (s.printCount === 1 ? '' : 's') + '</div>'
+          : '',
+        s.printCount && population !== 'pc' && population !== 'net'
+          ? '<div style="color:var(--text-secondary)">' + U.num(s.pages) + ' pages printed in their lifetimes</div>'
+          : '',
+        s.printSilent && population !== 'pc' && population !== 'net'
+          ? '<div style="font-weight:600"><strong>' + U.num(s.printSilent) + '</strong> printer' +
+            (s.printSilent === 1 ? '' : 's') + ' not reporting</div>'
           : '',
         kindBits.length && population !== 'pc'
           ? '<div style="color:var(--text-secondary)">' + U.escapeHtml(kindBits.join(' \u00b7 ')) + '</div>' : '',
@@ -5843,11 +5939,17 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
           onclick: function () { if (opts.onSelect) opts.onSelect(s, 'pc'); }
         }, population === 'both' ? 'View ' + s.pcCount + ' PCs' : 'View these ' + s.count + ' devices'));
       }
-      if (s.netCount && population !== 'pc') {
+      if (s.netCount && population !== 'pc' && population !== 'print') {
         actions.appendChild(U.el('button', {
           class: 'btn sm' + (population === 'net' ? ' primary' : ''),
           onclick: function () { if (opts.onSelect) opts.onSelect(s, 'net'); }
         }, population === 'both' ? 'View ' + s.netCount + ' network' : 'View these ' + s.count + ' devices'));
+      }
+      if (s.printCount && population !== 'pc' && population !== 'net') {
+        actions.appendChild(U.el('button', {
+          class: 'btn sm' + (population === 'print' ? ' primary' : ''),
+          onclick: function () { if (opts.onSelect) opts.onSelect(s, 'print'); }
+        }, population === 'both' ? 'View ' + s.printCount + ' printers' : 'View these ' + s.count + ' printers'));
       }
       content.appendChild(actions);
 
@@ -5883,7 +5985,8 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
 
       if (mode !== 'count') {
         var titles = { variance: 'Variance', issues: 'Issue rate',
-                       netMissing: 'Network kit not in Freshservice' };
+                       netMissing: 'Network kit not in Freshservice',
+                       printSilent: 'Printers not reporting' };
         div.appendChild(U.el('div', { class: 'lg-title' }, titles[mode] || 'Colour'));
         var bands = [['var(--seq-100)', 'None'], ['var(--seq-250)', 'Under 20%'], ['var(--seq-400)', '20\u201340%'],
                      ['var(--seq-550)', '40\u201360%'], ['var(--seq-700)', 'Over 60%']];
@@ -5892,6 +5995,8 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
              ['var(--div-pos)', 'Over'], ['var(--div-pos-strong)', 'Well over']]
           : mode === 'netMissing'
           ? [['var(--seq-100)', 'All recorded']].concat(bands.slice(1))
+          : mode === 'printSilent'
+          ? [['var(--seq-100)', 'All reporting']].concat(bands.slice(1))
           : [['var(--seq-100)', 'None flagged']].concat(bands.slice(1));
         swatches.forEach(function (s) {
           div.appendChild(U.el('div', { class: 'lg-row' }, [
@@ -5955,6 +6060,7 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     COLOUR_MODES: COLOUR_MODES,
     POPULATIONS: POPULATIONS,
     modesFor: modesFor,
+    members: members,
     radiusFor: radiusFor
   };
 })(window);
@@ -6806,6 +6912,571 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
 
 </script>
 <script>
+/* js/printers.js */
+/* Printers, reconciled between OneStop and Freshservice.
+
+   Unlike the network side there is nothing much to discover: the register is
+   complete. What is wrong is the fields — asset states left at In Stock on
+   machines that have printed forty thousand pages, serials sitting in the Name
+   column and nowhere else, IP addresses left behind by a re-IP. So this is a
+   correction job, and each field has its own authoritative side:
+
+     serial, IP, meter reads, monitoring  -> OneStop, which polls the device
+     location                             -> Freshservice, which knows the
+                                             building rather than the campus
+
+   OneStop is the managed print service's monitoring app: it reads the meters
+   and ships toner when a printer runs low, so a printer it is not monitoring
+   is one nobody is watching. */
+(function (global) {
+  'use strict';
+
+  var U = global.U, N = global.Norm;
+
+  var DEFAULTS = {
+    staleDays: 30,            // no report from OneStop in this long
+    idleMono: 500,            // lifetime pages below which a printer looks unused
+    locationSource: 'fs'      // 'fs' | 'onestop' — who wins on location
+  };
+
+  function settings(saved) { return Object.assign({}, DEFAULTS, saved || {}); }
+
+  var SEVERITY_ORDER = { low: 1, medium: 2, high: 3 };
+
+  /* A Freshservice state that says the printer is not in service. */
+  function idleState(v) {
+    return /^(in stock|stock|spare|store|stored)$/i.test(String(v || '').trim());
+    }
+
+  var RULES = [
+    {
+      code: 'state-wrong',
+      label: 'Marked In Stock but printing',
+      severity: 'high',
+      hint: 'Freshservice has this in stock, and OneStop has it reporting with pages on the meter. The state is simply out of date.',
+      fix: { field: 'state' },
+      test: function (r, cfg) {
+        return !!r.os && !!r.fs && idleState(r.fsState) && r.reporting && (r.mono || r.colour);
+      },
+      detail: function (r) {
+        return 'last reported ' + U.agoLabel(r.lastSeen) + ', ' +
+          U.num((r.mono || 0) + (r.colour || 0)) + ' pages on the meter';
+      }
+    },
+    {
+      code: 'serial-missing',
+      label: 'No serial on the FS record',
+      severity: 'high',
+      hint: 'The serial is in the Name field but the Serial Number field is empty, so nothing else can key on it.',
+      fix: { field: 'serial' },
+      test: function (r) { return !!r.fs && !!r.serial && N.isBlank(r.fs.serial); }
+    },
+    {
+      code: 'ip-differs',
+      label: 'IP address out of date',
+      severity: 'medium',
+      hint: 'OneStop polls the printer, so its address is the current one.',
+      fix: { field: 'ipAddress' },
+      test: function (r) {
+        if (!r.os || !r.fs) return false;
+        var a = usable(r.ipOnestop), b = N.clean(r.ipFs);
+        return !!a && !!b && a !== b;
+      },
+      detail: function (r) { return 'Freshservice ' + r.ipFs + ', OneStop ' + r.ipOnestop; }
+    },
+    {
+      code: 'ip-missing',
+      label: 'No IP on the FS record',
+      severity: 'low',
+      fix: { field: 'ipAddress' },
+      test: function (r) { return !!r.os && !!r.fs && !!usable(r.ipOnestop) && N.isBlank(r.ipFs); }
+    },
+    {
+      code: 'mac-missing',
+      label: 'No MAC on the FS record',
+      severity: 'low',
+      fix: { field: 'mac' },
+      test: function (r) { return !!r.os && !!r.fs && !!N.clean(r.macOnestop) && N.isBlank(r.macFs); }
+    },
+    {
+      code: 'product-inconsistent',
+      label: 'Product spelt differently from the rest',
+      severity: 'medium',
+      hint: 'Most of your Freshservice records spell this model another way. The majority spelling is taken as the house one.',
+      fix: { field: 'product' },
+      test: function (r) { return !!r.productDiffers; },
+      detail: function (r) { return N.clean(r.fsProduct) + ' \u2192 ' + r.productShould; }
+    },
+    {
+      code: 'product-has-make',
+      label: 'Product still names the make',
+      severity: 'low',
+      hint: 'Most product names here are the model on its own. This one carries the manufacturer as well, which is only a naming difference \u2014 no correction is proposed, because your own records are unanimous for this model.',
+      test: function (r) {
+        var v = N.clean(r.fsProduct);
+        return !!v && v !== stripMake(v) && !r.productDiffers;
+      }
+    },
+    {
+      code: 'vendor-missing',
+      label: 'No vendor recorded',
+      severity: 'low',
+      fix: { field: 'vendor' },
+      test: function (r) { return !!r.fs && N.isBlank(r.fsVendor) && !!r.vendorShould; }
+    },
+    {
+      code: 'location-conflict',
+      label: 'The two systems name different sites',
+      severity: 'medium',
+      hint: 'Both place this printer at a site in your list, and they are not the same site. One of them is wrong.',
+      test: function (r) {
+        return !!r.fsSite && !!r.osSite && r.fsSite.code !== r.osSite.code;
+      },
+      detail: function (r) {
+        return 'Freshservice ' + r.fsSite.code + ' ' + r.fsSite.name +
+               ', OneStop ' + r.osSite.code + ' ' + r.osSite.name;
+      }
+    },
+    {
+      code: 'location-wording',
+      label: 'Location worded differently',
+      severity: 'low',
+      defaultOff: true,
+      hint: 'The two systems say the same thing in different words \u2014 OneStop usually names the campus where Freshservice names the building. Off by default: it is a wording difference, not a disagreement about where the printer is.',
+      test: function (r) {
+        if (!r.os || !r.fs) return false;
+        if (r.fsSite && r.osSite && r.fsSite.code !== r.osSite.code) return false;  // the conflict above
+        var a = N.clean(r.fsLocation), b = stripCompany(r.siteName);
+        if (!a || !b) return false;
+        return N.locationKey(a) !== N.locationKey(b);
+      },
+      detail: function (r) { return 'Freshservice "' + r.fsLocation + '", OneStop "' + r.siteName + '"'; }
+    },
+    {
+      code: 'location-missing',
+      label: 'No location on the FS record',
+      severity: 'medium',
+      fix: { field: 'location' },
+      test: function (r) { return !!r.fs && N.isBlank(r.fsLocation); }
+    },
+    {
+      code: 'site-unresolved',
+      label: 'Site not in the lookup',
+      severity: 'medium',
+      hint: 'Neither system places this printer at a site in your site list, so it cannot be mapped.',
+      test: function (r, cfg, ctx) { return ctx.hasSites && !r.site; }
+    },
+    {
+      code: 'not-reporting',
+      label: 'Not reporting to OneStop',
+      severity: 'high',
+      hint: 'On the contract but silent. Toner will not be shipped for a printer OneStop cannot see.',
+      test: function (r, cfg) { return !!r.os && !r.reporting; },
+      detail: function (r) {
+        return r.lastSeen ? 'last reported ' + U.agoLabel(r.lastSeen) : 'has never reported';
+      }
+    },
+    {
+      code: 'not-monitored',
+      label: 'Monitoring switched off',
+      severity: 'high',
+      hint: 'OneStop is not monitoring this printer, so nobody is watching its meters or its toner.',
+      test: function (r) { return !!r.os && r.monitored === false; }
+    },
+    {
+      code: 'no-proactive-toner',
+      label: 'No proactive consumables',
+      severity: 'medium',
+      hint: 'Toner is not shipped automatically for this printer — somebody has to notice and order it.',
+      test: function (r) { return !!r.os && r.proactive === false; }
+    },
+    {
+      code: 'legacy-subnet',
+      label: 'Still on a legacy 192.168 address',
+      severity: 'medium',
+      hint: 'Pre-migration addressing. Usually a printer that was left behind rather than moved.',
+      test: function (r) { return /^192\.168\./.test(N.clean(r.ipOnestop) || N.clean(r.ipFs)); }
+    },
+    {
+      code: 'closed-site',
+      label: 'At a closed or non-care site',
+      severity: 'medium',
+      hint: 'The site name says closed, or it is pool stock or an office rather than a service.',
+      test: function (r) { return !!r.siteName && /\(closed\)|pool stock|business centre|business plaza/i.test(r.siteName); }
+    },
+    {
+      code: 'barely-used',
+      label: 'Barely used',
+      severity: 'low',
+      hint: 'A low lifetime page count for a printer that is still on the contract.',
+      test: function (r, cfg) {
+        if (!r.os || !r.reporting) return false;
+        var total = (r.mono || 0) + (r.colour || 0);
+        return total > 0 && total < cfg.idleMono;
+      },
+      detail: function (r) { return U.num((r.mono || 0) + (r.colour || 0)) + ' pages in its life'; }
+    },
+    {
+      code: 'not-a-printer',
+      label: 'Not a printer',
+      severity: 'low',
+      hint: 'On the print contract but not a device — print management software, for instance.',
+      test: function (r) {
+        return /print ?logic|printerlogic|vasion/i.test(N.clean(r.model) + ' ' + N.clean(r.fsProduct));
+      }
+    },
+    {
+      code: 'tag-differs',
+      label: 'Asset tag is not the OneStop site',
+      severity: 'low',
+      hint: 'Freshservice uses Asset Tag to hold the OneStop site number, and the two disagree here.',
+      test: function (r) {
+        if (!r.os || !r.fs) return false;
+        var a = tagKey(r.fsTag), b = tagKey(r.siteNum);
+        return !!a && !!b && a !== b;
+      },
+      detail: function (r) { return 'Freshservice ' + r.fsTag + ', OneStop ' + r.siteNum; }
+    },
+    {
+      code: 'tag-shared',
+      label: 'Asset tag used by several printers',
+      severity: 'low',
+      hint: 'Asset Tag is holding a site reference rather than identifying the device, so the same value turns up on more than one record.',
+      test: function (r) { return r.tagShared > 1; },
+      detail: function (r) { return r.fsTag + ' is on ' + r.tagShared + ' records'; }
+    },
+    {
+      code: 'onestop-only',
+      label: 'Not in Freshservice',
+      severity: 'high',
+      hint: 'On the print contract with no Freshservice record at all.',
+      test: function (r) { return !!r.os && !r.fs; }
+    },
+    {
+      code: 'fs-only',
+      label: 'Not on the print contract',
+      severity: 'medium',
+      hint: 'A Freshservice printer OneStop does not list — a spare, or one that has left the contract.',
+      test: function (r) { return !!r.fs && !r.os; }
+    }
+  ];
+
+  var RULE_BY_CODE = {};
+  RULES.forEach(function (r) { RULE_BY_CODE[r.code] = r; });
+
+  function isEnabled(rule, enabled) {
+    if (enabled && Object.prototype.hasOwnProperty.call(enabled, rule.code)) return !!enabled[rule.code];
+    return !rule.defaultOff;
+  }
+
+  /* ------------------------------------------------------------- helpers */
+
+  /* 0.0.0.0 is OneStop saying it has no address, not an address. */
+  function usable(ip) {
+    var v = N.clean(ip);
+    return v && v !== '0.0.0.0' ? v : '';
+  }
+
+  function tagKey(v) {
+    return String(v || '').trim().replace(/\\/g, '/').toUpperCase();
+  }
+
+  /* OneStop prefixes every site with the operating company. */
+  function stripCompany(v) {
+    return String(v || '').replace(/^\s*(ivolve care|tlc care homes ltd|tlc care homes)\s*-?\s*/i, '').trim();
+  }
+
+  /* Strip the make off a product name. */
+  function stripMake(model) {
+    var m = N.clean(model);
+    if (!m) return '';
+    return m.replace(/^(hp|hewlett[- ]packard|canon|xerox|ricoh|brother|kyocera|lexmark|epson)\s+/i, '').trim();
+  }
+
+  /* The house spelling of a product, learnt from Freshservice rather than
+     invented: whichever spelling most of your own records already use for that
+     model is the one the rest should match. Inventing a convention instead
+     flagged thirteen records for a capital letter and would have "corrected"
+     the majority spelling to my own. */
+  function houseProducts(osRecords, fsRecords, keyOf) {
+    var votes = {};
+    (fsRecords || []).forEach(function (a) {
+      var v = N.clean(a.product);
+      if (!v) return;
+      var k = keyOf(a);
+      if (!k) return;
+      votes[k] = votes[k] || {};
+      votes[k][v] = (votes[k][v] || 0) + 1;
+    });
+    var out = {};
+    Object.keys(votes).forEach(function (k) {
+      var best = '', n = 0;
+      Object.keys(votes[k]).forEach(function (v) { if (votes[k][v] > n) { n = votes[k][v]; best = v; } });
+      out[k] = best;
+    });
+    return out;
+  }
+
+  function modelKey(v) { return stripMake(v).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+
+  function vendorOf(model) {
+    var m = N.clean(model).toLowerCase();
+    if (/^hp\b|hewlett/.test(m)) return 'HP';
+    if (/^canon/.test(m)) return 'Canon';
+    if (/^xerox/.test(m)) return 'Xerox';
+    if (/^ricoh/.test(m)) return 'Ricoh';
+    if (/^brother/.test(m)) return 'Brother';
+    if (/^kyocera/.test(m)) return 'Kyocera';
+    if (/^lexmark/.test(m)) return 'Lexmark';
+    if (/^epson/.test(m)) return 'Epson';
+    return '';
+  }
+
+  function yesNo(v) {
+    var s = String(v == null ? '' : v).trim().toLowerCase();
+    if (!s) return null;
+    if (/^(1|y|yes|true|on|enabled)$/.test(s)) return true;
+    if (/^(0|n|no|false|off|disabled)$/.test(s)) return false;
+    return null;
+  }
+
+  /* -------------------------------------------------------- reconciliation */
+
+  /* osRecords: projected onestop rows
+     fsRecords: projected fsprinter rows
+     sites:     { code: site } from the location lookup
+  */
+  function reconcile(osRecords, fsRecords, cfg, sites) {
+    cfg = settings(cfg);
+    sites = sites || {};
+    var os = osRecords || [], fs = fsRecords || [];
+
+    /* Sites reachable by name and by postcode. Printers carry neither a site
+       code nor a device name that encodes one, so the name is the join and the
+       postcode is the tiebreak — except where a postcode covers a whole campus,
+       in which case it settles nothing and is left alone. */
+    var byName = {}, byPostcode = {};
+    Object.keys(sites).forEach(function (code) {
+      var s = sites[code];
+      siteKeys(s.name).forEach(function (nk) {
+        if (nk && !byName[nk]) byName[nk] = s;
+      });
+      var pk = postKey(s.postcode);
+      if (pk) (byPostcode[pk] = byPostcode[pk] || []).push(s);
+    });
+
+    function findSite(v) {
+      var ks = siteKeys(v);
+      for (var i = 0; i < ks.length; i++) {
+        if (ks[i] && byName[ks[i]]) return byName[ks[i]];
+      }
+      return null;
+    }
+
+    /* The Freshservice serial lives in Serial Number when it is filled in and
+       in Name when it is not — Name is the serial on every record in the
+       export, which is what makes the match complete. */
+    function fsKey(a) { return N.serial(a.serial) || N.serial(a.name); }
+
+    /* The house spelling per model, voted for by your own records. Keyed on
+       the model with the make stripped and punctuation and case removed, so
+       "HP E57540dn", "E57540DN" and "E57540 DN" are one model. */
+    var house = houseProducts(os, fs, function (a) { return modelKey(a.product); });
+
+    var fsBySerial = {}, tagCount = {};
+    fs.forEach(function (a) {
+      var k = fsKey(a);
+      if (k) (fsBySerial[k] = fsBySerial[k] || []).push(a);
+      var t = tagKey(a.assetTag);
+      if (t) tagCount[t] = (tagCount[t] || 0) + 1;
+    });
+    var fsByMac = {};
+    fs.forEach(function (a) {
+      var m = N.clean(a.mac).toUpperCase().replace(/[^0-9A-F]/g, '');
+      if (m) (fsByMac[m] = fsByMac[m] || []).push(a);
+    });
+
+    var rows = [], seen = {}, id = 0;
+
+    os.forEach(function (d) {
+      var key = N.serial(d.serial);
+      var matches = (key && fsBySerial[key]) || [];
+      var on = matches.length ? 'serial' : '';
+      if (!matches.length) {
+        var mac = N.clean(d.mac).toUpperCase().replace(/[^0-9A-F]/g, '');
+        if (mac && fsByMac[mac]) { matches = fsByMac[mac]; on = 'mac'; }
+      }
+      matches.forEach(function (a) { seen[a._row] = true; });
+      rows.push(build(++id, d, matches[0] || null, on, findSite, byPostcode, tagCount, cfg, house));
+    });
+
+    fs.forEach(function (a) {
+      if (seen[a._row]) return;
+      rows.push(build(++id, null, a, '', findSite, byPostcode, tagCount, cfg, house));
+    });
+
+    return {
+      rows: rows,
+      counts: { onestop: os.length, fs: fs.length, rows: rows.length },
+      sites: sites
+    };
+  }
+
+  function postKey(v) { return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+
+  /* The keys a site name can be matched under. Ninety-three of the site names
+     end in " SL" — supported living, a service type rather than part of the
+     name — and Freshservice writes the same place both with and without it, so
+     both spellings are indexed. Only SL: House, Lodge and Cottage really are
+     part of the names they end. */
+  function siteKeys(v) {
+    var raw = N.clean(v);
+    if (!raw) return [];
+    var out = [N.locationKey(raw)];
+    var trimmed = raw.replace(/\s+SL\s*$/i, '').trim();
+    if (trimmed && trimmed !== raw) out.push(N.locationKey(trimmed));
+    return out.filter(Boolean);
+  }
+
+  function build(id, d, a, matchedBy, findSite, byPostcode, tagCount, cfg, house) {
+    var model = d ? d.model : (a ? a.product : '');
+    var row = {
+      id: 'p' + id,
+      os: d, fs: a,
+      matchedBy: matchedBy,
+
+      name: a ? a.name : (d ? d.serial : ''),
+      serial: d ? N.clean(d.serial) : (a ? (N.clean(a.serial) || N.clean(a.name)) : ''),
+      model: N.clean(model),
+      vendorShould: vendorOf(d ? d.model : (a ? a.product : '')),
+
+      siteNum: d ? N.clean(d.siteNum) : '',
+      siteName: d ? N.clean(d.siteName) : '',
+      spot: d ? N.clean(d.location) : '',
+      postcode: d ? N.clean(d.postcode) : '',
+      contract: d ? N.clean(d.contract) : '',
+
+      ipOnestop: d ? N.clean(d.ipAddress) : '',
+      ipFs: a ? N.clean(a.ipAddress) : '',
+      macOnestop: d ? N.clean(d.mac) : '',
+      macFs: a ? N.clean(a.mac) : '',
+
+      mono: d && typeof d.mono === 'number' ? d.mono : null,
+      colour: d && typeof d.colour === 'number' ? d.colour : null,
+      monitored: d ? yesNo(d.monitored) : null,
+      proactive: d ? yesNo(d.proactive) : null,
+      lastSeen: d ? U.parseDate(d.lastSeen) : null,
+
+      fsName: a ? N.clean(a.name) : '',
+      fsState: a ? N.clean(a.state) : '',
+      fsLocation: a ? N.clean(a.location) : '',
+      fsProduct: a ? N.clean(a.product) : '',
+      fsVendor: a ? N.clean(a.vendor) : '',
+      fsTag: a ? N.clean(a.assetTag) : '',
+      fsAssetType: a ? N.clean(a.assetType) : '',
+      fsPrinterType: a ? N.clean(a.printerType) : ''
+    };
+
+    /* What this model should be called, and whether this record differs. The
+       comparison ignores case and punctuation so a capital letter is not
+       reported as an inconsistency; the proposed value keeps the majority
+       spelling exactly. */
+    var mk = modelKey(model);
+    row.productShould = (house && house[mk]) || stripMake(d ? d.model : '');
+    row.productDiffers = !!(a && row.productShould &&
+      modelKey(row.fsProduct) === mk && N.clean(row.fsProduct) !== row.productShould);
+    if (!row.productDiffers && a && row.productShould &&
+        modelKey(row.fsProduct) !== mk) {
+      // Different model recorded altogether, not just spelt differently.
+      row.productDiffers = true;
+    }
+    if (!row.productDiffers) row.productShould = N.clean(row.fsProduct) || row.productShould;
+
+    row.pages = (row.mono || 0) + (row.colour || 0);
+    row.reporting = !!(row.lastSeen && U.daysSince(row.lastSeen) !== null &&
+                       U.daysSince(row.lastSeen) <= cfg.staleDays);
+    row.tagShared = row.fsTag ? (tagCount[tagKey(row.fsTag)] || 0) : 0;
+    row.status = d && a ? 'matched' : (d ? 'onestop-only' : 'fs-only');
+
+    /* Which location to believe is a setting, because neither side is reliably
+       right: OneStop names the campus where Freshservice names the building,
+       and Freshservice occasionally names a department instead of a place. */
+    var preferred = cfg.locationSource === 'onestop'
+      ? (stripCompany(row.siteName) || row.fsLocation)
+      : (row.fsLocation || stripCompany(row.siteName));
+    row.location = preferred;
+    row.locationKey = N.locationKey(preferred);
+
+    /* Resolve each side on its own as well as the preferred one: only when
+       both land on a site, and on different sites, is there a real
+       disagreement about where the printer is. */
+    row.fsSite = findSite(row.fsLocation);
+    row.osSite = findSite(stripCompany(row.siteName));
+
+    var site = findSite(preferred) || row.fsSite || row.osSite || null;
+    if (!site) {
+      // A postcode that belongs to exactly one site can settle it; one that
+      // covers a campus cannot, so it is left unresolved rather than guessed.
+      var pl = byPostcode[postKey(row.postcode)] || [];
+      if (pl.length === 1) site = pl[0];
+      else if (pl.length > 1) row.postcodeAmbiguous = pl.length;
+    }
+    row.site = site;
+    row.siteCode = site ? site.code : '';
+    row.siteResolved = site ? site.name : '';
+    return row;
+  }
+
+  /* ------------------------------------------------------------ rule pass */
+
+  function apply(result, cfg, enabled) {
+    cfg = settings(cfg);
+    var ctx = { hasSites: result.sites && Object.keys(result.sites).length > 0 };
+    var active = RULES.filter(function (r) { return isEnabled(r, enabled); });
+    var tally = {};
+    active.forEach(function (r) { tally[r.code] = 0; });
+
+    result.rows.forEach(function (row) {
+      row.issues = [];
+      row.details = {};
+      var worst = null;
+      active.forEach(function (rule) {
+        var hit = false;
+        try { hit = !!rule.test(row, cfg, ctx); } catch (e) { hit = false; }
+        if (!hit) return;
+        row.issues.push(rule.code);
+        try { row.details[rule.code] = rule.detail ? rule.detail(row) : ''; } catch (e) { row.details[rule.code] = ''; }
+        tally[rule.code]++;
+        if (!worst || SEVERITY_ORDER[rule.severity] > SEVERITY_ORDER[worst]) worst = rule.severity;
+      });
+      row.severity = worst;
+      row.issueCount = row.issues.length;
+    });
+
+    result.tally = tally;
+    result.rulesUsed = active.map(function (r) { return r.code; });
+    return result;
+  }
+
+  global.Printers = {
+    DEFAULTS: DEFAULTS,
+    RULES: RULES,
+    RULE_BY_CODE: RULE_BY_CODE,
+    SEVERITY_ORDER: SEVERITY_ORDER,
+    settings: settings,
+    isEnabled: isEnabled,
+    reconcile: reconcile,
+    apply: apply,
+    stripMake: stripMake,
+    modelKey: modelKey,
+    stripCompany: stripCompany,
+    usable: usable,
+    siteKeys: siteKeys
+  };
+})(window);
+
+</script>
+<script>
 /* js/dupes.js */
 /* Finding duplicate entries *within* each source file, keyed on serial number.
 
@@ -7190,6 +7861,159 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     BUILT_IN: BUILT_IN,
     setEnvLabeller: function (fn) { labelEnv = fn || function (k) { return k; }; }
   }, E);
+})(window);
+
+</script>
+<script>
+/* js/printviews.js */
+/* Columns and views for printers. Same filter engine as the other two
+   populations, and the emphasis is on corrections: the register is complete,
+   so almost every view is a field to put right. */
+(function (global) {
+  'use strict';
+
+  var U = global.U, N = global.Norm;
+
+  var COLUMNS = [
+    { key: 'notes',      label: 'Notes',        width: 64, type: 'notes',
+      get: function (r) { return global.Notes.countFor(r); },
+      sortKey: function (r) { return -global.Notes.countFor(r); } },
+    { key: 'name',       label: 'Printer',      width: 150, get: function (r) { return r.name; }, strong: true },
+    { key: 'serial',     label: 'Serial',       width: 140, get: function (r) { return r.serial; } },
+    { key: 'severity',   label: 'Severity',     width: 90,  get: function (r) { return r.severity || ''; },
+      sortKey: function (r) { return r.severity ? -global.Printers.SEVERITY_ORDER[r.severity] : 9; } },
+    { key: 'issues',     label: 'Issues',       width: 300, type: 'issues', get: function (r) { return r.issues; },
+      sortKey: function (r) { return -r.issueCount; } },
+    { key: 'issueCount', label: 'Issue count',  width: 70, type: 'number', get: function (r) { return r.issueCount; } },
+    { key: 'status',     label: 'Present in',   width: 130,
+      get: function (r) {
+        return r.status === 'matched' ? 'both'
+             : r.status === 'onestop-only' ? 'OneStop only' : 'Freshservice only';
+      } },
+
+    { key: 'model',      label: 'Model (OneStop)', width: 170, get: function (r) { return r.model; } },
+    { key: 'fsProduct',  label: 'Product (FS)',  width: 150, get: function (r) { return r.fsProduct; } },
+    { key: 'productShould', label: 'Product should be', width: 150, get: function (r) { return r.productShould; } },
+    { key: 'fsVendor',   label: 'Vendor (FS)',   width: 110, get: function (r) { return r.fsVendor; } },
+    { key: 'vendorShould', label: 'Vendor should be', width: 110, get: function (r) { return r.vendorShould; } },
+    { key: 'fsState',    label: 'Asset state',   width: 110, get: function (r) { return r.fsState; } },
+    { key: 'fsAssetType',label: 'Asset type',    width: 110, get: function (r) { return r.fsAssetType; } },
+    { key: 'printerType',label: 'Printer type',  width: 110, get: function (r) { return r.fsPrinterType; } },
+
+    { key: 'siteCode',   label: 'Site code',     width: 80,  get: function (r) { return r.siteCode; } },
+    { key: 'siteResolved', label: 'Site',        width: 180, get: function (r) { return r.siteResolved; } },
+    { key: 'fsLocation', label: 'Location (FS)', width: 170, get: function (r) { return r.fsLocation; } },
+    { key: 'siteName',   label: 'Site (OneStop)',width: 220, get: function (r) { return r.siteName; } },
+    { key: 'spot',       label: 'Where in the building', width: 170, get: function (r) { return r.spot; } },
+    { key: 'town',       label: 'Town',          width: 130, get: function (r) { return r.site ? N.clean(r.site.town) : ''; } },
+    { key: 'postcode',   label: 'Postcode',      width: 95,  get: function (r) { return r.site ? N.clean(r.site.postcode) : r.postcode; } },
+    { key: 'region',     label: 'Region',        width: 130, get: function (r) { return r.site ? N.clean(r.site.region) : ''; } },
+
+    { key: 'ipOnestop',  label: 'IP (OneStop)',  width: 130, get: function (r) { return r.ipOnestop; } },
+    { key: 'ipFs',       label: 'IP (FS)',       width: 130, get: function (r) { return r.ipFs; } },
+    { key: 'macOnestop', label: 'MAC (OneStop)', width: 150, get: function (r) { return r.macOnestop; } },
+    { key: 'macFs',      label: 'MAC (FS)',      width: 150, get: function (r) { return r.macFs; } },
+
+    { key: 'mono',       label: 'Mono pages',    width: 100, type: 'number', get: function (r) { return r.mono; } },
+    { key: 'colour',     label: 'Colour pages',  width: 100, type: 'number', get: function (r) { return r.colour; } },
+    { key: 'pages',      label: 'Pages, total',  width: 105, type: 'number', get: function (r) { return r.pages; } },
+    { key: 'lastSeen',   label: 'Last reported', width: 120, type: 'date', get: function (r) { return r.lastSeen; },
+      sortKey: function (r) { return r.lastSeen ? r.lastSeen.getTime() : 0; } },
+    { key: 'monitored',  label: 'Monitored',     width: 100,
+      get: function (r) { return r.monitored === null ? '' : (r.monitored ? 'yes' : 'no'); } },
+    { key: 'proactive',  label: 'Proactive toner', width: 120,
+      get: function (r) { return r.proactive === null ? '' : (r.proactive ? 'yes' : 'no'); } },
+
+    { key: 'fsTag',      label: 'Asset tag (FS)', width: 110, get: function (r) { return r.fsTag; } },
+    { key: 'siteNum',    label: 'Site no. (OneStop)', width: 120, get: function (r) { return r.siteNum; } },
+    { key: 'contract',   label: 'Contract',      width: 100, get: function (r) { return r.contract; } },
+    { key: 'matchedBy',  label: 'Matched on',    width: 100, get: function (r) { return r.matchedBy; } }
+  ];
+
+  var BASE_COLS = ['name', 'serial', 'severity', 'model', 'siteResolved', 'fsState', 'issues'];
+
+  var E = global.Views.engine(COLUMNS, BASE_COLS);
+
+  function issueView(id, name, description, codes, columns) {
+    return {
+      id: id, name: name, description: description, columns: columns || BASE_COLS,
+      filter: { match: 'any', conditions: codes.map(function (c) { return { field: '__issue', op: 'is', value: c }; }) },
+      sort: { key: 'severity', dir: 'asc' }
+    };
+  }
+
+  var BUILT_IN = [
+    {
+      id: 'pr-attention',
+      name: 'Needs attention',
+      description: 'Every printer with at least one open discrepancy, worst first.',
+      columns: ['name', 'serial', 'severity', 'siteResolved', 'fsState', 'pages', 'lastSeen', 'issues'],
+      filter: { match: 'all', conditions: [{ field: '__anyIssue', op: 'is' }] },
+      sort: { key: 'severity', dir: 'asc' }
+    },
+    issueView('pr-state', 'Fix: asset state',
+      'Marked In Stock in Freshservice while OneStop has them reporting with pages on the meter. The page count is the evidence.',
+      ['state-wrong'],
+      ['name', 'serial', 'fsState', 'pages', 'mono', 'colour', 'lastSeen', 'siteResolved']),
+    issueView('pr-serial', 'Fix: serial number',
+      'The serial is in the Name field but the Serial Number field is empty. One column, and everything else keys on it.',
+      ['serial-missing'],
+      ['name', 'serial', 'model', 'siteResolved', 'fsTag', 'fsState']),
+    issueView('pr-ip', 'Fix: IP address',
+      'OneStop polls the printer, so its address is the current one. Includes the Region 2 sites that moved from 10.16 to 10.17.',
+      ['ip-differs', 'ip-missing', 'mac-missing'],
+      ['name', 'serial', 'ipFs', 'ipOnestop', 'macFs', 'macOnestop', 'siteResolved', 'issues']),
+    issueView('pr-product', 'Fix: product',
+      'Spelt differently from the rest of your own records for the same model, or recorded as the wrong model entirely.',
+      ['product-inconsistent'],
+      ['name', 'serial', 'model', 'fsProduct', 'productShould', 'siteResolved', 'issues']),
+    issueView('pr-vendor', 'Fix: vendor',
+      'No manufacturer recorded. Every one of these is an HP, so it is a single bulk correction.',
+      ['vendor-missing'],
+      ['name', 'model', 'fsProduct', 'fsVendor', 'vendorShould', 'siteResolved']),
+    issueView('pr-location', 'Location to check',
+      'The two systems name different sites, no location is recorded, or the site is not in your site list.',
+      ['location-conflict', 'location-missing', 'site-unresolved'],
+      ['name', 'serial', 'fsLocation', 'siteName', 'siteCode', 'siteResolved', 'postcode', 'issues']),
+    issueView('pr-silent', 'Not reporting',
+      'On the contract but silent. OneStop cannot read the meters or ship toner for a printer it cannot see.',
+      ['not-reporting'],
+      ['name', 'serial', 'lastSeen', 'ipOnestop', 'siteResolved', 'fsState', 'pages']),
+    issueView('pr-unwatched', 'Monitoring and toner',
+      'Monitoring switched off, or toner not shipped automatically — somebody has to notice these run low.',
+      ['not-monitored', 'no-proactive-toner'],
+      ['name', 'serial', 'monitored', 'proactive', 'siteResolved', 'lastSeen', 'pages', 'issues']),
+    issueView('pr-questionable', 'Worth questioning',
+      'Barely used, at a closed or non-care site, still on a legacy address, or not a printer at all. The candidates for coming off the contract.',
+      ['barely-used', 'closed-site', 'legacy-subnet', 'not-a-printer'],
+      ['name', 'serial', 'model', 'siteName', 'pages', 'lastSeen', 'ipOnestop', 'issues']),
+    issueView('pr-contract', 'Contract mismatches',
+      'In one system and not the other.',
+      ['onestop-only', 'fs-only'],
+      ['name', 'serial', 'status', 'model', 'fsState', 'siteResolved', 'issues']),
+    issueView('pr-tags', 'Asset tag oddities',
+      'Freshservice uses Asset Tag to hold the OneStop site number, so it disagrees or is shared between printers.',
+      ['tag-differs', 'tag-shared'],
+      ['name', 'serial', 'fsTag', 'siteNum', 'siteResolved', 'issues']),
+    {
+      id: 'pr-volume',
+      name: 'By volume',
+      description: 'Every printer by lifetime page count, busiest first — the other end of the list is where the savings are.',
+      columns: ['name', 'model', 'siteResolved', 'mono', 'colour', 'pages', 'lastSeen', 'monitored'],
+      filter: null,
+      sort: { key: 'pages', dir: 'desc' }
+    },
+    {
+      id: 'pr-all',
+      name: 'All printers',
+      description: 'Everything from both systems after matching.',
+      columns: ['name', 'serial', 'model', 'status', 'siteResolved', 'spot', 'fsState', 'pages', 'issues'],
+      filter: null,
+      sort: { key: 'siteResolved', dir: 'asc' }
+    }
+  ];
+
+  global.PrintViews = Object.assign({ engine: global.Views.engine, BUILT_IN: BUILT_IN }, E);
 })(window);
 
 </script>
@@ -7957,6 +8781,276 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
 
 </script>
 <script>
+/* js/printexport.js */
+/* The Freshservice import for printers.
+
+   These rows all correct records that already exist, so unlike the network
+   import there is nothing to create: the file carries the key Freshservice
+   matches on plus only the columns being put right. Each field names the side
+   that is authoritative for it, which is not the same side throughout —
+   OneStop polls the device, so it owns the serial, the addresses, the meters
+   and the monitoring flags; Freshservice knows which building rather than
+   which campus, so it owns the location. */
+(function (global) {
+  'use strict';
+
+  var U = global.U, N = global.Norm, P = global.Printers;
+
+  var DEFAULT_HEADERS = {
+    workspace: 'Workspace',
+    name:      'Name',
+    assetType: 'Asset Type',
+    product:   'Product',
+    serial:    'Serial Number',
+    state:     'Asset State',
+    location:  'Location',
+    vendor:    'Vendor',
+    ip:        'IP Address',
+    mac:       'MAC Address',
+    tag:       'Asset Tag',
+    description: 'Description'
+  };
+
+  /* Every column the import can carry.
+       required : Freshservice rejects an asset import without it
+       fixes    : the rule code this column exists to put right
+       from     : which system the value comes from */
+  var COLUMNS = [
+    { key: 'workspace', label: 'Workspace',     required: true, fixed: true, from: 'fixed' },
+    { key: 'name',      label: 'Name',          required: true, from: 'fs',
+      help: 'The key Freshservice matches the row on. Never changed.' },
+    { key: 'assetType', label: 'Asset Type',    required: true, fixed: true, from: 'fixed' },
+    { key: 'product',   label: 'Product',       required: true, from: 'house',
+      fixes: 'product-inconsistent', help: 'The spelling most of your own records already use for this model.' },
+    { key: 'serial',    label: 'Serial Number', from: 'onestop', fixes: 'serial-missing' },
+    { key: 'state',     label: 'Asset State',   from: 'derived', fixes: 'state-wrong',
+      help: 'Set to In Use where OneStop shows the printer reporting with pages on the meter.' },
+    { key: 'location',  label: 'Location',      from: 'fs', fixes: 'location-missing',
+      help: 'Freshservice wins on location, so this only fills a blank.' },
+    { key: 'vendor',    label: 'Vendor',        from: 'derived', fixes: 'vendor-missing' },
+    { key: 'ip',        label: 'IP Address',    from: 'onestop', fixes: 'ip-differs' },
+    { key: 'mac',       label: 'MAC Address',   from: 'onestop', fixes: 'mac-missing' },
+    { key: 'tag',       label: 'Asset Tag',     from: 'onestop', fixes: 'tag-differs',
+      help: 'The OneStop site number, which is what Freshservice holds here.' },
+    { key: 'description', label: 'Description', from: 'derived',
+      help: 'Where in the building, and the meter reading it was set from.' }
+  ];
+
+  var SOURCE_LABELS = {
+    fixed:   'the same on every row',
+    fs:      'Freshservice',
+    onestop: 'OneStop',
+    house:   'your own majority spelling',
+    derived: 'worked out from both'
+  };
+
+  function defaultConfig() {
+    return {
+      headers: Object.assign({}, DEFAULT_HEADERS),
+      include: {
+        workspace: true, name: true, assetType: true, product: true, serial: true,
+        state: true, location: false, vendor: true, ip: true, mac: true,
+        tag: false, description: false
+      },
+      fixed: { workspace: 'IT', assetType: 'Printer' },
+      inUseState: 'In Use',
+      // Only write a column on the rows that actually need it, leaving the
+      // rest blank. Freshservice treats a blank cell as "leave alone", so a
+      // narrow file is a safer file.
+      onlyChanged: true
+    };
+  }
+
+  /* --------------------------------------------------------------- values */
+
+  function cellValue(row, key, config) {
+    var col = byKey(key);
+    if (!col) return '';
+    if (col.fixed) return N.clean(config.fixed[key]);
+
+    switch (key) {
+      case 'name':
+        // The match key: whatever Freshservice already calls the record.
+        return N.clean(row.fsName) || N.clean(row.serial);
+      case 'product':
+        return N.clean(row.productShould) || N.clean(row.fsProduct);
+      case 'serial':
+        return only(row, config, 'serial-missing', N.clean(row.serial));
+      case 'state':
+        return only(row, config, 'state-wrong', config.inUseState);
+      case 'location':
+        return only(row, config, 'location-missing',
+          N.clean(row.fsLocation) || N.clean(P.stripCompany(row.siteName)));
+      case 'vendor':
+        return only(row, config, 'vendor-missing', N.clean(row.vendorShould));
+      case 'ip':
+        return only(row, config, ['ip-differs', 'ip-missing'], P.usable(row.ipOnestop));
+      case 'mac':
+        return only(row, config, 'mac-missing', N.clean(row.macOnestop));
+      case 'tag':
+        return only(row, config, 'tag-differs', N.clean(row.siteNum));
+      case 'description':
+        return description(row);
+      default: return '';
+    }
+  }
+
+  /* With onlyChanged on, a column is written only for the rows whose issue it
+     exists to fix. Freshservice reads a blank cell as "leave this field as it
+     is", so writing a value everywhere would overwrite fields nobody asked to
+     change — the Product column being the exception, since the import is
+     rejected without it. */
+  function only(row, config, codes, value) {
+    if (!config.onlyChanged) return value;
+    var list = Array.isArray(codes) ? codes : [codes];
+    var hit = list.some(function (c) { return row.issues && row.issues.indexOf(c) >= 0; });
+    return hit ? value : '';
+  }
+
+  function description(row) {
+    var bits = [];
+    if (row.spot) bits.push(row.spot);
+    if (row.pages) bits.push(U.num(row.pages) + ' pages at ' + (row.lastSeen ? U.fmtDate(row.lastSeen) : 'last read'));
+    if (row.monitored === false) bits.push('not monitored by OneStop');
+    return bits.join('; ');
+  }
+
+  function byKey(key) {
+    return COLUMNS.filter(function (c) { return c.key === key; })[0] || null;
+  }
+
+  function header(col, config) {
+    return N.clean((config.headers || {})[col.key]) || col.label;
+  }
+
+  function activeColumns(config) {
+    return COLUMNS.filter(function (c) { return config.include[c.key]; });
+  }
+
+  /* Which rows this file would actually change, and what it would change. */
+  function changeSummary(rows, config) {
+    var out = [];
+    activeColumns(config).forEach(function (col) {
+      if (col.fixed || col.key === 'name') return;
+      var n = 0;
+      rows.forEach(function (r) {
+        var v = cellValue(r, col.key, config);
+        if (!v) return;
+        if (col.key === 'product' && !r.productDiffers) return;   // present but unchanged
+        n++;
+      });
+      if (n) out.push({ key: col.key, label: header(col, config), rows: n, fixes: col.fixes || '' });
+    });
+    return out;
+  }
+
+  function missingRequired(config) {
+    return COLUMNS.filter(function (c) { return c.required && !config.include[c.key]; })
+                  .map(function (c) { return header(c, config); });
+  }
+
+  /* A required column blank on any row is a rejected import. */
+  function blankRequired(rows, config) {
+    var out = [];
+    activeColumns(config).forEach(function (c) {
+      if (!c.required) return;
+      var n = 0;
+      rows.forEach(function (r) { if (!cellValue(r, c.key, config)) n++; });
+      if (n) out.push({ key: c.key, label: header(c, config), rows: n });
+    });
+    return out;
+  }
+
+  /* Rows worth writing at all: a correction file for a row with nothing to
+     correct is noise, and Freshservice would rewrite it for no reason. */
+  function rowsWithChanges(rows, config) {
+    if (!config.onlyChanged) return rows.slice();
+    var fixable = {};
+    activeColumns(config).forEach(function (c) { if (c.fixes) fixable[c.fixes] = true; });
+    // Product is not gated on onlyChanged, so include a row whose product differs.
+    return rows.filter(function (r) {
+      if (r.productDiffers && config.include.product) return true;
+      return (r.issues || []).some(function (code) { return fixable[code]; });
+    });
+  }
+
+  /* ---------------------------------------------------------------- output */
+
+  function toImportCsv(rows, config) {
+    var seen = {}, keep = [];
+    activeColumns(config).forEach(function (c) {
+      var h = header(c, config);
+      if (seen[h]) return;
+      seen[h] = true;
+      keep.push({ col: c, header: h });
+    });
+    var headers = keep.map(function (k) { return k.header; });
+    var out = rows.map(function (r) {
+      var o = {};
+      keep.forEach(function (k) { o[k.header] = cellValue(r, k.col.key, config); });
+      return o;
+    });
+    return global.CSV.stringify(out, headers);
+  }
+
+  /* What the import claimed to change, field by field, for the change log. */
+  function toChangeLogCsv(rows, config) {
+    var headers = ['Printer', 'Serial', 'Field', 'Was', 'Set to', 'Because'];
+    var out = [];
+    rows.forEach(function (r) {
+      activeColumns(config).forEach(function (col) {
+        if (col.fixed || col.key === 'name') return;
+        var to = cellValue(r, col.key, config);
+        if (!to) return;
+        var was = currentValue(r, col.key);
+        if (N.clean(was) === N.clean(to)) return;
+        out.push({
+          'Printer': r.fsName || r.name,
+          'Serial': r.serial,
+          'Field': header(col, config),
+          'Was': was,
+          'Set to': to,
+          'Because': col.fixes ? ((P.RULE_BY_CODE[col.fixes] || {}).label || col.fixes) : (col.help || '')
+        });
+      });
+    });
+    return global.CSV.stringify(out, headers);
+  }
+
+  function currentValue(row, key) {
+    switch (key) {
+      case 'product':  return row.fsProduct;
+      case 'serial':   return row.fs ? N.clean(row.fs.serial) : '';
+      case 'state':    return row.fsState;
+      case 'location': return row.fsLocation;
+      case 'vendor':   return row.fsVendor;
+      case 'ip':       return row.ipFs;
+      case 'mac':      return row.macFs;
+      case 'tag':      return row.fsTag;
+      default:         return '';
+    }
+  }
+
+  global.PrintExport = {
+    COLUMNS: COLUMNS,
+    DEFAULT_HEADERS: DEFAULT_HEADERS,
+    SOURCE_LABELS: SOURCE_LABELS,
+    defaultConfig: defaultConfig,
+    cellValue: cellValue,
+    currentValue: currentValue,
+    activeColumns: activeColumns,
+    changeSummary: changeSummary,
+    missingRequired: missingRequired,
+    blankRequired: blankRequired,
+    rowsWithChanges: rowsWithChanges,
+    header: header,
+    toImportCsv: toImportCsv,
+    toChangeLogCsv: toChangeLogCsv
+  };
+})(window);
+
+</script>
+<script>
 /* js/sampledata.js */
 /* Sample data for the "Load sample data" button.
 
@@ -7982,14 +9076,16 @@ window.SampleData = {
 
   var U = global.U, V = global.Views, R = global.Rules, N = global.Norm,
       S = global.Schema, C = global.Charts, T = global.Table, FX = global.FSExport,
-      NV = global.NetViews, NM = global.NetMatch, NX = global.NetExport, FT = global.Fortinet;
+      NV = global.NetViews, NM = global.NetMatch, NX = global.NetExport, FT = global.Fortinet,
+      PV = global.PrintViews, PM = global.Printers, PX2 = global.PrintExport;
 
   /* Two populations, reconciled separately. PC_SOURCES feed the device
      reconciliation; NET_SOURCES feed the network one. The location lookup is
      shared, because a site is a site. */
   var PC_SOURCES = ['freshservice', 'intune', 'arcticwolf', 'locations', 'verification'];
   var NET_SOURCES = ['fortimanager', 'fsnetwork'];
-  var SOURCE_IDS = PC_SOURCES.concat(NET_SOURCES);
+  var PRINT_SOURCES = ['onestop', 'fsprinter'];
+  var SOURCE_IDS = PC_SOURCES.concat(NET_SOURCES, PRINT_SOURCES);
 
   /* FortiManager is exported per environment, and the two exports do not have
      the same columns, so they are unioned by header name on load rather than
@@ -8056,6 +9152,16 @@ window.SampleData = {
     return out;
   }
 
+  function mergePrintConfig(saved) {
+    var base = PX2.defaultConfig();
+    if (!saved || typeof saved !== 'object') return base;
+    var out = Object.assign({}, base, saved);
+    ['headers', 'include', 'fixed'].forEach(function (k) {
+      out[k] = Object.assign({}, base[k], saved[k] || {});
+    });
+    return out;
+  }
+
   var state = {
     sources: {},                 // id -> { fileName, headers, raw, mapping, records }
     result: null,
@@ -8098,7 +9204,20 @@ window.SampleData = {
     netConfig: mergeNetConfig(global.Store.get('netConfig', {})),
     siteOverrides: global.Store.get('siteOverrides', {}),  // device name -> site code
     envLabels: global.Store.get('envLabels', {}),          // export file -> your name for it
-    envOrder: global.Store.get('envOrder', [])
+    envOrder: global.Store.get('envOrder', []),
+
+    /* --- printers, reconciled OneStop against Freshservice --- */
+    printResult: null,
+    printCfg: PM.settings(global.Store.get('printCfg', null) || {}),
+    printEnabledRules: global.Store.get('printEnabledRules', {}),
+    printViewId: 'pr-attention',
+    printSearch: '',
+    printColumns: null,
+    printColumnsById: global.Store.get('printColumns', {}),
+    printSelectedIds: [],
+    printSiteFilter: null,
+    printCustomViews: global.Store.get('printCustomViews', []),
+    printConfig: mergePrintConfig(global.Store.get('printConfig', {}))
   };
 
   var grid = null;
@@ -8119,6 +9238,7 @@ window.SampleData = {
        exports afterwards a fight. */
     var hadPc = !!(state.sources.freshservice && state.sources.intune);
     var hadNet = !!(state.sources.fortimanager && state.sources.fsnetwork);
+    var hadPrint = !!(state.sources.onestop && state.sources.fsprinter);
 
     var jobs = list.map(function (file) {
       return global.CSV.readFile(file).then(function (parsed) {
@@ -8215,8 +9335,10 @@ window.SampleData = {
            boxes off screen before the second environment could be added. */
         var hasPc = !!(state.sources.freshservice && state.sources.intune);
         var hasNet = !!(state.sources.fortimanager && state.sources.fsnetwork);
+        var hasPrint = !!(state.sources.onestop && state.sources.fsprinter);
         if (hasPc && !hadPc) setTab('dashboard');
         else if (hasNet && !hadNet) setTab('network');
+        else if (hasPrint && !hadPrint) setTab('printers');
       }
     }).catch(function (err) {
       U.toast(err.message || String(err), 'err', 8000);
@@ -8272,6 +9394,7 @@ window.SampleData = {
       state.result = R.apply(global.Match.reconcile(data, state.cfg), state.cfg, state.enabledRules);
     }
     recomputeNet(data);
+    recomputePrinters(data);
     saveWorkingSet();
   }
 
@@ -8348,6 +9471,10 @@ window.SampleData = {
       netEnabledRules: state.netEnabledRules,
       netConfig: state.netConfig,
       netCustomViews: state.netCustomViews,
+      printCfg: state.printCfg,
+      printEnabledRules: state.printEnabledRules,
+      printConfig: state.printConfig,
+      printCustomViews: state.printCustomViews,
       favourites: state.favourites,
       siteOverrides: state.siteOverrides,
       envLabels: state.envLabels,
@@ -8411,6 +9538,10 @@ window.SampleData = {
       if (payload.netEnabledRules) state.netEnabledRules = payload.netEnabledRules;
       if (payload.netConfig) state.netConfig = mergeNetConfig(payload.netConfig);
       if (payload.netCustomViews) state.netCustomViews = payload.netCustomViews;
+      if (payload.printCfg) state.printCfg = PM.settings(payload.printCfg);
+      if (payload.printEnabledRules) state.printEnabledRules = payload.printEnabledRules;
+      if (payload.printConfig) state.printConfig = mergePrintConfig(payload.printConfig);
+      if (payload.printCustomViews) state.printCustomViews = payload.printCustomViews;
       if (payload.favourites) state.favourites = payload.favourites;
       if (payload.siteOverrides) state.siteOverrides = payload.siteOverrides;
       if (payload.envLabels) state.envLabels = payload.envLabels;
@@ -8477,6 +9608,19 @@ window.SampleData = {
     return rows;
   }
 
+  function recomputePrinters(data) {
+    data = data || {};
+    var os = data.onestop || [];
+    var fsp = data.fsprinter || [];
+    if (!os.length && !fsp.length) {
+      state.printResult = null;
+      return;
+    }
+    state.printResult = PM.apply(
+      PM.reconcile(os, fsp, state.printCfg, siteIndex()),
+      state.printCfg, state.printEnabledRules);
+  }
+
   /* ---------------------------------------------------- network views */
 
   function netViews() {
@@ -8526,6 +9670,54 @@ window.SampleData = {
     setTab('network');
   }
 
+  /* ---------------------------------------------------- printer views */
+
+  function printViews() {
+    return PV.BUILT_IN.concat(state.printCustomViews.map(function (v) {
+      return Object.assign({}, v, { isCustom: true });
+    }));
+  }
+
+  function printViewById(id) {
+    return printViews().filter(function (v) { return v.id === id; })[0] || PV.BUILT_IN[0];
+  }
+
+  function printRowsForView(view, withSearch) {
+    if (!state.printResult) return [];
+    var rows = PV.applyView(view, state.printResult.rows);
+    if (state.printSiteFilter) {
+      rows = rows.filter(function (r) { return r.locationKey === state.printSiteFilter.key; });
+    }
+    if (withSearch && state.printSearch) rows = PV.searchRows(rows, state.printSearch);
+    return rows;
+  }
+
+  function printViewCount(view) {
+    if (!state.printResult) return 0;
+    try { return PV.applyView(view, state.printResult.rows).length; } catch (e) { return 0; }
+  }
+
+  function printSelectedRows() {
+    if (!state.printResult || !state.printSelectedIds.length) return [];
+    var wanted = {};
+    state.printSelectedIds.forEach(function (id) { wanted[id] = true; });
+    return state.printResult.rows.filter(function (r) { return wanted[r.id]; });
+  }
+
+  function setPrintView(id) {
+    if (id !== state.printViewId) {
+      state.printSearch = '';
+      state.printSelectedIds = [];
+    }
+    state.printViewId = id;
+    setTab('printers');
+  }
+
+  function setPrintSite(site) {
+    state.printSiteFilter = { key: site.key, name: site.name };
+    setPrintView('pr-all');
+  }
+
   function selectedRows() {
     if (!state.result || !state.selectedIds.length) return [];
     var wanted = {};
@@ -8570,6 +9762,7 @@ window.SampleData = {
       ['dupes', 'Duplicates'],
       ['devices', 'Devices'],
       ['network', 'Network'],
+      ['printers', 'Printers'],
       ['map', 'Map'],
       ['export', 'Freshservice import'],
       ['settings', 'Settings']
@@ -8577,8 +9770,9 @@ window.SampleData = {
     tabs.forEach(function (t) {
       // The two populations load independently: network exports alone should
       // open the Network tab without the PC reconciliation being present.
-      var needs = { network: !!state.netResult, data: true, settings: true,
-                    map: !!(state.result || state.netResult) };
+      var needs = { network: !!state.netResult, printers: !!state.printResult,
+                    data: true, settings: true,
+                    map: !!(state.result || state.netResult || state.printResult) };
       var disabled = !(Object.prototype.hasOwnProperty.call(needs, t[0]) ? needs[t[0]] : !!state.result);
       host.appendChild(U.el('button', {
         class: 'tab' + (state.tab === t[0] ? ' active' : ''),
@@ -8590,7 +9784,11 @@ window.SampleData = {
 
     host.appendChild(U.el('div', { class: 'spacer' }));
 
-    if (state.tab === 'network' && state.netResult) {
+    if (state.tab === 'printers' && state.printResult) {
+      host.appendChild(U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } },
+        U.num(state.printResult.rows.length) + ' printers \u00b7 ' +
+        U.num(state.printResult.rows.filter(function (r) { return r.issueCount; }).length) + ' flagged'));
+    } else if (state.tab === 'network' && state.netResult) {
       host.appendChild(U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } },
         U.num(state.netResult.rows.length) + ' network devices \u00b7 ' +
         U.num(state.netResult.rows.filter(function (r) { return r.issueCount; }).length) + ' flagged'));
@@ -8762,6 +9960,7 @@ window.SampleData = {
     var contexts = [];
     if (state.result) contexts.push(pcCtx());
     if (state.netResult) contexts.push(netCtx());
+    if (state.printResult) contexts.push(printCtx());
     if (!contexts.length) return;
 
     /* Favourites first: the whole point is that the views someone uses every
@@ -8810,6 +10009,10 @@ window.SampleData = {
       filters.push(['Network site: ' + U.truncate(state.netSiteFilter.name, 14),
                     function () { state.netSiteFilter = null; render(); }]);
     }
+    if (state.printSiteFilter) {
+      filters.push(['Printer site: ' + U.truncate(state.printSiteFilter.name, 14),
+                    function () { state.printSiteFilter = null; render(); }]);
+    }
     if (filters.length) {
       var fsec = sideSection('filters', 'Active filter');
       if (fsec.body) {
@@ -8851,6 +10054,7 @@ window.SampleData = {
         dupes: renderDupes,
         devices: renderDevices,
         network: renderNetwork,
+        printers: renderPrinters,
         map: renderMap,
         export: renderExport,
         settings: renderSettings
@@ -8858,7 +10062,8 @@ window.SampleData = {
       var ready = state.tab === 'data' || state.tab === 'settings'
         ? true
         : state.tab === 'network' ? !!state.netResult
-        : state.tab === 'map' ? !!(state.result || state.netResult)
+        : state.tab === 'printers' ? !!state.printResult
+        : state.tab === 'map' ? !!(state.result || state.netResult || state.printResult)
         : !!state.result;
       (ready ? page : renderData)(main);
     } finally {
@@ -9928,6 +11133,210 @@ window.SampleData = {
      working-set save. A value typed into a lookup box therefore reached
      localStorage but not the working set, and on the next visit the stale
      working-set copy overwrote it. Anything that edits the config saves both. */
+
+  /* Building the Freshservice correction file for printers.
+
+     Every row here updates a record that already exists, so the file carries
+     the Name Freshservice matches on plus only the fields being put right. A
+     blank cell means "leave this alone", which is why each column is written
+     only for the rows whose problem it fixes. */
+  function openPrintImport() {
+    var view = printViewById(state.printViewId);
+    var scope = state.printSelectedIds.length ? 'selection' : 'view';
+    var pool = (scope === 'selection' ? printSelectedRows() : printRowsForView(view, true))
+      .filter(function (r) { return r.fs; });          // only records that exist
+    var cfg = state.printConfig;
+    var dlg = null;
+
+    var body = U.el('div', { class: 'body' });
+    var head = U.el('div', { style: { marginBottom: '12px' } });
+    body.appendChild(head);
+
+    var scopeRow = U.el('div', { class: 'row', style: { marginBottom: '10px' } });
+    [['view', 'Everything in "' + view.name + '"' + (state.printSearch ? ' matching your search' : '')],
+     ['selection', U.num(state.printSelectedIds.length) + ' selected']].forEach(function (o) {
+      scopeRow.appendChild(U.el('label', { class: 'check' }, [
+        U.el('input', {
+          type: 'radio', name: 'prscope', checked: scope === o[0],
+          disabled: o[0] === 'selection' && !state.printSelectedIds.length,
+          onchange: function () {
+            state.printSelectedIds = o[0] === 'selection' ? state.printSelectedIds : [];
+            if (dlg) dlg.close();
+            openPrintImport();
+          }
+        }),
+        o[1]
+      ]));
+    });
+    body.appendChild(scopeRow);
+
+    /* --- columns ------------------------------------------------------ */
+    var colCard = U.el('details', { class: 'card', open: true, style: { marginBottom: '10px' } });
+    colCard.appendChild(U.el('summary', {}, [
+      U.el('strong', {}, 'What to correct'),
+      U.el('span', { class: 'hint', style: { marginLeft: '8px' } }, 'and where each value comes from')
+    ]));
+    var kv = U.el('div', { class: 'kv two', style: { marginTop: '8px' } });
+    kv.appendChild(U.el('div', { class: 'hdr' }, 'Column'));
+    kv.appendChild(U.el('div', { class: 'hdr' }, 'Header in Freshservice'));
+    PX2.COLUMNS.forEach(function (col) {
+      kv.appendChild(U.el('div', { class: 'k' }, [
+        U.el('label', { class: 'check' }, [
+          U.el('input', {
+            type: 'checkbox', checked: !!cfg.include[col.key], disabled: col.required,
+            title: col.required ? 'Freshservice rejects an asset import without this column' : null,
+            onchange: function (e) {
+              cfg.include[col.key] = e.target.checked;
+              persistPrintConfig();
+              drawStatus();
+            }
+          }),
+          col.label + (col.required ? ' (required)' : '')
+        ]),
+        U.el('div', { class: 'hint', style: { marginLeft: '24px' } },
+          'from ' + (PX2.SOURCE_LABELS[col.from] || col.from) +
+          (col.help ? ' — ' + col.help : '')),
+        col.fixed ? U.el('div', { class: 'row tight', style: { marginTop: '4px', marginLeft: '24px' } }, [
+          U.el('span', { class: 'hint' }, 'value:'),
+          U.el('input', {
+            type: 'text', value: cfg.fixed[col.key] || '', style: { maxWidth: '140px' },
+            oninput: function (e) { cfg.fixed[col.key] = e.target.value; drawStatus(); },
+            onchange: function () { persistPrintConfig(); }
+          })
+        ]) : null
+      ]));
+      kv.appendChild(U.el('input', {
+        type: 'text', value: PX2.header(col, cfg),
+        oninput: function (e) { cfg.headers[col.key] = e.target.value; },
+        onchange: function () { persistPrintConfig(); drawStatus(); }
+      }));
+    });
+    colCard.appendChild(kv);
+    colCard.appendChild(U.el('div', { class: 'field', style: { marginTop: '10px' } }, [
+      U.el('label', {}, 'Asset state to set where a printer is clearly in use'),
+      U.el('input', {
+        type: 'text', value: cfg.inUseState, style: { maxWidth: '180px' },
+        oninput: function (e) { cfg.inUseState = e.target.value; drawStatus(); },
+        onchange: function () { persistPrintConfig(); }
+      })
+    ]));
+    colCard.appendChild(U.el('label', { class: 'check', style: { marginTop: '10px' } }, [
+      U.el('input', {
+        type: 'checkbox', checked: !!cfg.onlyChanged,
+        onchange: function (e) {
+          cfg.onlyChanged = e.target.checked;
+          persistPrintConfig();
+          if (dlg) dlg.close();
+          openPrintImport();
+        }
+      }),
+      'Write each column only on the rows that need it, and leave out printers with nothing to correct'
+    ]));
+    body.appendChild(colCard);
+
+    var status = U.el('div');
+    body.appendChild(status);
+    var preview = U.el('div', { style: { marginTop: '10px' } });
+    body.appendChild(preview);
+
+    var rows = [], canExport = false;
+
+    function drawStatus() {
+      rows = PX2.rowsWithChanges(pool, cfg);
+      var missing = PX2.missingRequired(cfg);
+      var blanks = PX2.blankRequired(rows, cfg);
+      var changes = PX2.changeSummary(rows, cfg);
+      canExport = rows.length > 0 && !missing.length && !blanks.length;
+
+      U.clear(head);
+      head.appendChild(U.el('div', { class: 'row tight' }, [
+        U.el('strong', {}, U.num(rows.length) + ' printer' + (rows.length === 1 ? '' : 's')),
+        U.el('span', { class: 'hint' },
+          'of ' + U.num(pool.length) + ' in scope have something to correct')
+      ]));
+
+      U.clear(status);
+      U.clear(preview);
+
+      if (!pool.length) {
+        status.appendChild(note('err', 'Nothing to correct',
+          'This view has no printers with a Freshservice record in it. A printer that exists only in ' +
+          'OneStop has nothing to update — it would need creating instead.'));
+      } else if (!rows.length) {
+        status.appendChild(note('ok', 'Nothing to do',
+          'Every printer in this view already holds the values this file would set.'));
+      }
+      if (missing.length) {
+        status.appendChild(note('err', 'A required column is switched off',
+          missing.join(', ') + ' — Freshservice rejects an asset import without it.'));
+      }
+      if (blanks.length) {
+        status.appendChild(note('err', 'A required column would be blank',
+          blanks.map(function (b) { return b.label + ' on ' + U.num(b.rows) + ' rows'; }).join('; ')));
+      }
+      if (changes.length) {
+        var card = U.el('div', { class: 'card', style: { marginBottom: '8px' } });
+        card.appendChild(U.el('strong', {}, 'What this file changes'));
+        var list = U.el('div', { class: 'kv two', style: { marginTop: '6px' } });
+        changes.forEach(function (c) {
+          list.appendChild(U.el('div', { class: 'k' }, c.label));
+          list.appendChild(U.el('div', {},
+            U.num(c.rows) + ' printer' + (c.rows === 1 ? '' : 's') +
+            (c.fixes ? '  — ' + ((PM.RULE_BY_CODE[c.fixes] || {}).label || c.fixes) : '')));
+        });
+        card.appendChild(list);
+        status.appendChild(card);
+      }
+      if (canExport) {
+        status.appendChild(note('ok', 'Ready to export',
+          'Blank cells are left alone by Freshservice, so nothing outside the columns above is touched.'));
+        var csv = PX2.toImportCsv(rows.slice(0, 4), cfg);
+        preview.appendChild(U.el('div', { class: 'side-head' }, 'First rows, as they will be written'));
+        preview.appendChild(U.el('pre', {
+          style: {
+            overflowX: 'auto', fontSize: '11px', background: 'var(--surface-2)',
+            padding: '8px', border: '1px solid var(--grid)', maxHeight: '150px'
+          }
+        }, csv));
+      }
+    }
+
+    function note(kind, title, text) {
+      var colour = kind === 'err' ? 'var(--critical)' : kind === 'warn' ? 'var(--warn)' : 'var(--good)';
+      return U.el('div', {
+        class: 'card',
+        style: { borderLeft: '3px solid ' + colour, marginBottom: '8px', padding: '8px 10px' }
+      }, [
+        U.el('strong', {}, title),
+        U.el('div', { class: 'hint' }, text)
+      ]);
+    }
+
+    drawStatus();
+
+    dlg = modal('Build Freshservice import — printer corrections', body, [
+      { label: 'Cancel', ghost: true },
+      { label: 'Download change log', ghost: true, action: function () {
+        if (!rows.length) { U.toast('Nothing to export.', 'err'); return; }
+        U.download('printer-changes-' + U.todayStamp() + '.csv', PX2.toChangeLogCsv(rows, cfg));
+      } },
+      { label: 'Download import file', primary: true, keepOpen: true, action: function () {
+        if (!canExport) {
+          U.toast(rows.length ? 'Fix the highlighted problem first.' : 'Nothing to correct in this view.', 'err', 8000);
+          return;
+        }
+        persistPrintConfig();
+        U.download('freshservice-printer-import-' + U.todayStamp() + '.csv', PX2.toImportCsv(rows, cfg));
+        U.toast('Correction file written for ' + U.num(rows.length) + ' printers.', 'ok');
+      } }
+    ], { wide: true });
+  }
+
+  function persistPrintConfig() {
+    global.Store.set('printConfig', state.printConfig);
+    saveWorkingSet();
+  }
+
   function persistNetConfig() {
     global.Store.set('netConfig', state.netConfig);
     saveWorkingSet();
@@ -10592,15 +12001,208 @@ window.SampleData = {
   }
 
   function netViewCsv(rows, columns) {
-    var cols = (columns || NV.BASE_COLS).filter(function (k) { return k !== 'notes'; });
-    var headers = cols.map(function (k) { return (NV.COL_BY_KEY[k] || {}).label || k; });
+    return popViewCsv(NV, NM, rows, columns);
+  }
+
+
+  /* ==================================================================== */
+  /*  printers                                                            */
+  /* ==================================================================== */
+
+  var printGrid = null;
+  var renderPrintNoteBar = function () {};
+
+  function renderPrinters(main) {
+    var view = printViewById(state.printViewId);
+    var rows = printRowsForView(view);
+    var tally = state.printResult.tally;
+
+    main.appendChild(U.el('div', { class: 'page-head' }, [
+      U.el('h1', {}, view.name),
+      U.el('div', { class: 'sub' }, view.description || ''),
+      state.printSiteFilter ? U.el('div', { class: 'row tight', style: { marginTop: '6px' } }, [
+        U.el('span', { class: 'pill' }, 'Site: ' + state.printSiteFilter.name),
+        U.el('button', {
+          class: 'btn sm ghost',
+          onclick: function () { state.printSiteFilter = null; render(); }
+        }, 'Clear filter')
+      ]) : null
+    ]));
+
+    function inView(id) { return printViewCount(printViewById(id)); }
+    main.appendChild(U.el('div', { class: 'tiles', style: { marginBottom: '14px' } }, [
+      C.tile('Wrong asset state', inView('pr-state'),
+        'In Stock, but printing', function () { setPrintView('pr-state'); }),
+      C.tile('Missing serial', inView('pr-serial'),
+        'serial only in the Name field', function () { setPrintView('pr-serial'); }),
+      C.tile('Not reporting', inView('pr-silent'),
+        'OneStop cannot see them', function () { setPrintView('pr-silent'); }),
+      C.tile('Unwatched', inView('pr-unwatched'),
+        'no monitoring or no auto toner', function () { setPrintView('pr-unwatched'); }),
+      C.tile('Worth questioning', inView('pr-questionable'),
+        'barely used, closed site, legacy', function () { setPrintView('pr-questionable'); }),
+      C.tile('Pages printed', U.num(state.printResult.rows.reduce(function (n, r) {
+        return n + (r.pages || 0);
+      }, 0)), 'across the whole fleet, lifetime')
+    ]));
+
+    var controls = U.el('div', { class: 'row no-print', style: { marginBottom: '12px' } });
+    controls.appendChild(U.el('input', {
+      type: 'search', placeholder: 'Search these printers…', style: { minWidth: '220px' },
+      value: state.printSearch,
+      oninput: U.debounce(function (e) {
+        state.printSearch = e.target.value;
+        printGrid.setSearch(state.printSearch);
+        printGrid.render();
+        renderPrintNoteBar();
+      }, 180)
+    }));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      onclick: function () { openColumnPicker(printCtx(), view, function () { return printGrid; }); }
+    }, 'Columns'));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      title: view.isCustom ? 'Change this view’s conditions' : 'See how this view is defined, and copy it',
+      onclick: function () { openViewBuilder(printCtx(), view, view.isCustom ? 'edit' : 'inspect'); }
+    }, view.isCustom ? 'Edit view' : 'View settings'));
+    controls.appendChild(U.el('label', { class: 'check' }, [
+      U.el('input', {
+        type: 'checkbox', checked: false,
+        onchange: function (e) { printGrid.setGroup(e.target.checked ? 'siteResolved' : null); printGrid.render(); }
+      }),
+      'Group by site'
+    ]));
+    controls.appendChild(U.el('div', { class: 'spacer' }));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      onclick: function () {
+        var visible = printGrid.visibleRows();
+        U.download('printers-' + view.id + '-' + U.todayStamp() + '.csv',
+          popViewCsv(PV, PM, visible, printGrid.state.columns));
+        U.toast('Exported ' + U.num(visible.length) + ' rows.', 'ok');
+      }
+    }, 'Export this view'));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm primary',
+      title: 'Build a Freshservice correction file from the printers you are looking at',
+      onclick: function () { openPrintImport(); }
+    }, 'Build import file'));
+    main.appendChild(controls);
+
+    var noteBar = U.el('div', { class: 'row no-print', style: { marginBottom: '10px' } });
+    main.appendChild(noteBar);
+    var gridHost = U.el('div');
+    main.appendChild(gridHost);
+
+    renderPrintNoteBar = function () {
+      U.clear(noteBar);
+      var chosen = printGrid ? printGrid.selected() : [];
+      var visible = printGrid ? printGrid.visibleRows() : [];
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm' + (chosen.length ? ' primary' : ''),
+        disabled: !chosen.length,
+        onclick: function () { openNotes(chosen); }
+      }, chosen.length ? 'Add note to ' + U.num(chosen.length) + ' selected' : 'Add note to selected'));
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm',
+        onclick: function () {
+          if (!visible.length) return;
+          if (visible.length > 50 &&
+              !confirm('Add the same note to all ' + visible.length + ' printers in this view?')) return;
+          openNotes(visible);
+        }
+      }, 'Add note to all ' + U.num(visible.length) + ' in view'));
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm ghost',
+        onclick: function () {
+          visible.forEach(function (r) { printGrid.state.selection.add(r.id); });
+          printGrid.render(); renderPrintNoteBar();
+        }
+      }, 'Select all in view'));
+      noteBar.appendChild(U.el('div', { class: 'spacer' }));
+      noteBar.appendChild(U.el('span', { class: 'hint' },
+        U.num(visible.length) + ' of ' + U.num(rows.length) + ' shown'));
+    };
+
+    printGrid = T.create(gridHost, {
+      views: PV,
+      rules: PM,
+      selectable: true,
+      pageSize: 150,
+      onRowClick: function (r) {
+        T.openDrawer(r, null, {
+          views: PV,
+          rules: PM,
+          fieldRows: printFieldRows,
+          sideLabels: ['OneStop', 'Freshservice'],
+          cleanText: 'Both systems agree on this printer.',
+          onAddNote: function (row) { openNotes([row]); }
+        });
+      },
+      onChipClick: function (code) {
+        var rule = PM.RULE_BY_CODE[code];
+        if (rule) U.toast(rule.label + (rule.hint ? ' — ' + rule.hint : ''), 'ok', 9000);
+      },
+      onNotesClick: function (r) { openNotes([r]); },
+      onSelectionChange: function (sel) {
+        state.printSelectedIds = Array.from(sel);
+        renderPrintNoteBar();
+      },
+      emptyText: 'Nothing in this view.'
+    });
+    printGrid.setRows(rows);
+    var cols = (state.printColumnsById[view.id] || view.columns || PV.BASE_COLS).slice();
+    if (cols.indexOf('notes') < 0) cols.unshift('notes');
+    printGrid.setColumns(cols);
+    state.printColumns = cols;
+    printGrid.setSearch(state.printSearch);
+    state.printSelectedIds.forEach(function (id) { printGrid.state.selection.add(id); });
+    if (view.sort) printGrid.setSort(view.sort);
+    printGrid.render();
+    renderPrintNoteBar();
+  }
+
+  /* The drawer's side-by-side table for a printer. */
+  function printFieldRows(row) {
+    var d = row.os, a = row.fs;
+    return [
+      ['Serial number', d ? d.serial : '', a ? (a.serial || '(in the Name field only)') : ''],
+      ['Name / record', d ? d.serial : '', row.fsName],
+      ['Model / product', row.model, row.fsProduct],
+      ['Product should be', '—', row.productShould],
+      ['Vendor', row.vendorShould, row.fsVendor],
+      ['Asset state', row.reporting ? 'reporting' : 'not reporting', row.fsState],
+      ['Site', P_stripCompany(row.siteName), row.fsLocation],
+      ['Site resolved', row.siteCode ? row.siteCode + ' ' + row.siteResolved : '', '—'],
+      ['Where in the building', row.spot, '—'],
+      ['IP address', row.ipOnestop, row.ipFs],
+      ['MAC address', row.macOnestop, row.macFs],
+      ['Asset tag / site no.', row.siteNum, row.fsTag],
+      ['Contract', row.contract, '—'],
+      ['Mono pages', row.mono === null ? '' : U.num(row.mono), '—'],
+      ['Colour pages', row.colour === null ? '' : U.num(row.colour), '—'],
+      ['Monitored', row.monitored === null ? '' : (row.monitored ? 'yes' : 'no'), '—'],
+      ['Proactive toner', row.proactive === null ? '' : (row.proactive ? 'yes' : 'no'), '—'],
+      ['Last reported', row.lastSeen ? U.fmtDate(row.lastSeen) : 'never', '—'],
+      ['Matched on', row.matchedBy || 'nothing — present in one system only', '—']
+    ];
+  }
+
+  function P_stripCompany(v) { return PM.stripCompany(v); }
+
+  /* One view-to-CSV for any population: the column registry and the rule
+     registry come in, so the issue chips export as their labels. */
+  function popViewCsv(VE, RE, rows, columns) {
+    var cols = (columns || VE.BASE_COLS).filter(function (k) { return k !== 'notes'; });
+    var headers = cols.map(function (k) { return (VE.COL_BY_KEY[k] || {}).label || k; });
+    var byCode = RE.BY_CODE || RE.RULE_BY_CODE || {};
     var out = rows.map(function (r) {
       var o = {};
       cols.forEach(function (k, i) {
-        var v = NV.colValue(r, k);
-        if (Array.isArray(v)) {
-          v = v.map(function (c) { return (NM.RULE_BY_CODE[c] || {}).label || c; }).join('; ');
-        } else if (v instanceof Date) v = U.fmtDate(v);
+        var v = VE.colValue(r, k);
+        if (Array.isArray(v)) v = v.map(function (c) { return (byCode[c] || {}).label || c; }).join('; ');
+        else if (v instanceof Date) v = U.fmtDate(v);
         o[headers[i]] = v === null || v === undefined ? '' : v;
       });
       return o;
@@ -10613,15 +12215,16 @@ window.SampleData = {
 
     // Only offer a population there is data for, and never leave the selector
     // pointing at an empty one.
-    var have = { pc: !!state.result, net: !!state.netResult };
-    have.both = have.pc && have.net;
+    var have = { pc: !!state.result, net: !!state.netResult, print: !!state.printResult };
+    have.both = [have.pc, have.net, have.print].filter(Boolean).length > 1;
     var population = state.mapPopulation;
-    if (!have[population]) population = have.pc ? 'pc' : 'net';
+    if (!have[population]) population = have.pc ? 'pc' : have.net ? 'net' : 'print';
     state.mapPopulation = population;
 
     var agg = M.aggregate({
       pc: state.result ? state.result.rows : [],
-      net: state.netResult ? state.netResult.rows : []
+      net: state.netResult ? state.netResult.rows : [],
+      print: state.printResult ? state.printResult.rows : []
     }, { includeOther: state.includeOtherOnMap, population: population });
 
     var modes = M.modesFor(population);
@@ -10629,10 +12232,12 @@ window.SampleData = {
 
     var noun = M.POPULATIONS[population].noun;
     main.appendChild(U.el('div', { class: 'page-head' }, [
-      U.el('h1', {}, population === 'net' ? 'Where the network kit is' : 'Where the devices are'),
+      U.el('h1', {}, population === 'net' ? 'Where the network kit is'
+        : population === 'print' ? 'Where the printers are' : 'Where the devices are'),
       U.el('div', { class: 'sub' },
         'Each dot is a site; the area of the dot is the number of ' + noun + 's recorded there.' +
-        (population === 'both' ? ' PCs and network assets are counted together, and the popup splits them out.' : ''))
+        (population === 'both'
+          ? ' PCs, network assets and printers are counted together, and the popup splits them out.' : ''))
     ]));
 
     var controls = U.el('div', { class: 'row no-print', style: { marginBottom: '12px' } }, [
@@ -10647,7 +12252,9 @@ window.SampleData = {
             M.reset();
             render();
           }
-        }, Object.keys(M.POPULATIONS).map(function (k) {
+        }, Object.keys(M.POPULATIONS).filter(function (k) {
+          return k === 'both' ? have.both : have[k];
+        }).map(function (k) {
           return U.el('option', { value: k, selected: population === k }, M.POPULATIONS[k].label);
         }))
       ]) : null,
@@ -10663,7 +12270,7 @@ window.SampleData = {
           return U.el('option', { value: k, selected: state.mapMode === k }, M.COLOUR_MODES[k].label);
         }))
       ]),
-      population === 'net' ? null : U.el('label', { class: 'check' }, [
+      (population === 'net' || population === 'print') ? null : U.el('label', { class: 'check' }, [
         U.el('input', {
           type: 'checkbox', checked: state.includeOtherOnMap,
           onchange: function (e) { state.includeOtherOnMap = e.target.checked; render(); }
@@ -10719,12 +12326,20 @@ window.SampleData = {
         agg.unmapped.length ? 'add a postcode or run the lookup' : 'all located'),
       C.tile('Locations not in the lookup', agg.unmatched.length,
         agg.unmatched.length ? 'add them to the lookup file' : 'all recognised'),
-      C.tile(population === 'net' ? 'Network kit with no site' : 'Devices with no location',
+      C.tile(population === 'net' ? 'Network kit with no site'
+        : population === 'print' ? 'Printers with no site' : 'Devices with no location',
         agg.unlocated.length,
         population === 'net' && agg.unlocated.length ? 'add a site override' : ''),
-      population === 'pc' ? null : C.tile('Network kit not in Freshservice',
-        agg.mappable.reduce(function (n, s) { return n + s.netMissing; }, 0),
-        'across the sites on the map', function () { setNetView('net-new'); })
+      (population === 'net' || population === 'both') && state.netResult
+        ? C.tile('Network kit not in Freshservice',
+            agg.mappable.reduce(function (n, s) { return n + s.netMissing; }, 0),
+            'across the sites on the map', function () { setNetView('net-new'); })
+        : null,
+      (population === 'print' || population === 'both') && state.printResult
+        ? C.tile('Printers not reporting',
+            agg.mappable.reduce(function (n, s) { return n + s.printSilent; }, 0),
+            'across the sites on the map', function () { setPrintView('pr-silent'); })
+        : null
     ]);
     main.appendChild(stats);
 
@@ -10770,6 +12385,7 @@ window.SampleData = {
          the combined map stands for two separate lists. */
       onSelect: function (site, which) {
         if (which === 'net') { setNetSite(site); return; }
+        if (which === 'print') { setPrintSite(site); return; }
         state.siteFilter = { key: site.key, name: site.name };
         setView('all');
       }
@@ -11457,6 +13073,67 @@ window.SampleData = {
       main.appendChild(netCard);
     }
 
+    if (state.printResult) {
+      var prCard = U.el('div', { class: 'card' });
+      prCard.appendChild(U.el('h2', {}, 'Printer checks'));
+      prCard.appendChild(U.el('p', { class: 'hint' },
+        'These apply to the OneStop and Freshservice printer exports.'));
+
+      [['staleDays', 'Days without a OneStop report before a printer counts as silent', 1, 365],
+       ['idleMono', 'Lifetime pages below which a printer looks barely used', 0, 100000]]
+        .forEach(function (f) {
+          prCard.appendChild(U.el('label', { class: 'field' }, [
+            U.el('span', {}, f[1]),
+            U.el('input', {
+              type: 'number', min: String(f[2]), max: String(f[3]), value: String(state.printCfg[f[0]]),
+              onchange: function (e) {
+                var v = parseInt(e.target.value, 10);
+                if (isNaN(v)) return;
+                state.printCfg[f[0]] = Math.min(f[3], Math.max(f[2], v));
+                global.Store.set('printCfg', state.printCfg);
+                recompute(); render();
+              }
+            })
+          ]));
+        });
+
+      prCard.appendChild(U.el('label', { class: 'field', style: { marginTop: '8px' } }, [
+        U.el('span', {}, 'Which system wins on a printer\u2019s location'),
+        U.el('select', {
+          onchange: function (e) {
+            state.printCfg.locationSource = e.target.value;
+            global.Store.set('printCfg', state.printCfg);
+            recompute(); render();
+          }
+        }, [
+          U.el('option', { value: 'fs', selected: state.printCfg.locationSource === 'fs' },
+            'Freshservice \u2014 names the building rather than the campus'),
+          U.el('option', { value: 'onestop', selected: state.printCfg.locationSource === 'onestop' },
+            'OneStop \u2014 the supplier\u2019s site name')
+        ])
+      ]));
+
+      prCard.appendChild(U.el('div', { class: 'side-head', style: { marginTop: '14px' } }, 'Checks'));
+      PM.RULES.forEach(function (rule) {
+        prCard.appendChild(U.el('div', { style: { padding: '7px 0', borderBottom: '1px solid var(--grid)' } }, [
+          U.el('label', { class: 'check' }, [
+            U.el('input', {
+              type: 'checkbox', checked: PM.isEnabled(rule, state.printEnabledRules),
+              onchange: function (e) {
+                state.printEnabledRules[rule.code] = e.target.checked;
+                global.Store.set('printEnabledRules', state.printEnabledRules);
+                recompute(); render();
+              }
+            }),
+            U.el('span', { class: 'badge ' + rule.severity }, [U.el('span', { class: 'sev sev-' + rule.severity }), rule.label]),
+            U.el('span', { class: 'hint' }, U.num(state.printResult.tally[rule.code] || 0) + ' printers')
+          ]),
+          rule.hint ? U.el('div', { class: 'hint', style: { marginLeft: '24px' } }, rule.hint) : null
+        ]));
+      });
+      main.appendChild(prCard);
+    }
+
     var notesCard = U.el('div', { class: 'card' });
     var ns = global.Notes.stats();
     notesCard.appendChild(U.el('h2', {}, 'Device notes'));
@@ -11657,7 +13334,36 @@ window.SampleData = {
     };
   }
 
-  function ctxFor(key) { return key === 'net' ? netCtx() : pcCtx(); }
+  function printCtx() {
+    return {
+      key: 'print',
+      label: 'Printer views',
+      noun: 'printer',
+      listName: 'printer list',
+      tab: 'printers',
+      views: PV,
+      rules: PM,
+      result: state.printResult,
+      builtIn: PV.BUILT_IN,
+      custom: state.printCustomViews,
+      saveCustom: function (list) {
+        state.printCustomViews = list;
+        global.Store.set('printCustomViews', list);
+      },
+      columnsById: state.printColumnsById,
+      saveColumns: function () { global.Store.set('printColumns', state.printColumnsById); },
+      all: printViews,
+      count: printViewCount,
+      currentId: function () { return state.printViewId; },
+      isActive: function () { return state.tab === 'printers'; },
+      open: setPrintView,
+      fallbackId: 'pr-attention'
+    };
+  }
+
+  function ctxFor(key) {
+    return key === 'net' ? netCtx() : key === 'print' ? printCtx() : pcCtx();
+  }
 
   function openViewBuilder(ctx, existing, mode) {
     var VE = ctx.views, RE = ctx.rules;
@@ -12109,7 +13815,9 @@ window.SampleData = {
       /* Land on a tab the restored data can actually fill. A session with only
          the network exports in it has no PC reconciliation, and the Dashboard
          reads that result unconditionally. */
-      setTab(state.result ? 'dashboard' : (state.netResult ? 'network' : 'data'));
+      setTab(state.result ? 'dashboard'
+        : state.netResult ? 'network'
+        : state.printResult ? 'printers' : 'data');
       U.toast('Picked up where you left off — ' +
         Object.keys(state.sources).map(function (id) {
           return S.SOURCES[id].short + ' ' + U.num(state.sources[id].records.length);

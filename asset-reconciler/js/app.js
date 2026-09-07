@@ -5,14 +5,16 @@
 
   var U = global.U, V = global.Views, R = global.Rules, N = global.Norm,
       S = global.Schema, C = global.Charts, T = global.Table, FX = global.FSExport,
-      NV = global.NetViews, NM = global.NetMatch, NX = global.NetExport, FT = global.Fortinet;
+      NV = global.NetViews, NM = global.NetMatch, NX = global.NetExport, FT = global.Fortinet,
+      PV = global.PrintViews, PM = global.Printers, PX2 = global.PrintExport;
 
   /* Two populations, reconciled separately. PC_SOURCES feed the device
      reconciliation; NET_SOURCES feed the network one. The location lookup is
      shared, because a site is a site. */
   var PC_SOURCES = ['freshservice', 'intune', 'arcticwolf', 'locations', 'verification'];
   var NET_SOURCES = ['fortimanager', 'fsnetwork'];
-  var SOURCE_IDS = PC_SOURCES.concat(NET_SOURCES);
+  var PRINT_SOURCES = ['onestop', 'fsprinter'];
+  var SOURCE_IDS = PC_SOURCES.concat(NET_SOURCES, PRINT_SOURCES);
 
   /* FortiManager is exported per environment, and the two exports do not have
      the same columns, so they are unioned by header name on load rather than
@@ -79,6 +81,16 @@
     return out;
   }
 
+  function mergePrintConfig(saved) {
+    var base = PX2.defaultConfig();
+    if (!saved || typeof saved !== 'object') return base;
+    var out = Object.assign({}, base, saved);
+    ['headers', 'include', 'fixed'].forEach(function (k) {
+      out[k] = Object.assign({}, base[k], saved[k] || {});
+    });
+    return out;
+  }
+
   var state = {
     sources: {},                 // id -> { fileName, headers, raw, mapping, records }
     result: null,
@@ -121,7 +133,20 @@
     netConfig: mergeNetConfig(global.Store.get('netConfig', {})),
     siteOverrides: global.Store.get('siteOverrides', {}),  // device name -> site code
     envLabels: global.Store.get('envLabels', {}),          // export file -> your name for it
-    envOrder: global.Store.get('envOrder', [])
+    envOrder: global.Store.get('envOrder', []),
+
+    /* --- printers, reconciled OneStop against Freshservice --- */
+    printResult: null,
+    printCfg: PM.settings(global.Store.get('printCfg', null) || {}),
+    printEnabledRules: global.Store.get('printEnabledRules', {}),
+    printViewId: 'pr-attention',
+    printSearch: '',
+    printColumns: null,
+    printColumnsById: global.Store.get('printColumns', {}),
+    printSelectedIds: [],
+    printSiteFilter: null,
+    printCustomViews: global.Store.get('printCustomViews', []),
+    printConfig: mergePrintConfig(global.Store.get('printConfig', {}))
   };
 
   var grid = null;
@@ -142,6 +167,7 @@
        exports afterwards a fight. */
     var hadPc = !!(state.sources.freshservice && state.sources.intune);
     var hadNet = !!(state.sources.fortimanager && state.sources.fsnetwork);
+    var hadPrint = !!(state.sources.onestop && state.sources.fsprinter);
 
     var jobs = list.map(function (file) {
       return global.CSV.readFile(file).then(function (parsed) {
@@ -238,8 +264,10 @@
            boxes off screen before the second environment could be added. */
         var hasPc = !!(state.sources.freshservice && state.sources.intune);
         var hasNet = !!(state.sources.fortimanager && state.sources.fsnetwork);
+        var hasPrint = !!(state.sources.onestop && state.sources.fsprinter);
         if (hasPc && !hadPc) setTab('dashboard');
         else if (hasNet && !hadNet) setTab('network');
+        else if (hasPrint && !hadPrint) setTab('printers');
       }
     }).catch(function (err) {
       U.toast(err.message || String(err), 'err', 8000);
@@ -295,6 +323,7 @@
       state.result = R.apply(global.Match.reconcile(data, state.cfg), state.cfg, state.enabledRules);
     }
     recomputeNet(data);
+    recomputePrinters(data);
     saveWorkingSet();
   }
 
@@ -371,6 +400,10 @@
       netEnabledRules: state.netEnabledRules,
       netConfig: state.netConfig,
       netCustomViews: state.netCustomViews,
+      printCfg: state.printCfg,
+      printEnabledRules: state.printEnabledRules,
+      printConfig: state.printConfig,
+      printCustomViews: state.printCustomViews,
       favourites: state.favourites,
       siteOverrides: state.siteOverrides,
       envLabels: state.envLabels,
@@ -434,6 +467,10 @@
       if (payload.netEnabledRules) state.netEnabledRules = payload.netEnabledRules;
       if (payload.netConfig) state.netConfig = mergeNetConfig(payload.netConfig);
       if (payload.netCustomViews) state.netCustomViews = payload.netCustomViews;
+      if (payload.printCfg) state.printCfg = PM.settings(payload.printCfg);
+      if (payload.printEnabledRules) state.printEnabledRules = payload.printEnabledRules;
+      if (payload.printConfig) state.printConfig = mergePrintConfig(payload.printConfig);
+      if (payload.printCustomViews) state.printCustomViews = payload.printCustomViews;
       if (payload.favourites) state.favourites = payload.favourites;
       if (payload.siteOverrides) state.siteOverrides = payload.siteOverrides;
       if (payload.envLabels) state.envLabels = payload.envLabels;
@@ -500,6 +537,19 @@
     return rows;
   }
 
+  function recomputePrinters(data) {
+    data = data || {};
+    var os = data.onestop || [];
+    var fsp = data.fsprinter || [];
+    if (!os.length && !fsp.length) {
+      state.printResult = null;
+      return;
+    }
+    state.printResult = PM.apply(
+      PM.reconcile(os, fsp, state.printCfg, siteIndex()),
+      state.printCfg, state.printEnabledRules);
+  }
+
   /* ---------------------------------------------------- network views */
 
   function netViews() {
@@ -549,6 +599,54 @@
     setTab('network');
   }
 
+  /* ---------------------------------------------------- printer views */
+
+  function printViews() {
+    return PV.BUILT_IN.concat(state.printCustomViews.map(function (v) {
+      return Object.assign({}, v, { isCustom: true });
+    }));
+  }
+
+  function printViewById(id) {
+    return printViews().filter(function (v) { return v.id === id; })[0] || PV.BUILT_IN[0];
+  }
+
+  function printRowsForView(view, withSearch) {
+    if (!state.printResult) return [];
+    var rows = PV.applyView(view, state.printResult.rows);
+    if (state.printSiteFilter) {
+      rows = rows.filter(function (r) { return r.locationKey === state.printSiteFilter.key; });
+    }
+    if (withSearch && state.printSearch) rows = PV.searchRows(rows, state.printSearch);
+    return rows;
+  }
+
+  function printViewCount(view) {
+    if (!state.printResult) return 0;
+    try { return PV.applyView(view, state.printResult.rows).length; } catch (e) { return 0; }
+  }
+
+  function printSelectedRows() {
+    if (!state.printResult || !state.printSelectedIds.length) return [];
+    var wanted = {};
+    state.printSelectedIds.forEach(function (id) { wanted[id] = true; });
+    return state.printResult.rows.filter(function (r) { return wanted[r.id]; });
+  }
+
+  function setPrintView(id) {
+    if (id !== state.printViewId) {
+      state.printSearch = '';
+      state.printSelectedIds = [];
+    }
+    state.printViewId = id;
+    setTab('printers');
+  }
+
+  function setPrintSite(site) {
+    state.printSiteFilter = { key: site.key, name: site.name };
+    setPrintView('pr-all');
+  }
+
   function selectedRows() {
     if (!state.result || !state.selectedIds.length) return [];
     var wanted = {};
@@ -593,6 +691,7 @@
       ['dupes', 'Duplicates'],
       ['devices', 'Devices'],
       ['network', 'Network'],
+      ['printers', 'Printers'],
       ['map', 'Map'],
       ['export', 'Freshservice import'],
       ['settings', 'Settings']
@@ -600,8 +699,9 @@
     tabs.forEach(function (t) {
       // The two populations load independently: network exports alone should
       // open the Network tab without the PC reconciliation being present.
-      var needs = { network: !!state.netResult, data: true, settings: true,
-                    map: !!(state.result || state.netResult) };
+      var needs = { network: !!state.netResult, printers: !!state.printResult,
+                    data: true, settings: true,
+                    map: !!(state.result || state.netResult || state.printResult) };
       var disabled = !(Object.prototype.hasOwnProperty.call(needs, t[0]) ? needs[t[0]] : !!state.result);
       host.appendChild(U.el('button', {
         class: 'tab' + (state.tab === t[0] ? ' active' : ''),
@@ -613,7 +713,11 @@
 
     host.appendChild(U.el('div', { class: 'spacer' }));
 
-    if (state.tab === 'network' && state.netResult) {
+    if (state.tab === 'printers' && state.printResult) {
+      host.appendChild(U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } },
+        U.num(state.printResult.rows.length) + ' printers \u00b7 ' +
+        U.num(state.printResult.rows.filter(function (r) { return r.issueCount; }).length) + ' flagged'));
+    } else if (state.tab === 'network' && state.netResult) {
       host.appendChild(U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } },
         U.num(state.netResult.rows.length) + ' network devices \u00b7 ' +
         U.num(state.netResult.rows.filter(function (r) { return r.issueCount; }).length) + ' flagged'));
@@ -785,6 +889,7 @@
     var contexts = [];
     if (state.result) contexts.push(pcCtx());
     if (state.netResult) contexts.push(netCtx());
+    if (state.printResult) contexts.push(printCtx());
     if (!contexts.length) return;
 
     /* Favourites first: the whole point is that the views someone uses every
@@ -833,6 +938,10 @@
       filters.push(['Network site: ' + U.truncate(state.netSiteFilter.name, 14),
                     function () { state.netSiteFilter = null; render(); }]);
     }
+    if (state.printSiteFilter) {
+      filters.push(['Printer site: ' + U.truncate(state.printSiteFilter.name, 14),
+                    function () { state.printSiteFilter = null; render(); }]);
+    }
     if (filters.length) {
       var fsec = sideSection('filters', 'Active filter');
       if (fsec.body) {
@@ -874,6 +983,7 @@
         dupes: renderDupes,
         devices: renderDevices,
         network: renderNetwork,
+        printers: renderPrinters,
         map: renderMap,
         export: renderExport,
         settings: renderSettings
@@ -881,7 +991,8 @@
       var ready = state.tab === 'data' || state.tab === 'settings'
         ? true
         : state.tab === 'network' ? !!state.netResult
-        : state.tab === 'map' ? !!(state.result || state.netResult)
+        : state.tab === 'printers' ? !!state.printResult
+        : state.tab === 'map' ? !!(state.result || state.netResult || state.printResult)
         : !!state.result;
       (ready ? page : renderData)(main);
     } finally {
@@ -1951,6 +2062,210 @@
      working-set save. A value typed into a lookup box therefore reached
      localStorage but not the working set, and on the next visit the stale
      working-set copy overwrote it. Anything that edits the config saves both. */
+
+  /* Building the Freshservice correction file for printers.
+
+     Every row here updates a record that already exists, so the file carries
+     the Name Freshservice matches on plus only the fields being put right. A
+     blank cell means "leave this alone", which is why each column is written
+     only for the rows whose problem it fixes. */
+  function openPrintImport() {
+    var view = printViewById(state.printViewId);
+    var scope = state.printSelectedIds.length ? 'selection' : 'view';
+    var pool = (scope === 'selection' ? printSelectedRows() : printRowsForView(view, true))
+      .filter(function (r) { return r.fs; });          // only records that exist
+    var cfg = state.printConfig;
+    var dlg = null;
+
+    var body = U.el('div', { class: 'body' });
+    var head = U.el('div', { style: { marginBottom: '12px' } });
+    body.appendChild(head);
+
+    var scopeRow = U.el('div', { class: 'row', style: { marginBottom: '10px' } });
+    [['view', 'Everything in "' + view.name + '"' + (state.printSearch ? ' matching your search' : '')],
+     ['selection', U.num(state.printSelectedIds.length) + ' selected']].forEach(function (o) {
+      scopeRow.appendChild(U.el('label', { class: 'check' }, [
+        U.el('input', {
+          type: 'radio', name: 'prscope', checked: scope === o[0],
+          disabled: o[0] === 'selection' && !state.printSelectedIds.length,
+          onchange: function () {
+            state.printSelectedIds = o[0] === 'selection' ? state.printSelectedIds : [];
+            if (dlg) dlg.close();
+            openPrintImport();
+          }
+        }),
+        o[1]
+      ]));
+    });
+    body.appendChild(scopeRow);
+
+    /* --- columns ------------------------------------------------------ */
+    var colCard = U.el('details', { class: 'card', open: true, style: { marginBottom: '10px' } });
+    colCard.appendChild(U.el('summary', {}, [
+      U.el('strong', {}, 'What to correct'),
+      U.el('span', { class: 'hint', style: { marginLeft: '8px' } }, 'and where each value comes from')
+    ]));
+    var kv = U.el('div', { class: 'kv two', style: { marginTop: '8px' } });
+    kv.appendChild(U.el('div', { class: 'hdr' }, 'Column'));
+    kv.appendChild(U.el('div', { class: 'hdr' }, 'Header in Freshservice'));
+    PX2.COLUMNS.forEach(function (col) {
+      kv.appendChild(U.el('div', { class: 'k' }, [
+        U.el('label', { class: 'check' }, [
+          U.el('input', {
+            type: 'checkbox', checked: !!cfg.include[col.key], disabled: col.required,
+            title: col.required ? 'Freshservice rejects an asset import without this column' : null,
+            onchange: function (e) {
+              cfg.include[col.key] = e.target.checked;
+              persistPrintConfig();
+              drawStatus();
+            }
+          }),
+          col.label + (col.required ? ' (required)' : '')
+        ]),
+        U.el('div', { class: 'hint', style: { marginLeft: '24px' } },
+          'from ' + (PX2.SOURCE_LABELS[col.from] || col.from) +
+          (col.help ? ' — ' + col.help : '')),
+        col.fixed ? U.el('div', { class: 'row tight', style: { marginTop: '4px', marginLeft: '24px' } }, [
+          U.el('span', { class: 'hint' }, 'value:'),
+          U.el('input', {
+            type: 'text', value: cfg.fixed[col.key] || '', style: { maxWidth: '140px' },
+            oninput: function (e) { cfg.fixed[col.key] = e.target.value; drawStatus(); },
+            onchange: function () { persistPrintConfig(); }
+          })
+        ]) : null
+      ]));
+      kv.appendChild(U.el('input', {
+        type: 'text', value: PX2.header(col, cfg),
+        oninput: function (e) { cfg.headers[col.key] = e.target.value; },
+        onchange: function () { persistPrintConfig(); drawStatus(); }
+      }));
+    });
+    colCard.appendChild(kv);
+    colCard.appendChild(U.el('div', { class: 'field', style: { marginTop: '10px' } }, [
+      U.el('label', {}, 'Asset state to set where a printer is clearly in use'),
+      U.el('input', {
+        type: 'text', value: cfg.inUseState, style: { maxWidth: '180px' },
+        oninput: function (e) { cfg.inUseState = e.target.value; drawStatus(); },
+        onchange: function () { persistPrintConfig(); }
+      })
+    ]));
+    colCard.appendChild(U.el('label', { class: 'check', style: { marginTop: '10px' } }, [
+      U.el('input', {
+        type: 'checkbox', checked: !!cfg.onlyChanged,
+        onchange: function (e) {
+          cfg.onlyChanged = e.target.checked;
+          persistPrintConfig();
+          if (dlg) dlg.close();
+          openPrintImport();
+        }
+      }),
+      'Write each column only on the rows that need it, and leave out printers with nothing to correct'
+    ]));
+    body.appendChild(colCard);
+
+    var status = U.el('div');
+    body.appendChild(status);
+    var preview = U.el('div', { style: { marginTop: '10px' } });
+    body.appendChild(preview);
+
+    var rows = [], canExport = false;
+
+    function drawStatus() {
+      rows = PX2.rowsWithChanges(pool, cfg);
+      var missing = PX2.missingRequired(cfg);
+      var blanks = PX2.blankRequired(rows, cfg);
+      var changes = PX2.changeSummary(rows, cfg);
+      canExport = rows.length > 0 && !missing.length && !blanks.length;
+
+      U.clear(head);
+      head.appendChild(U.el('div', { class: 'row tight' }, [
+        U.el('strong', {}, U.num(rows.length) + ' printer' + (rows.length === 1 ? '' : 's')),
+        U.el('span', { class: 'hint' },
+          'of ' + U.num(pool.length) + ' in scope have something to correct')
+      ]));
+
+      U.clear(status);
+      U.clear(preview);
+
+      if (!pool.length) {
+        status.appendChild(note('err', 'Nothing to correct',
+          'This view has no printers with a Freshservice record in it. A printer that exists only in ' +
+          'OneStop has nothing to update — it would need creating instead.'));
+      } else if (!rows.length) {
+        status.appendChild(note('ok', 'Nothing to do',
+          'Every printer in this view already holds the values this file would set.'));
+      }
+      if (missing.length) {
+        status.appendChild(note('err', 'A required column is switched off',
+          missing.join(', ') + ' — Freshservice rejects an asset import without it.'));
+      }
+      if (blanks.length) {
+        status.appendChild(note('err', 'A required column would be blank',
+          blanks.map(function (b) { return b.label + ' on ' + U.num(b.rows) + ' rows'; }).join('; ')));
+      }
+      if (changes.length) {
+        var card = U.el('div', { class: 'card', style: { marginBottom: '8px' } });
+        card.appendChild(U.el('strong', {}, 'What this file changes'));
+        var list = U.el('div', { class: 'kv two', style: { marginTop: '6px' } });
+        changes.forEach(function (c) {
+          list.appendChild(U.el('div', { class: 'k' }, c.label));
+          list.appendChild(U.el('div', {},
+            U.num(c.rows) + ' printer' + (c.rows === 1 ? '' : 's') +
+            (c.fixes ? '  — ' + ((PM.RULE_BY_CODE[c.fixes] || {}).label || c.fixes) : '')));
+        });
+        card.appendChild(list);
+        status.appendChild(card);
+      }
+      if (canExport) {
+        status.appendChild(note('ok', 'Ready to export',
+          'Blank cells are left alone by Freshservice, so nothing outside the columns above is touched.'));
+        var csv = PX2.toImportCsv(rows.slice(0, 4), cfg);
+        preview.appendChild(U.el('div', { class: 'side-head' }, 'First rows, as they will be written'));
+        preview.appendChild(U.el('pre', {
+          style: {
+            overflowX: 'auto', fontSize: '11px', background: 'var(--surface-2)',
+            padding: '8px', border: '1px solid var(--grid)', maxHeight: '150px'
+          }
+        }, csv));
+      }
+    }
+
+    function note(kind, title, text) {
+      var colour = kind === 'err' ? 'var(--critical)' : kind === 'warn' ? 'var(--warn)' : 'var(--good)';
+      return U.el('div', {
+        class: 'card',
+        style: { borderLeft: '3px solid ' + colour, marginBottom: '8px', padding: '8px 10px' }
+      }, [
+        U.el('strong', {}, title),
+        U.el('div', { class: 'hint' }, text)
+      ]);
+    }
+
+    drawStatus();
+
+    dlg = modal('Build Freshservice import — printer corrections', body, [
+      { label: 'Cancel', ghost: true },
+      { label: 'Download change log', ghost: true, action: function () {
+        if (!rows.length) { U.toast('Nothing to export.', 'err'); return; }
+        U.download('printer-changes-' + U.todayStamp() + '.csv', PX2.toChangeLogCsv(rows, cfg));
+      } },
+      { label: 'Download import file', primary: true, keepOpen: true, action: function () {
+        if (!canExport) {
+          U.toast(rows.length ? 'Fix the highlighted problem first.' : 'Nothing to correct in this view.', 'err', 8000);
+          return;
+        }
+        persistPrintConfig();
+        U.download('freshservice-printer-import-' + U.todayStamp() + '.csv', PX2.toImportCsv(rows, cfg));
+        U.toast('Correction file written for ' + U.num(rows.length) + ' printers.', 'ok');
+      } }
+    ], { wide: true });
+  }
+
+  function persistPrintConfig() {
+    global.Store.set('printConfig', state.printConfig);
+    saveWorkingSet();
+  }
+
   function persistNetConfig() {
     global.Store.set('netConfig', state.netConfig);
     saveWorkingSet();
@@ -2615,15 +2930,208 @@
   }
 
   function netViewCsv(rows, columns) {
-    var cols = (columns || NV.BASE_COLS).filter(function (k) { return k !== 'notes'; });
-    var headers = cols.map(function (k) { return (NV.COL_BY_KEY[k] || {}).label || k; });
+    return popViewCsv(NV, NM, rows, columns);
+  }
+
+
+  /* ==================================================================== */
+  /*  printers                                                            */
+  /* ==================================================================== */
+
+  var printGrid = null;
+  var renderPrintNoteBar = function () {};
+
+  function renderPrinters(main) {
+    var view = printViewById(state.printViewId);
+    var rows = printRowsForView(view);
+    var tally = state.printResult.tally;
+
+    main.appendChild(U.el('div', { class: 'page-head' }, [
+      U.el('h1', {}, view.name),
+      U.el('div', { class: 'sub' }, view.description || ''),
+      state.printSiteFilter ? U.el('div', { class: 'row tight', style: { marginTop: '6px' } }, [
+        U.el('span', { class: 'pill' }, 'Site: ' + state.printSiteFilter.name),
+        U.el('button', {
+          class: 'btn sm ghost',
+          onclick: function () { state.printSiteFilter = null; render(); }
+        }, 'Clear filter')
+      ]) : null
+    ]));
+
+    function inView(id) { return printViewCount(printViewById(id)); }
+    main.appendChild(U.el('div', { class: 'tiles', style: { marginBottom: '14px' } }, [
+      C.tile('Wrong asset state', inView('pr-state'),
+        'In Stock, but printing', function () { setPrintView('pr-state'); }),
+      C.tile('Missing serial', inView('pr-serial'),
+        'serial only in the Name field', function () { setPrintView('pr-serial'); }),
+      C.tile('Not reporting', inView('pr-silent'),
+        'OneStop cannot see them', function () { setPrintView('pr-silent'); }),
+      C.tile('Unwatched', inView('pr-unwatched'),
+        'no monitoring or no auto toner', function () { setPrintView('pr-unwatched'); }),
+      C.tile('Worth questioning', inView('pr-questionable'),
+        'barely used, closed site, legacy', function () { setPrintView('pr-questionable'); }),
+      C.tile('Pages printed', U.num(state.printResult.rows.reduce(function (n, r) {
+        return n + (r.pages || 0);
+      }, 0)), 'across the whole fleet, lifetime')
+    ]));
+
+    var controls = U.el('div', { class: 'row no-print', style: { marginBottom: '12px' } });
+    controls.appendChild(U.el('input', {
+      type: 'search', placeholder: 'Search these printers…', style: { minWidth: '220px' },
+      value: state.printSearch,
+      oninput: U.debounce(function (e) {
+        state.printSearch = e.target.value;
+        printGrid.setSearch(state.printSearch);
+        printGrid.render();
+        renderPrintNoteBar();
+      }, 180)
+    }));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      onclick: function () { openColumnPicker(printCtx(), view, function () { return printGrid; }); }
+    }, 'Columns'));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      title: view.isCustom ? 'Change this view’s conditions' : 'See how this view is defined, and copy it',
+      onclick: function () { openViewBuilder(printCtx(), view, view.isCustom ? 'edit' : 'inspect'); }
+    }, view.isCustom ? 'Edit view' : 'View settings'));
+    controls.appendChild(U.el('label', { class: 'check' }, [
+      U.el('input', {
+        type: 'checkbox', checked: false,
+        onchange: function (e) { printGrid.setGroup(e.target.checked ? 'siteResolved' : null); printGrid.render(); }
+      }),
+      'Group by site'
+    ]));
+    controls.appendChild(U.el('div', { class: 'spacer' }));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      onclick: function () {
+        var visible = printGrid.visibleRows();
+        U.download('printers-' + view.id + '-' + U.todayStamp() + '.csv',
+          popViewCsv(PV, PM, visible, printGrid.state.columns));
+        U.toast('Exported ' + U.num(visible.length) + ' rows.', 'ok');
+      }
+    }, 'Export this view'));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm primary',
+      title: 'Build a Freshservice correction file from the printers you are looking at',
+      onclick: function () { openPrintImport(); }
+    }, 'Build import file'));
+    main.appendChild(controls);
+
+    var noteBar = U.el('div', { class: 'row no-print', style: { marginBottom: '10px' } });
+    main.appendChild(noteBar);
+    var gridHost = U.el('div');
+    main.appendChild(gridHost);
+
+    renderPrintNoteBar = function () {
+      U.clear(noteBar);
+      var chosen = printGrid ? printGrid.selected() : [];
+      var visible = printGrid ? printGrid.visibleRows() : [];
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm' + (chosen.length ? ' primary' : ''),
+        disabled: !chosen.length,
+        onclick: function () { openNotes(chosen); }
+      }, chosen.length ? 'Add note to ' + U.num(chosen.length) + ' selected' : 'Add note to selected'));
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm',
+        onclick: function () {
+          if (!visible.length) return;
+          if (visible.length > 50 &&
+              !confirm('Add the same note to all ' + visible.length + ' printers in this view?')) return;
+          openNotes(visible);
+        }
+      }, 'Add note to all ' + U.num(visible.length) + ' in view'));
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm ghost',
+        onclick: function () {
+          visible.forEach(function (r) { printGrid.state.selection.add(r.id); });
+          printGrid.render(); renderPrintNoteBar();
+        }
+      }, 'Select all in view'));
+      noteBar.appendChild(U.el('div', { class: 'spacer' }));
+      noteBar.appendChild(U.el('span', { class: 'hint' },
+        U.num(visible.length) + ' of ' + U.num(rows.length) + ' shown'));
+    };
+
+    printGrid = T.create(gridHost, {
+      views: PV,
+      rules: PM,
+      selectable: true,
+      pageSize: 150,
+      onRowClick: function (r) {
+        T.openDrawer(r, null, {
+          views: PV,
+          rules: PM,
+          fieldRows: printFieldRows,
+          sideLabels: ['OneStop', 'Freshservice'],
+          cleanText: 'Both systems agree on this printer.',
+          onAddNote: function (row) { openNotes([row]); }
+        });
+      },
+      onChipClick: function (code) {
+        var rule = PM.RULE_BY_CODE[code];
+        if (rule) U.toast(rule.label + (rule.hint ? ' — ' + rule.hint : ''), 'ok', 9000);
+      },
+      onNotesClick: function (r) { openNotes([r]); },
+      onSelectionChange: function (sel) {
+        state.printSelectedIds = Array.from(sel);
+        renderPrintNoteBar();
+      },
+      emptyText: 'Nothing in this view.'
+    });
+    printGrid.setRows(rows);
+    var cols = (state.printColumnsById[view.id] || view.columns || PV.BASE_COLS).slice();
+    if (cols.indexOf('notes') < 0) cols.unshift('notes');
+    printGrid.setColumns(cols);
+    state.printColumns = cols;
+    printGrid.setSearch(state.printSearch);
+    state.printSelectedIds.forEach(function (id) { printGrid.state.selection.add(id); });
+    if (view.sort) printGrid.setSort(view.sort);
+    printGrid.render();
+    renderPrintNoteBar();
+  }
+
+  /* The drawer's side-by-side table for a printer. */
+  function printFieldRows(row) {
+    var d = row.os, a = row.fs;
+    return [
+      ['Serial number', d ? d.serial : '', a ? (a.serial || '(in the Name field only)') : ''],
+      ['Name / record', d ? d.serial : '', row.fsName],
+      ['Model / product', row.model, row.fsProduct],
+      ['Product should be', '—', row.productShould],
+      ['Vendor', row.vendorShould, row.fsVendor],
+      ['Asset state', row.reporting ? 'reporting' : 'not reporting', row.fsState],
+      ['Site', P_stripCompany(row.siteName), row.fsLocation],
+      ['Site resolved', row.siteCode ? row.siteCode + ' ' + row.siteResolved : '', '—'],
+      ['Where in the building', row.spot, '—'],
+      ['IP address', row.ipOnestop, row.ipFs],
+      ['MAC address', row.macOnestop, row.macFs],
+      ['Asset tag / site no.', row.siteNum, row.fsTag],
+      ['Contract', row.contract, '—'],
+      ['Mono pages', row.mono === null ? '' : U.num(row.mono), '—'],
+      ['Colour pages', row.colour === null ? '' : U.num(row.colour), '—'],
+      ['Monitored', row.monitored === null ? '' : (row.monitored ? 'yes' : 'no'), '—'],
+      ['Proactive toner', row.proactive === null ? '' : (row.proactive ? 'yes' : 'no'), '—'],
+      ['Last reported', row.lastSeen ? U.fmtDate(row.lastSeen) : 'never', '—'],
+      ['Matched on', row.matchedBy || 'nothing — present in one system only', '—']
+    ];
+  }
+
+  function P_stripCompany(v) { return PM.stripCompany(v); }
+
+  /* One view-to-CSV for any population: the column registry and the rule
+     registry come in, so the issue chips export as their labels. */
+  function popViewCsv(VE, RE, rows, columns) {
+    var cols = (columns || VE.BASE_COLS).filter(function (k) { return k !== 'notes'; });
+    var headers = cols.map(function (k) { return (VE.COL_BY_KEY[k] || {}).label || k; });
+    var byCode = RE.BY_CODE || RE.RULE_BY_CODE || {};
     var out = rows.map(function (r) {
       var o = {};
       cols.forEach(function (k, i) {
-        var v = NV.colValue(r, k);
-        if (Array.isArray(v)) {
-          v = v.map(function (c) { return (NM.RULE_BY_CODE[c] || {}).label || c; }).join('; ');
-        } else if (v instanceof Date) v = U.fmtDate(v);
+        var v = VE.colValue(r, k);
+        if (Array.isArray(v)) v = v.map(function (c) { return (byCode[c] || {}).label || c; }).join('; ');
+        else if (v instanceof Date) v = U.fmtDate(v);
         o[headers[i]] = v === null || v === undefined ? '' : v;
       });
       return o;
@@ -2636,15 +3144,16 @@
 
     // Only offer a population there is data for, and never leave the selector
     // pointing at an empty one.
-    var have = { pc: !!state.result, net: !!state.netResult };
-    have.both = have.pc && have.net;
+    var have = { pc: !!state.result, net: !!state.netResult, print: !!state.printResult };
+    have.both = [have.pc, have.net, have.print].filter(Boolean).length > 1;
     var population = state.mapPopulation;
-    if (!have[population]) population = have.pc ? 'pc' : 'net';
+    if (!have[population]) population = have.pc ? 'pc' : have.net ? 'net' : 'print';
     state.mapPopulation = population;
 
     var agg = M.aggregate({
       pc: state.result ? state.result.rows : [],
-      net: state.netResult ? state.netResult.rows : []
+      net: state.netResult ? state.netResult.rows : [],
+      print: state.printResult ? state.printResult.rows : []
     }, { includeOther: state.includeOtherOnMap, population: population });
 
     var modes = M.modesFor(population);
@@ -2652,10 +3161,12 @@
 
     var noun = M.POPULATIONS[population].noun;
     main.appendChild(U.el('div', { class: 'page-head' }, [
-      U.el('h1', {}, population === 'net' ? 'Where the network kit is' : 'Where the devices are'),
+      U.el('h1', {}, population === 'net' ? 'Where the network kit is'
+        : population === 'print' ? 'Where the printers are' : 'Where the devices are'),
       U.el('div', { class: 'sub' },
         'Each dot is a site; the area of the dot is the number of ' + noun + 's recorded there.' +
-        (population === 'both' ? ' PCs and network assets are counted together, and the popup splits them out.' : ''))
+        (population === 'both'
+          ? ' PCs, network assets and printers are counted together, and the popup splits them out.' : ''))
     ]));
 
     var controls = U.el('div', { class: 'row no-print', style: { marginBottom: '12px' } }, [
@@ -2670,7 +3181,9 @@
             M.reset();
             render();
           }
-        }, Object.keys(M.POPULATIONS).map(function (k) {
+        }, Object.keys(M.POPULATIONS).filter(function (k) {
+          return k === 'both' ? have.both : have[k];
+        }).map(function (k) {
           return U.el('option', { value: k, selected: population === k }, M.POPULATIONS[k].label);
         }))
       ]) : null,
@@ -2686,7 +3199,7 @@
           return U.el('option', { value: k, selected: state.mapMode === k }, M.COLOUR_MODES[k].label);
         }))
       ]),
-      population === 'net' ? null : U.el('label', { class: 'check' }, [
+      (population === 'net' || population === 'print') ? null : U.el('label', { class: 'check' }, [
         U.el('input', {
           type: 'checkbox', checked: state.includeOtherOnMap,
           onchange: function (e) { state.includeOtherOnMap = e.target.checked; render(); }
@@ -2742,12 +3255,20 @@
         agg.unmapped.length ? 'add a postcode or run the lookup' : 'all located'),
       C.tile('Locations not in the lookup', agg.unmatched.length,
         agg.unmatched.length ? 'add them to the lookup file' : 'all recognised'),
-      C.tile(population === 'net' ? 'Network kit with no site' : 'Devices with no location',
+      C.tile(population === 'net' ? 'Network kit with no site'
+        : population === 'print' ? 'Printers with no site' : 'Devices with no location',
         agg.unlocated.length,
         population === 'net' && agg.unlocated.length ? 'add a site override' : ''),
-      population === 'pc' ? null : C.tile('Network kit not in Freshservice',
-        agg.mappable.reduce(function (n, s) { return n + s.netMissing; }, 0),
-        'across the sites on the map', function () { setNetView('net-new'); })
+      (population === 'net' || population === 'both') && state.netResult
+        ? C.tile('Network kit not in Freshservice',
+            agg.mappable.reduce(function (n, s) { return n + s.netMissing; }, 0),
+            'across the sites on the map', function () { setNetView('net-new'); })
+        : null,
+      (population === 'print' || population === 'both') && state.printResult
+        ? C.tile('Printers not reporting',
+            agg.mappable.reduce(function (n, s) { return n + s.printSilent; }, 0),
+            'across the sites on the map', function () { setPrintView('pr-silent'); })
+        : null
     ]);
     main.appendChild(stats);
 
@@ -2793,6 +3314,7 @@
          the combined map stands for two separate lists. */
       onSelect: function (site, which) {
         if (which === 'net') { setNetSite(site); return; }
+        if (which === 'print') { setPrintSite(site); return; }
         state.siteFilter = { key: site.key, name: site.name };
         setView('all');
       }
@@ -3480,6 +4002,67 @@
       main.appendChild(netCard);
     }
 
+    if (state.printResult) {
+      var prCard = U.el('div', { class: 'card' });
+      prCard.appendChild(U.el('h2', {}, 'Printer checks'));
+      prCard.appendChild(U.el('p', { class: 'hint' },
+        'These apply to the OneStop and Freshservice printer exports.'));
+
+      [['staleDays', 'Days without a OneStop report before a printer counts as silent', 1, 365],
+       ['idleMono', 'Lifetime pages below which a printer looks barely used', 0, 100000]]
+        .forEach(function (f) {
+          prCard.appendChild(U.el('label', { class: 'field' }, [
+            U.el('span', {}, f[1]),
+            U.el('input', {
+              type: 'number', min: String(f[2]), max: String(f[3]), value: String(state.printCfg[f[0]]),
+              onchange: function (e) {
+                var v = parseInt(e.target.value, 10);
+                if (isNaN(v)) return;
+                state.printCfg[f[0]] = Math.min(f[3], Math.max(f[2], v));
+                global.Store.set('printCfg', state.printCfg);
+                recompute(); render();
+              }
+            })
+          ]));
+        });
+
+      prCard.appendChild(U.el('label', { class: 'field', style: { marginTop: '8px' } }, [
+        U.el('span', {}, 'Which system wins on a printer\u2019s location'),
+        U.el('select', {
+          onchange: function (e) {
+            state.printCfg.locationSource = e.target.value;
+            global.Store.set('printCfg', state.printCfg);
+            recompute(); render();
+          }
+        }, [
+          U.el('option', { value: 'fs', selected: state.printCfg.locationSource === 'fs' },
+            'Freshservice \u2014 names the building rather than the campus'),
+          U.el('option', { value: 'onestop', selected: state.printCfg.locationSource === 'onestop' },
+            'OneStop \u2014 the supplier\u2019s site name')
+        ])
+      ]));
+
+      prCard.appendChild(U.el('div', { class: 'side-head', style: { marginTop: '14px' } }, 'Checks'));
+      PM.RULES.forEach(function (rule) {
+        prCard.appendChild(U.el('div', { style: { padding: '7px 0', borderBottom: '1px solid var(--grid)' } }, [
+          U.el('label', { class: 'check' }, [
+            U.el('input', {
+              type: 'checkbox', checked: PM.isEnabled(rule, state.printEnabledRules),
+              onchange: function (e) {
+                state.printEnabledRules[rule.code] = e.target.checked;
+                global.Store.set('printEnabledRules', state.printEnabledRules);
+                recompute(); render();
+              }
+            }),
+            U.el('span', { class: 'badge ' + rule.severity }, [U.el('span', { class: 'sev sev-' + rule.severity }), rule.label]),
+            U.el('span', { class: 'hint' }, U.num(state.printResult.tally[rule.code] || 0) + ' printers')
+          ]),
+          rule.hint ? U.el('div', { class: 'hint', style: { marginLeft: '24px' } }, rule.hint) : null
+        ]));
+      });
+      main.appendChild(prCard);
+    }
+
     var notesCard = U.el('div', { class: 'card' });
     var ns = global.Notes.stats();
     notesCard.appendChild(U.el('h2', {}, 'Device notes'));
@@ -3680,7 +4263,36 @@
     };
   }
 
-  function ctxFor(key) { return key === 'net' ? netCtx() : pcCtx(); }
+  function printCtx() {
+    return {
+      key: 'print',
+      label: 'Printer views',
+      noun: 'printer',
+      listName: 'printer list',
+      tab: 'printers',
+      views: PV,
+      rules: PM,
+      result: state.printResult,
+      builtIn: PV.BUILT_IN,
+      custom: state.printCustomViews,
+      saveCustom: function (list) {
+        state.printCustomViews = list;
+        global.Store.set('printCustomViews', list);
+      },
+      columnsById: state.printColumnsById,
+      saveColumns: function () { global.Store.set('printColumns', state.printColumnsById); },
+      all: printViews,
+      count: printViewCount,
+      currentId: function () { return state.printViewId; },
+      isActive: function () { return state.tab === 'printers'; },
+      open: setPrintView,
+      fallbackId: 'pr-attention'
+    };
+  }
+
+  function ctxFor(key) {
+    return key === 'net' ? netCtx() : key === 'print' ? printCtx() : pcCtx();
+  }
 
   function openViewBuilder(ctx, existing, mode) {
     var VE = ctx.views, RE = ctx.rules;
@@ -4132,7 +4744,9 @@
       /* Land on a tab the restored data can actually fill. A session with only
          the network exports in it has no PC reconciliation, and the Dashboard
          reads that result unconditionally. */
-      setTab(state.result ? 'dashboard' : (state.netResult ? 'network' : 'data'));
+      setTab(state.result ? 'dashboard'
+        : state.netResult ? 'network'
+        : state.printResult ? 'printers' : 'data');
       U.toast('Picked up where you left off — ' +
         Object.keys(state.sources).map(function (id) {
           return S.SOURCES[id].short + ' ' + U.num(state.sources[id].records.length);
