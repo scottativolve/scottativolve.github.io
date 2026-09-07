@@ -8817,12 +8817,18 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
        from     : which system the value comes from */
   var COLUMNS = [
     { key: 'workspace', label: 'Workspace',     required: true, fixed: true, from: 'fixed' },
-    { key: 'name',      label: 'Name',          required: true, from: 'fs',
+    { key: 'name',      label: 'Name',          required: true, identity: true, from: 'fs',
       help: 'The key Freshservice matches the row on. Never changed.' },
     { key: 'assetType', label: 'Asset Type',    required: true, fixed: true, from: 'fixed' },
     { key: 'product',   label: 'Product',       required: true, from: 'house',
       fixes: 'product-inconsistent', help: 'The spelling most of your own records already use for this model.' },
-    { key: 'serial',    label: 'Serial Number', from: 'onestop', fixes: 'serial-missing' },
+    /* Identity, not a correction: written on every row whether or not this is
+       the field being put right. Leaving it blank on the rows that did not need
+       it made a correction file whose identifying column was empty on 140 of
+       150 lines — impossible to check by eye, and broken outright if your
+       import is set to match on the serial rather than the name. */
+    { key: 'serial',    label: 'Serial Number', identity: true, from: 'onestop', fixes: 'serial-missing',
+      help: 'Always written when known, because it identifies the printer.' },
     { key: 'state',     label: 'Asset State',   from: 'derived', fixes: 'state-wrong',
       help: 'Set to In Use where OneStop shows the printer reporting with pages on the meter.' },
     { key: 'location',  label: 'Location',      from: 'fs', fixes: 'location-missing',
@@ -8875,7 +8881,7 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
       case 'product':
         return N.clean(row.productShould) || N.clean(row.fsProduct);
       case 'serial':
-        return only(row, config, 'serial-missing', N.clean(row.serial));
+        return N.clean(row.serial);
       case 'state':
         return only(row, config, 'state-wrong', config.inUseState);
       case 'location':
@@ -8902,6 +8908,9 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
      rejected without it. */
   function only(row, config, codes, value) {
     if (!config.onlyChanged) return value;
+    // Identity columns are handled directly and never routed through here;
+    // this is belt and braces if one ever is.
+    if (codes === 'identity') return value;
     var list = Array.isArray(codes) ? codes : [codes];
     var hit = list.some(function (c) { return row.issues && row.issues.indexOf(c) >= 0; });
     return hit ? value : '';
@@ -8927,7 +8936,11 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     return COLUMNS.filter(function (c) { return config.include[c.key]; });
   }
 
-  /* Which rows this file would actually change, and what it would change. */
+  /* Which rows this file would actually change, and what it would change.
+
+     Counted by comparing against what Freshservice already holds rather than
+     by whether a cell is filled in: the identity columns are written on every
+     row and would otherwise be reported as changing all of them. */
   function changeSummary(rows, config) {
     var out = [];
     activeColumns(config).forEach(function (col) {
@@ -8936,7 +8949,7 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
       rows.forEach(function (r) {
         var v = cellValue(r, col.key, config);
         if (!v) return;
-        if (col.key === 'product' && !r.productDiffers) return;   // present but unchanged
+        if (N.clean(currentValue(r, col.key)) === N.clean(v)) return;
         n++;
       });
       if (n) out.push({ key: col.key, label: header(col, config), rows: n, fixes: col.fixes || '' });
