@@ -84,7 +84,11 @@ by re-detection on load and the new matches are named in a message, so a column
 added to the tool starts working without you re-importing. A field you
 deliberately left unmapped stays unmapped.
 
-### 1. Freshservice assets
+### 1. PCs — the Freshservice asset export
+
+The box is labelled **PCs** rather than Freshservice, because three of the boxes
+on the Data screen are Freshservice exports and the label needs to say which one
+this is.
 
 Assets → filter to what you want → Export → CSV.
 
@@ -92,6 +96,33 @@ Useful columns: `Display Name`, `Asset Tag`, `Serial Number`, `Asset Type`,
 `Asset State`, `Used By`, `Last Login By`, `Location`, `Department`, `Product`,
 `Vendor`, `OS`, `IP Address`, `Last Audit Date`. Only the device name is
 strictly required.
+
+#### Desktops and laptops, as two exports
+
+Freshservice exports one asset type at a time, so the PC list arrives as a
+Desktop file and a Laptop file. **Drop both on the box** — the second is added
+to the first, not put in its place — and the tool holds them as one list.
+
+They are joined by column name, not by column position, so it does not matter
+whether the two exports came out with their columns in the same order. That is
+the failure appending them in a spreadsheet invites: two files whose column
+order differs paste together looking fine and put every field one column across.
+
+Each file gets its own line under the box, giving what it brought by asset type:
+
+```
+2 exports held together as one list, unioned by column name.
+  ivolve-desktops.csv     184 rows · 08 Sept, 08:36
+  Desktop 160 · Network switch 6 · Mobile phone 6 · +2 more
+  ivolve-laptops.csv      104 rows · 08 Sept, 08:36
+  Laptop 104
+```
+
+That breakdown is the point of the per-file lines: a box reading "288 rows" says
+nothing about whether the desktops are in there, and dropping only the laptop
+export otherwise looks exactly like 160 desktops having gone missing from
+Freshservice. Re-dropping a file you have already loaded replaces its rows
+rather than doubling them, so re-exporting one asset type is safe.
 
 #### About "Last Login By"
 
@@ -258,9 +289,10 @@ match.
 Every loaded box carries the date and time that file was read, and how long ago
 that was, so the Data screen answers "which of these needs re-exporting?"
 without you having to remember. The times are kept per file, not per source:
-the FortiManager box holds an export from each environment, so it shows the
-**oldest** of the two — a reconciliation is only as fresh as the staler side of
-it — and each environment's own line underneath carries its own time.
+the PCs box holds a desktop and a laptop export and the FortiManager box one
+per environment, so a box like those shows the **oldest** of what it holds — a
+reconciliation is only as fresh as the staler side of it — and each file's own
+line underneath carries its own time.
 
 A file more than a week older than the newest thing loaded is marked *N days
 behind*. That is measured against the rest of this project rather than against

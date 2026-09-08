@@ -9,9 +9,12 @@
   var SOURCES = {
     freshservice: {
       id: 'freshservice',
-      label: 'Freshservice',
-      short: 'FS',
-      hint: 'Assets export (Assets → Export → CSV)',
+      /* Named for what it holds rather than where it came from: three of the
+         boxes on the Data screen are Freshservice exports, and "Freshservice"
+         alone did not say which one this was. */
+      label: 'PCs',
+      short: 'PCs',
+      hint: 'Freshservice assets export (Assets → Export → CSV). Desktops and laptops export separately — drop both.',
       signature: ['asset tag', 'used by', 'asset state', 'asset type', 'display name', 'last audit date', 'display id', 'usage type'],
       /* A PC export never carries a Printer Type column, and without ruling it
          out the printer export scored 21.6 here against 22.0 as a printer —

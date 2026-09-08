@@ -16,11 +16,32 @@
   var PRINT_SOURCES = ['onestop', 'fsprinter'];
   var SOURCE_IDS = PC_SOURCES.concat(NET_SOURCES, PRINT_SOURCES);
 
-  /* FortiManager is exported per environment, and the two exports do not have
-     the same columns, so they are unioned by header name on load rather than
-     pasted together in a spreadsheet, where the differing column order would
-     silently shift every field. */
-  var MULTI_FILE = { fortimanager: true };
+  /* Sources that arrive as several exports and are appended on load.
+
+     Both of these used to be pasted together in a spreadsheet first, which is
+     where the columns get out of step: FortiManager's two environments do not
+     export the same columns at all, and appending two files whose column order
+     differs shifts every field one across without saying so. Unioning by
+     header name on load cannot make that mistake.
+
+       environments : the files are separate networks and each gets a name you
+                      can set. Only FortiManager works that way — Freshservice
+                      exports one file per asset type, which are two slices of
+                      one list, not two places.
+       more         : what to say when only one of them has been dropped.
+       together     : what to say once several have. */
+  var MULTI_FILE = {
+    freshservice: {
+      more: 'Drop your other asset-type export here too \u2014 desktops and laptops ' +
+            'come out of Freshservice separately, and the second one is added, not replaced.',
+      together: 'held together as one list, unioned by column name.'
+    },
+    fortimanager: {
+      environments: true,
+      more: 'Drop the other environment\u2019s export here too \u2014 it is added, not replaced.',
+      together: 'held together, unioned by column name.'
+    }
+  };
 
   /* A config saved by an older build can be missing whole sections, and a
      shallow merge would leave the UI dereferencing keys that aren't there.
@@ -196,9 +217,10 @@
         // Each row remembers which file it came from, so a device can be
         // reported as being in one FortiManager environment or both.
         var envName = environmentKey(file.name);
-        // Only a source that is loaded from several files has environments to
-        // name; the site list is not one of them.
-        if (MULTI_FILE[sourceId]) noteEnvironment(envName);
+        // Only a source whose files are separate networks has environments to
+        // name. The site list is not one of them, and nor are the two
+        // Freshservice PC exports: they are asset types, not places.
+        if ((MULTI_FILE[sourceId] || {}).environments) noteEnvironment(envName);
         parsed.rows.forEach(function (r) { r.__env = envName; });
 
         var prior = MULTI_FILE[sourceId] ? state.sources[sourceId] : null;
@@ -1085,6 +1107,79 @@
     ]);
   }
 
+  /* One loaded file within a source that holds several.
+
+     An environment gets a name box, because "Export 1" is not what anybody
+     calls their network. An asset-type export gets no name: the file already
+     says what it is, and what matters is what it brought \u2014 dropping only the
+     laptops export is otherwise indistinguishable from 200 desktops having
+     gone missing from Freshservice. */
+  function filePart(src, multi, fileName) {
+    var key = environmentKey(fileName);
+    /* Rows are stamped with the file they came from on load, but a working set
+       saved before this box took several files has no stamp on it. With one
+       file there is nothing to attribute, so take the lot rather than showing
+       a source that plainly holds rows as holding none. */
+    var rows = src.files && src.files.length > 1
+      ? src.raw.filter(function (r) { return r.__env === key; })
+      : src.raw;
+    var when = src.fileTimes && src.fileTimes[fileName];
+    var count = U.el('span', {
+      class: 'hint', style: { whiteSpace: 'nowrap' },
+      title: when ? 'Loaded ' + U.fmtDateTime(when) : fileName
+    }, U.num(rows.length) + ' rows' + (when ? ' \u00b7 ' + U.fmtDayTime(when) : ''));
+
+    if (multi.environments) {
+      return U.el('div', { class: 'row tight', style: { marginTop: '4px' } }, [
+        U.el('input', {
+          type: 'text', value: envLabel(key), title: fileName,
+          placeholder: 'Name this environment\u2026',
+          style: { flex: '1', minWidth: '0', fontSize: '11.5px' },
+          onchange: function (e) {
+            var v = e.target.value.trim();
+            if (v) state.envLabels[key] = v; else delete state.envLabels[key];
+            global.Store.set('envLabels', state.envLabels);
+            global.Store.set('envOrder', state.envOrder);
+            render();
+          }
+        }),
+        count
+      ]);
+    }
+
+    var kinds = kindsIn(src, rows);
+    return U.el('div', { style: { marginTop: '4px' } }, [
+      U.el('div', { class: 'row tight' }, [
+        U.el('span', {
+          class: 'hint', title: fileName,
+          style: {
+            flex: '1', minWidth: '0', overflow: 'hidden',
+            textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left'
+          }
+        }, fileName),
+        count
+      ]),
+      kinds ? U.el('div', { class: 'hint', style: { fontSize: '11px', textAlign: 'left' } }, kinds) : null
+    ]);
+  }
+
+  /* What a file brought, by asset type, so a box holding two exports says
+     "Desktop 212" and "Laptop 86" rather than only a total. */
+  function kindsIn(src, rows) {
+    var col = src.mapping && src.mapping.assetType;
+    if (!col) return '';
+    var tally = {};
+    rows.forEach(function (r) {
+      var v = N.clean(r[col]) || '(blank)';
+      tally[v] = (tally[v] || 0) + 1;
+    });
+    var keys = Object.keys(tally).sort(function (a, b) { return tally[b] - tally[a]; });
+    if (!keys.length) return '';
+    var shown = keys.slice(0, 3).map(function (k) { return k + ' ' + U.num(tally[k]); });
+    if (keys.length > 3) shown.push('+' + (keys.length - 3) + ' more');
+    return shown.join(' \u00b7 ');
+  }
+
   function dropZone(sourceId) {
     var def = S.SOURCES[sourceId];
     var src = state.sources[sourceId];
@@ -1130,37 +1225,17 @@
         }, 'View file'),
         U.el('button', { class: 'btn sm ghost', onclick: function () { clearSource(sourceId); } }, 'Remove')
       ]));
-      if (MULTI_FILE[sourceId] && src.files) {
-        var envs = U.el('div', { style: { marginTop: '8px' } });
-        envs.appendChild(U.el('div', { class: 'hint', style: { textAlign: 'center' } },
+      var multi = MULTI_FILE[sourceId];
+      if (multi && src.files) {
+        var parts = U.el('div', { style: { marginTop: '8px' } });
+        parts.appendChild(U.el('div', { class: 'hint', style: { textAlign: 'center' } },
           src.files.length > 1
-            ? 'Both exports are held together, unioned by column name.'
-            : 'Drop the other environment\u2019s export here too \u2014 it is added, not replaced.'));
+            ? src.files.length + ' exports ' + multi.together
+            : multi.more));
         src.files.forEach(function (fileName) {
-          var key = environmentKey(fileName);
-          var n = src.raw.filter(function (r) { return r.__env === key; }).length;
-          envs.appendChild(U.el('div', { class: 'row tight', style: { marginTop: '4px' } }, [
-            U.el('input', {
-              type: 'text', value: envLabel(key), title: fileName,
-              placeholder: 'Name this environment\u2026',
-              style: { flex: '1', minWidth: '0', fontSize: '11.5px' },
-              onchange: function (e) {
-                var v = e.target.value.trim();
-                if (v) state.envLabels[key] = v; else delete state.envLabels[key];
-                global.Store.set('envLabels', state.envLabels);
-                global.Store.set('envOrder', state.envOrder);
-                render();
-              }
-            }),
-            U.el('span', {
-              class: 'hint', style: { whiteSpace: 'nowrap' },
-              title: src.fileTimes && src.fileTimes[fileName]
-                ? 'Loaded ' + U.fmtDateTime(src.fileTimes[fileName]) : fileName
-            }, U.num(n) + ' rows' + (src.fileTimes && src.fileTimes[fileName]
-                ? ' \u00b7 ' + U.fmtDayTime(src.fileTimes[fileName]) : ''))
-          ]));
+          parts.appendChild(filePart(src, multi, fileName));
         });
-        wrap.appendChild(envs);
+        wrap.appendChild(parts);
       }
 
       var missingReq = def.fields.filter(function (f) { return f.required && !src.mapping[f.key]; });
@@ -1209,11 +1284,12 @@
       oninput: U.debounce(function (e) { query = e.target.value; page = 0; draw(); }, 180)
     }));
     if (MULTI_FILE[sourceId] && src.files && src.files.length > 1) {
+      var named = !!MULTI_FILE[sourceId].environments;
       var sel = U.el('select', {
         onchange: function (e) { envFilter = e.target.value; page = 0; draw(); }
       }, [U.el('option', { value: '' }, 'All files')].concat(src.files.map(function (f) {
         var k = environmentKey(f);
-        return U.el('option', { value: k }, envLabel(k));
+        return U.el('option', { value: k }, named ? envLabel(k) : f);
       })));
       controls.appendChild(sel);
     }
@@ -4736,6 +4812,9 @@
       var parsed = global.CSV.parse(global.SampleData[id]);
       var name = 'sample-' + id + '.csv';
       var times = {}; times[name] = new Date().toISOString();
+      // Stamped like a real load, so a box that takes several files can still
+      // say which file each row came from.
+      parsed.rows.forEach(function (r) { r.__env = environmentKey(name); });
       state.sources[id] = {
         id: id,
         fileName: name,
