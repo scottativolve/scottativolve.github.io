@@ -123,6 +123,39 @@
     return Math.round(n / 30.4) + ' months ago';
   }
 
+  /* Day granularity is enough for a device that last checked in months ago,
+     but not for an export you loaded twenty minutes before wondering whether
+     it was the fresh one, so this counts in minutes and hours first. */
+  function sinceLabel(v) {
+    var d = v instanceof Date ? v : parseDate(v);
+    if (!d) return 'never';
+    var mins = Math.floor((Date.now() - d.getTime()) / 60000);
+    if (mins < 0) return agoLabel(d);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + (mins === 1 ? ' minute ago' : ' minutes ago');
+    var hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + (hrs === 1 ? ' hour ago' : ' hours ago');
+    return agoLabel(d);
+  }
+
+  function fmtDateTime(v) {
+    var d = v instanceof Date ? v : parseDate(v);
+    if (!d) return '\u2014';
+    return d.toLocaleString('en-GB', {
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+  }
+
+  /* The same instant, short: no year, for a line that already says which
+     day it is elsewhere. */
+  function fmtDayTime(v) {
+    var d = v instanceof Date ? v : parseDate(v);
+    if (!d) return '\u2014';
+    return d.toLocaleString('en-GB', {
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+    });
+  }
+
   function todayStamp() {
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -223,7 +256,9 @@
     el: el, qs: qs, qsa: qsa, clear: clear,
     num: num, pct: pct, parseDate: parseDate, fmtDate: fmtDate,
     daysSince: daysSince, ageLabel: ageLabel, todayStamp: todayStamp,
-    agoLabel: agoLabel, truncate: truncate, escapeHtml: escapeHtml,
+    agoLabel: agoLabel, sinceLabel: sinceLabel,
+    fmtDateTime: fmtDateTime, fmtDayTime: fmtDayTime,
+    truncate: truncate, escapeHtml: escapeHtml,
     download: download, toast: toast, tooltip: tooltip, debounce: debounce,
     sortBy: sortBy, groupBy: groupBy, uniq: uniq
   };

@@ -253,6 +253,28 @@ match.
 
 ---
 
+### How current each file is
+
+Every loaded box carries the date and time that file was read, and how long ago
+that was, so the Data screen answers "which of these needs re-exporting?"
+without you having to remember. The times are kept per file, not per source:
+the FortiManager box holds an export from each environment, so it shows the
+**oldest** of the two — a reconciliation is only as fresh as the staler side of
+it — and each environment's own line underneath carries its own time.
+
+A file more than a week older than the newest thing loaded is marked *N days
+behind*. That is measured against the rest of this project rather than against
+an absolute idea of stale: being a week behind the export you are comparing it
+with is a fact worth knowing, because differences between them may be the age
+gap rather than a real change. Nothing is refused or hidden on account of it.
+
+The times survive being saved in the browser and being written to a project
+file, so they still read correctly when you come back to a session next week. A
+working set saved by a build before this one has no times recorded, and says so
+rather than guessing.
+
+---
+
 ### Reading a file you have loaded
 
 **View file**, beside *Check columns* on each loaded source, shows the file

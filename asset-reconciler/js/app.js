@@ -211,6 +211,14 @@
         var rows = prior ? prior.raw.concat(parsed.rows) : parsed.rows;
         var files = prior ? prior.files.filter(function (f) { return f !== file.name; }).concat([file.name]) : [file.name];
 
+        /* When each file arrived, kept per file rather than per source: a
+           FortiManager source holds an export from each environment, and one
+           of them being three months stale is exactly what you want to see.
+           Stored as an ISO string so it survives the working set and a
+           project file without needing a Date to be revived. */
+        var times = prior && prior.fileTimes ? Object.assign({}, prior.fileTimes) : {};
+        times[file.name] = new Date().toISOString();
+
         if (prior) {
           /* Adding a second export to a source keeps the mapping already
              decided for the first and fills only what the union has newly
@@ -234,7 +242,7 @@
           knownFields: S.fieldKeys(sourceId),
           autoMapped: !saved,
           filled: filled,
-          loadedAt: new Date()
+          fileTimes: times
         };
         project(sourceId);
         return { sourceId: sourceId, file: file.name, rows: parsed.rows.length,
@@ -416,7 +424,8 @@
       payload.sources[id] = {
         fileName: src.fileName, files: src.files || null, headers: src.headers,
         mapping: src.mapping, raw: src.raw,
-        knownFields: src.knownFields || S.fieldKeys(id)
+        knownFields: src.knownFields || S.fieldKeys(id),
+        fileTimes: src.fileTimes || null
       };
     });
     return payload;
@@ -454,7 +463,8 @@
           headers: src.headers,
           mapping: res.mapping, raw: src.raw,
           knownFields: S.fieldKeys(id),
-          filled: res.filled
+          filled: res.filled,
+          fileTimes: src.fileTimes || null
         };
         if (res.filled.length) restoredFills.push({ source: id, filled: res.filled });
         project(id);
@@ -1005,6 +1015,76 @@
   /*  tab: data                                                           */
   /* ==================================================================== */
 
+  /* How current each loaded file is.
+
+     Held per file rather than per source because a source can be several
+     exports: the FortiManager box holds one from each environment, and one of
+     them being months behind the other is precisely what you want to notice.
+     A reconciliation is only as fresh as the staler side of it, so the oldest
+     file is what a source is judged on and the newest is only trivia. */
+  var LAG_DAYS = 7;
+
+  function fileTimes(src) {
+    if (!src || !src.fileTimes) return [];
+    return (src.files || [src.fileName]).map(function (f) {
+      var t = src.fileTimes[f];
+      return t ? { file: f, at: new Date(t) } : null;
+    }).filter(function (x) { return x && !isNaN(x.at.getTime()); })
+      .sort(function (a, b) { return a.at - b.at; });
+  }
+
+  function loadedAt(src, which) {
+    var t = fileTimes(src);
+    if (!t.length) return null;
+    return (which === 'newest' ? t[t.length - 1] : t[0]).at;
+  }
+
+  /* The most recent thing loaded anywhere, which is the yardstick the rest are
+     measured against. An absolute "older than a month is stale" would be an
+     invention; being a week behind the export you loaded alongside it is a
+     fact about this project. */
+  function freshestLoad() {
+    var best = null;
+    SOURCE_IDS.forEach(function (id) {
+      var at = loadedAt(state.sources[id], 'newest');
+      if (at && (!best || at > best)) best = at;
+    });
+    return best;
+  }
+
+  function lagDays(src) {
+    var newest = freshestLoad(), mine = loadedAt(src, 'oldest');
+    if (!newest || !mine) return 0;
+    return Math.floor((newest - mine) / 86400000);
+  }
+
+  /* The line under a loaded box: exactly when it arrived, and how long ago. */
+  function loadedLine(src) {
+    var times = fileTimes(src);
+    if (!times.length) {
+      return U.el('div', { class: 'dz-when' }, [
+        U.el('span', { class: 'hint' }, 'Loaded before this build recorded times')
+      ]);
+    }
+    var oldest = times[0].at;
+    var several = times.length > 1;
+    var lag = lagDays(src);
+    var late = lag >= LAG_DAYS;
+    return U.el('div', { class: 'dz-when' + (late ? ' lagging' : ''), title:
+      (several ? times.length + ' files, oldest loaded ' : 'Loaded ')
+        + U.fmtDateTime(oldest)
+        + (late ? '\n' + lag + ' days older than the newest export in this project, so '
+                + 'differences you see may be the age gap rather than a real change.' : '')
+    }, [
+      U.el('span', { class: 'k' }, several ? 'Oldest loaded' : 'Loaded'),
+      U.el('span', {}, U.fmtDateTime(oldest)),
+      U.el('span', { class: 'ago' }, '(' + U.sinceLabel(oldest) + ')'),
+      late ? U.el('span', { class: 'badge medium' }, [
+        U.el('span', { class: 'sev sev-medium' }), lag + ' days behind'
+      ]) : null
+    ]);
+  }
+
   function dropZone(sourceId) {
     var def = S.SOURCES[sourceId];
     var src = state.sources[sourceId];
@@ -1035,6 +1115,7 @@
           : src.fileName) : null,
       src ? U.el('div', { class: 'dz-meta' }, U.num(src.raw.length) + ' rows \u00b7 ' +
             Object.keys(src.mapping).length + ' of ' + def.fields.length + ' columns mapped') : null,
+      src ? loadedLine(src) : null,
       input
     ]);
 
@@ -1071,7 +1152,12 @@
                 render();
               }
             }),
-            U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } }, U.num(n) + ' rows')
+            U.el('span', {
+              class: 'hint', style: { whiteSpace: 'nowrap' },
+              title: src.fileTimes && src.fileTimes[fileName]
+                ? 'Loaded ' + U.fmtDateTime(src.fileTimes[fileName]) : fileName
+            }, U.num(n) + ' rows' + (src.fileTimes && src.fileTimes[fileName]
+                ? ' \u00b7 ' + U.fmtDayTime(src.fileTimes[fileName]) : ''))
           ]));
         });
         wrap.appendChild(envs);
@@ -4581,7 +4667,10 @@
     SOURCE_IDS.forEach(function (id) {
       var s = state.sources[id];
       if (!s) return;
-      payload.sources[id] = { fileName: s.fileName, headers: s.headers, mapping: s.mapping, raw: s.raw };
+      payload.sources[id] = {
+        fileName: s.fileName, files: s.files || null, headers: s.headers,
+        mapping: s.mapping, raw: s.raw, fileTimes: s.fileTimes || null
+      };
     });
     U.download('asset-reconciler-' + U.todayStamp() + '.json', JSON.stringify(payload, null, 1),
       'application/json', { bom: false });
@@ -4604,7 +4693,11 @@
             state.sources = {};
             Object.keys(p.sources || {}).forEach(function (id) {
               var s = p.sources[id];
-              state.sources[id] = { id: id, fileName: s.fileName, headers: s.headers, mapping: s.mapping, raw: s.raw };
+              state.sources[id] = {
+                id: id, fileName: s.fileName, files: s.files || [s.fileName],
+                headers: s.headers, mapping: s.mapping, raw: s.raw,
+                fileTimes: s.fileTimes || null
+              };
               project(id);
             });
             if (p.cfg) state.cfg = global.Match.settings(p.cfg);
@@ -4641,13 +4734,17 @@
     if (!global.SampleData) { U.toast('Sample data is not available in this build.', 'err'); return; }
     Object.keys(global.SampleData).forEach(function (id) {
       var parsed = global.CSV.parse(global.SampleData[id]);
+      var name = 'sample-' + id + '.csv';
+      var times = {}; times[name] = new Date().toISOString();
       state.sources[id] = {
         id: id,
-        fileName: 'sample-' + id + '.csv',
+        fileName: name,
+        files: [name],
         headers: parsed.headers,
         raw: parsed.rows,
         mapping: S.autoMap(id, parsed.headers),
-        autoMapped: true
+        autoMapped: true,
+        fileTimes: times
       };
       project(id);
     });
