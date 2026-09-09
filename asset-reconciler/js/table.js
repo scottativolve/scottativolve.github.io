@@ -314,6 +314,16 @@
      the same shape under two names. */
   function byCode(R) { return R.BY_CODE || R.RULE_BY_CODE || {}; }
 
+  function pcSubtitle(row) {
+    if (!row.matchType) return '';
+    return row.matchType === 'serial' ? 'Matched on serial number'
+         : row.matchType === 'name' ? 'Matched on device name'
+         : row.matchType === 'fs-only' ? 'Freshservice only \u2014 no Intune record'
+         : row.matchType === 'intune-only' ? 'Intune only \u2014 no Freshservice record'
+         : row.matchType === 'aw-only' ? 'Arctic Wolf only \u2014 in neither register'
+         : '';
+  }
+
   function openDrawer(row, onClose, opts) {
     var R = (opts && opts.rules) || global.Rules;
     var rowFields = (opts && opts.fieldRows) || fieldRows;
@@ -330,14 +340,16 @@
     function esc(e) { if (e.key === 'Escape') close(); }
     document.addEventListener('keydown', esc);
 
+    /* The line under the name says how this row came to exist, which is a
+       different sentence for each population. It used to be the PC match
+       types with no fallback, so a network device, a printer or a mobile —
+       none of which carries a matchType — was labelled "Intune only". */
+    var subtitle = opts.subtitle ? opts.subtitle(row) : pcSubtitle(row);
+
     drawer.appendChild(U.el('header', {}, [
       U.el('div', {}, [
         U.el('h2', {}, row.name),
-        U.el('div', { class: 'hint' },
-          (row.matchType === 'serial' ? 'Matched on serial number'
-            : row.matchType === 'name' ? 'Matched on device name'
-            : row.matchType === 'fs-only' ? 'Freshservice only — no Intune record'
-            : 'Intune only — no Freshservice record'))
+        subtitle ? U.el('div', { class: 'hint' }, subtitle) : null
       ]),
       U.el('div', { class: 'spacer' }),
       U.el('button', { class: 'btn sm ghost', onclick: close, 'aria-label': 'Close' }, '✕')

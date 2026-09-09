@@ -18,7 +18,7 @@
 (function (global) {
   'use strict';
 
-  var U = global.U, N = global.Norm;
+  var U = global.U, N = global.Norm, PH = global.Phone;
 
   var DEFAULTS = {
     staleDays: 30,          // no check-in this long looks neglected
@@ -325,6 +325,68 @@
       test: function (r, cfg, ctx) { return !!r.name && ctx.nameCount[N.locationKey(r.name)] > 1; }
     },
     {
+      code: 'duplicate-number',
+      label: 'Phone number on more than one device',
+      severity: 'high',
+      hint: 'One number cannot be in two handsets. Usually the SIM has been moved into a replacement and the ' +
+            'old device record left behind — the stale one of the pair is the one to retire.',
+      test: function (r, cfg, ctx) { return !!r.phoneKey && ctx.phoneCount[r.phoneKey] > 1; },
+      detail: function (r, cfg, ctx) {
+        var others = (ctx.phoneDevices[r.phoneKey] || []).filter(function (o) { return o.id !== r.id; });
+        return 'also ' + others.map(function (o) {
+          return o.name + ' (' + (o.checkIn ? U.agoLabel(o.checkIn) : 'never reported') + ')';
+        }).join(', ');
+      }
+    },
+    {
+      code: 'no-phone-number',
+      label: 'No phone number',
+      severity: 'medium',
+      hint: 'A device with no number cannot be traced to whoever holds it. On a device filed by region rather ' +
+            'than by site that leaves nothing at all to identify it by.',
+      test: function (r) { return !r.isTest && !r.hasSiteFolder && !r.phone; }
+    },
+    {
+      code: 'owner-not-found',
+      label: 'Number matches nobody in Entra',
+      severity: 'low',
+      hint: 'The handset has a number but no member of staff has it recorded against them. Either the mobile ' +
+            'field is out of date or the handset is not held by anyone.',
+      test: function (r, cfg, ctx) {
+        return ctx.hasPeople && !!r.phoneKey && !r.owner && !r.hasSiteFolder && !r.isTest;
+      }
+    },
+    {
+      code: 'owner-left',
+      label: 'Held by a disabled account',
+      severity: 'high',
+      hint: 'The number is recorded against somebody whose Entra account is switched off, so a handset is ' +
+            'still out with a leaver.',
+      test: function (r) { return !!r.owner && r.owner.enabled === false; },
+      detail: function (r) { return r.ownerName + (r.owner.jobTitle ? ', ' + r.owner.jobTitle : ''); }
+    },
+    {
+      code: 'owner-at-site',
+      label: 'Site phone recorded against a person',
+      severity: 'low',
+      hint: 'The number is in somebody\u2019s Entra profile, but the handset is filed at a service rather than ' +
+            'with a person — so it is probably a shared site phone they answer, not their own. Worth checking ' +
+            'before the record says one person owns it.',
+      test: function (r) { return !!r.owner && r.hasSiteFolder; },
+      detail: function (r) { return r.ownerName + ' at ' + r.siteName; }
+    },
+    {
+      code: 'owner-ambiguous',
+      label: 'Number recorded against more than one person',
+      severity: 'medium',
+      hint: 'Two Entra profiles carry this number, so the tool will not choose between them. One of the two ' +
+            'is out of date.',
+      test: function (r) { return (r.ownerCandidates || []).length > 1; },
+      detail: function (r) {
+        return (r.ownerCandidates || []).map(function (o) { return o.name; }).join(' or ');
+      }
+    },
+    {
       code: 'site-closed',
       label: 'At a site marked closed',
       severity: 'medium',
@@ -355,11 +417,12 @@
 
      overrides is folder key -> site code, seeded with SEED_OVERRIDES and
      extended by the user. sites is the site index by code. */
-  function resolve(records, cfg, sites, overrides) {
+  function resolve(records, cfg, sites, overrides, people) {
     cfg = settings(cfg);
     sites = sites || {};
     /* User overrides come in already keyed, and win over the seeds. */
     var ov = Object.assign({}, OVERRIDE_KEYS, overrides || {});
+    var byPhone = peopleByPhone(people);
 
     /* Two ways into the site list: by name, and by name with " SL" removed.
        The second is a fallback and is only trusted where it is unambiguous,
@@ -388,6 +451,10 @@
         osVersion: N.clean(rec.osVersion),
         ip: N.clean(rec.ipAddress),
         mac: N.clean(rec.mac),
+        phone: N.clean(rec.phone),
+        // Only a mobile can be a handset, so a landline typed into the field
+        // keys on nothing rather than being compared and matched by accident.
+        phoneKey: PH.mobileKey(rec.phone),
         agentVersion: N.clean(rec.agentVersion),
         storage: typeof rec.storage === 'number' ? rec.storage : null,
         memory: typeof rec.memory === 'number' ? rec.memory : null,
@@ -416,6 +483,7 @@
       row.formFactor = info ? info.kind : '';
 
       resolveSite(row, ov, byName, byBase);
+      resolveOwner(row, byPhone);
 
       /* What the Freshservice Location will say. A site name where there is
          one; the home-worker label where the device is filed by region,
@@ -434,7 +502,72 @@
       return row;
     });
 
-    return { rows: rows, sites: sites, overrides: ov, cfg: cfg };
+    return { rows: rows, sites: sites, overrides: ov, cfg: cfg, people: people || [] };
+  }
+
+  /* ------------------------------------------------------------- owners */
+
+  /* Staff indexed by every mobile number recorded against them.
+
+     Entra's mobile field is free text kept for email signatures, so one
+     profile can hold two numbers and a number can be written six ways. Both
+     sides are reduced to E.164 first; see js/phone.js for what that has to
+     survive. */
+  function peopleByPhone(people) {
+    var out = {};
+    (people || []).forEach(function (p) {
+      var person = {
+        name: N.clean(p.name),
+        upn: N.clean(p.upn),
+        email: N.clean(p.email) || N.clean(p.upn),
+        jobTitle: N.clean(p.jobTitle),
+        department: N.clean(p.department),
+        office: N.clean(p.officeLocation),
+        town: N.clean(p.town),
+        manager: N.clean(p.manager),
+        managerEmail: N.clean(p.managerEmail),
+        samAccount: N.clean(p.samAccount),
+        employeeId: N.clean(p.employeeId),
+        enabled: enabledFlag(p.enabled),
+        numbers: []
+      };
+      /* Every phone column, because a mobile gets typed into the business
+         one often enough that ignoring it loses real matches. */
+      ['mobile', 'otherMobile', 'businessPhone'].forEach(function (f) {
+        PH.mobileKeys(p[f]).forEach(function (k) {
+          if (person.numbers.indexOf(k) < 0) person.numbers.push(k);
+        });
+      });
+      person.numbers.forEach(function (k) {
+        (out[k] = out[k] || []).push(person);
+      });
+    });
+    return out;
+  }
+
+  function enabledFlag(v) {
+    var s = String(v === undefined || v === null ? '' : v).trim();
+    if (!s) return null;
+    if (/^(true|yes|enabled|1|active)$/i.test(s)) return true;
+    if (/^(false|no|disabled|0|inactive|blocked)$/i.test(s)) return false;
+    return null;
+  }
+
+  /* One number, one person — or nothing.
+
+     Where two profiles claim the same number the row is left unowned and
+     flagged: picking the first would put a handset against a name on the
+     strength of row order. */
+  function resolveOwner(row, byPhone) {
+    row.owner = null;
+    row.ownerName = '';
+    row.ownerCandidates = [];
+    if (!row.phoneKey) return;
+    var list = byPhone[row.phoneKey] || [];
+    row.ownerCandidates = list;
+    if (list.length !== 1) return;
+    row.owner = list[0];
+    row.ownerName = list[0].name;
   }
 
   /* Exact name, then an override, then " SL" treated as optional.
@@ -483,11 +616,16 @@
     var rows = result.rows;
 
     var serialCount = {}, nameCount = {}, agentVotes = {};
+    var phoneCount = {}, phoneDevices = {};
     rows.forEach(function (r) {
       if (r.serial) serialCount[r.serial] = (serialCount[r.serial] || 0) + 1;
       var nk = N.locationKey(r.name);
       if (nk) nameCount[nk] = (nameCount[nk] || 0) + 1;
       if (r.agentVersion) agentVotes[r.agentVersion] = (agentVotes[r.agentVersion] || 0) + 1;
+      if (r.phoneKey) {
+        phoneCount[r.phoneKey] = (phoneCount[r.phoneKey] || 0) + 1;
+        (phoneDevices[r.phoneKey] = phoneDevices[r.phoneKey] || []).push(r);
+      }
     });
     var commonAgent = '', best = 0;
     Object.keys(agentVotes).forEach(function (v) {
@@ -496,8 +634,11 @@
 
     var ctx = {
       hasSites: result.sites && Object.keys(result.sites).length > 0,
+      hasPeople: !!(result.people && result.people.length),
       serialCount: serialCount,
       nameCount: nameCount,
+      phoneCount: phoneCount,
+      phoneDevices: phoneDevices,
       commonAgent: commonAgent
     };
 
@@ -537,7 +678,10 @@
         return acc;
       }, {})).length,
       tablets: rows.filter(function (r) { return r.formFactor === 'Tablet'; }).length,
-      phones: rows.filter(function (r) { return r.formFactor === 'Phone'; }).length
+      phones: rows.filter(function (r) { return r.formFactor === 'Phone'; }).length,
+      withNumber: rows.filter(function (r) { return !!r.phoneKey; }).length,
+      owned: rows.filter(function (r) { return !!r.owner; }).length,
+      people: (result.people || []).length
     };
     return result;
   }
@@ -582,6 +726,7 @@
     modelInfo: modelInfo,
     isAssetNumber: isAssetNumber,
     olderThan: olderThan,
+    peopleByPhone: peopleByPhone,
     OVERRIDE_KEYS: OVERRIDE_KEYS
   };
 })(window);

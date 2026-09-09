@@ -19,7 +19,7 @@
   var PC_SOURCES = ['freshservice', 'intune', 'arcticwolf', 'locations', 'verification'];
   var NET_SOURCES = ['fortimanager', 'fsnetwork'];
   var PRINT_SOURCES = ['onestop', 'fsprinter'];
-  var MOB_SOURCES = ['soti'];
+  var MOB_SOURCES = ['soti', 'entra'];
   var SOURCE_IDS = PC_SOURCES.concat(NET_SOURCES, PRINT_SOURCES, MOB_SOURCES);
 
   /* Sources that arrive as several exports and are appended on load.
@@ -638,8 +638,10 @@
       state.mobResult = null;
       return;
     }
+    /* Entra is optional: without it every device still gets a site and can
+       still be imported, it just has nobody's name against it. */
     state.mobResult = MB.apply(
-      MB.resolve(soti, state.mobCfg, siteIndex(), state.mobOverrides),
+      MB.resolve(soti, state.mobCfg, siteIndex(), state.mobOverrides, data.entra || []),
       state.mobCfg, state.mobEnabledRules);
   }
 
@@ -859,6 +861,8 @@
       host.appendChild(U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } },
         U.num(state.mobResult.rows.length) + ' mobiles \u00b7 ' +
         U.num(state.mobResult.counts.atSite) + ' at a site \u00b7 ' +
+        (state.mobResult.counts.people
+          ? U.num(state.mobResult.counts.owned) + ' with an owner \u00b7 ' : '') +
         U.num(state.mobResult.rows.filter(function (r) { return r.issueCount; }).length) + ' flagged'));
     } else if (state.tab === 'printers' && state.printResult) {
       host.appendChild(U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } },
@@ -1326,6 +1330,7 @@
     }, [
       U.el('div', { class: 'dz-title' }, def.label),
       U.el('div', { class: 'dz-sub' }, def.hint),
+      def.caution ? U.el('div', { class: 'dz-caution' }, def.caution) : null,
       src ? U.el('div', { class: 'dz-file' },
         MULTI_FILE[sourceId] && src.files && src.files.length > 1
           ? src.files.length + ' files loaded'
@@ -3165,6 +3170,12 @@
           rules: NM,
           fieldRows: netFieldRows,
           sideLabels: ['FortiManager', 'Freshservice'],
+          subtitle: function (n) {
+            var side = n.forti && n.fs ? 'In both FortiManager and Freshservice'
+                     : n.forti ? 'FortiManager only \u2014 not in Freshservice'
+                     : 'Freshservice only \u2014 FortiManager does not manage it';
+            return n.kind ? n.kind + ' \u00b7 ' + side : side;
+          },
           cleanText: 'Both systems agree on this device.',
           onAddNote: function (row) { openNotes([row]); }
         });
@@ -3358,6 +3369,11 @@
           rules: PM,
           fieldRows: printFieldRows,
           sideLabels: ['OneStop', 'Freshservice'],
+          subtitle: function (pr) {
+            return pr.status === 'matched' ? 'In both OneStop and Freshservice'
+                 : pr.status === 'onestop-only' ? 'OneStop only \u2014 no Freshservice record'
+                 : 'Freshservice only \u2014 OneStop has never seen it';
+          },
           cleanText: 'Both systems agree on this printer.',
           onAddNote: function (row) { openNotes([row]); }
         });
@@ -3449,10 +3465,16 @@
         function () { setMobView('mb-site-unresolved'); }),
       C.tile('Cannot be imported', inView('mb-import-blocked'),
         'no serial, model or product', function () { setMobView('mb-import-blocked'); }),
-      C.tile('Silent for months', inView('mb-silent'),
-        'lost, broken or in a drawer', function () { setMobView('mb-silent'); }),
-      C.tile('Tablets', counts.tablets,
-        'their own asset type and file', function () { setMobView('mb-tablets'); })
+      counts.people
+        ? C.tile('Held by a named person', counts.owned,
+            'of ' + U.num(counts.withNumber) + ' with a number', function () { setMobView('mb-owners'); })
+        : C.tile('Silent for months', inView('mb-silent'),
+            'lost, broken or in a drawer', function () { setMobView('mb-silent'); }),
+      counts.people
+        ? C.tile('Owner not established', inView('mb-owner-gaps'),
+            'no number, or no match', function () { setMobView('mb-owner-gaps'); })
+        : C.tile('Tablets', counts.tablets,
+            'their own asset type and file', function () { setMobView('mb-tablets'); })
     ]));
 
     var controls = U.el('div', { class: 'row no-print', style: { marginBottom: '12px' } });
@@ -3551,7 +3573,16 @@
           fieldRows: mobFieldRows,
           /* Not two systems being compared: the left column is what SOTI
              reports, the right is what the import would write. */
-          sideLabels: ['SOTI', 'Into Freshservice'],
+          sideLabels: ['SOTI and Entra', 'Into Freshservice'],
+          subtitle: function (m) {
+            var bits = [];
+            bits.push(m.siteName ? 'At ' + m.siteCode + ' ' + m.siteName
+              : m.isTest ? 'Test or supplier stock'
+              : m.hasSiteFolder ? 'Site folder not recognised' : 'Filed by region, no site');
+            if (m.ownerName) bits.push('held by ' + m.ownerName);
+            else if (m.phoneKey) bits.push('number matches nobody in Entra');
+            return bits.join(' \u00b7 ');
+          },
           cleanText: 'Nothing outstanding on this device.',
           onAddNote: function (row) { openNotes([row]); }
         });
@@ -3588,6 +3619,13 @@
       ['Device name', row.name, out('name')],
       ['Serial number', row.serial, out('serial')],
       ['IMEI', row.imei, out('imei')],
+      ['Phone number', row.phone, out('phone')],
+      ['Held by', row.ownerName || (row.phoneKey ? 'number matches nobody in Entra' : 'no number'),
+        out('user') || '(not written)'],
+      ['Owner email', row.owner ? row.owner.email : '', out('userEmail') || '(not written)'],
+      ['Job title', row.owner ? row.owner.jobTitle : '', '\u2014'],
+      ['Manager', row.owner ? row.owner.manager : '', '\u2014'],
+      ['Office (Entra)', row.owner ? row.owner.office : '', '\u2014'],
       ['Model', row.model, out('product')],
       ['Type', row.formFactor, out('assetType')],
       ['Make', row.manufacturer, out('vendor')],

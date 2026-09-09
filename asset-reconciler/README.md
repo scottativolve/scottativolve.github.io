@@ -13,7 +13,7 @@ It handles **four separate populations**, worked out independently:
 | **PCs** | Freshservice ↔ Intune ↔ Arctic Wolf | who has it, where is it, is it stale, is it at risk |
 | **Network assets** | FortiManager ↔ Freshservice | what has been added since, what has been replaced, what firmware is recorded |
 | **Printers** | OneStop ↔ Freshservice | which fields are wrong, which are silent, which are worth questioning |
-| **Mobiles** | SOTI, on its own | where each handset is, which can be imported, which have gone quiet |
+| **Mobiles** | SOTI ↔ Entra (by phone number) | where each handset is, who holds it, which have gone quiet |
 
 They share the site list, the map, the notes and the duplicate finder, but they
 have their own tabs, views, checks and import builder — a firewall and a laptop
@@ -259,6 +259,33 @@ duplicates and says so, but it cannot invent the devices the export left out.
 
 **Do not open the file in Excel.** Device names are five digits with a leading
 zero (`00030`), and Excel turns them into `30`.
+
+### 10. Entra users (optional)
+
+Staff with a phone number, which is what puts a **name** to a handset.
+`scripts/export-entra-phones.ps1` produces it:
+
+```powershell
+Install-Module Microsoft.Graph -Scope CurrentUser     # once
+.\scripts\export-entra-phones.ps1
+```
+
+It reads the directory, keeps only the users who have a number in
+`mobilePhone` **or** `businessPhones`, adds the line manager, and writes one
+CSV. Filtering on `mobilePhone` alone would be the obvious thing and would
+silently drop people whose number was typed into the wrong field, or synced up
+from on-prem AD into a different one.
+
+Only the people with a number are written out. Everyone else cannot be matched
+by number anyway, and **this file is staff personal data** — names, work
+mobiles, job titles and reporting lines. It stays in the browser like every
+other input, and it stays there until you clear the working set, which is why
+the box on the Data screen says so.
+
+Disabled accounts are kept on purpose: a leaver still holding a handset is one
+of the things worth finding. `-EnabledOnly` drops them if you would rather.
+
+Don't open this one in Excel either.
 
 ### Locating devices by IP address
 
@@ -1026,6 +1053,42 @@ them: `Whitley Park` is **Garmsway**, `Cannon Court` is **Ripon**, and
 between those names and anything in the site list. A tool that claimed to work
 them out would be guessing.
 
+### Who holds it
+
+SOTI reports the handset's own number, so the number is the join to a person:
+Entra's `mobilePhone` is maintained by the people team from the HR system, and
+where it matches, the tool has a name, a job title, a department, an office and
+a line manager for the handset.
+
+The two systems write the same number differently. SOTI is strict E.164
+(`+447821680115`); Entra's field is free text kept for email signatures
+(`07821 680115`). Both sides are reduced to E.164 before anything is compared,
+which has to survive rather more than those two forms:
+
+| In Entra | Read as |
+|---|---|
+| `07821 680115`, `07821680115`, `07821-680115` | `+447821680115` |
+| `+44 7821 680115`, `0044 7821 680115`, `44 7821 680115` | `+447821680115` |
+| `07821 680115 (work)`, `… ext 204`, `… x204` | `+447821680115` |
+| `7821680115` | `+447821680115` — a spreadsheet ate the leading zero |
+| `07821 680115 / 07999 123456` | both, and either will match |
+| `0121 496 0117` | a landline: **ignored, never compared** |
+| `n/a`, `TBC`, `-`, `07821 68011` | nothing |
+
+Two rules keep it honest. A number is only ever matched if it is a valid UK
+**mobile** — a landline in somebody's mobile field cannot be a handset, and
+comparing it could only ever produce a wrong answer. And a number found against
+*two* Entra profiles leaves the handset unowned and flagged, because choosing
+the first would put a device against a name on the strength of row order.
+
+**A site phone is not a personal one.** Two thirds of the numbered handsets are
+filed at a service. If a manager's Entra mobile happens to be a shared site
+phone they answer, matching it would end with a Freshservice record saying they
+own it, and the next person to read that record would believe it. So a match on
+a device filed at a site is reported as *Site phone against a person* and the
+**Used By** column is left blank; the description says whose number it is
+without claiming they hold the handset.
+
 ### The region cross-check
 
 The site list gives each site a region, and SOTI's second path segment is a
@@ -1060,6 +1123,14 @@ can be imported, and which handsets have stopped reporting:
   devices.
 - **Named after a person** — the convention is the five-digit asset number, and
   a handful carry somebody's name or a pilot instead.
+- **One number, two devices** — one number cannot be in two handsets. Almost
+  always a SIM moved into a replacement with the old device record left behind,
+  and most of that pair is not stale enough for the silence checks to catch.
+- **Out with a leaver** — the number is recorded against a disabled Entra
+  account.
+- **Owner not established** — a number that matches nobody, matches two people,
+  or a home-worker device with no number at all. The ones somebody has to ask
+  about.
 
 ### The creation import
 
@@ -1073,6 +1144,11 @@ Two lookups feed it, both editable and both seeded:
   *Galaxy A16 4G*. Nineteen codes cover the estate.
 - **Phone or tablet → Asset Type.** Two keys, because asking nineteen times for
   the same two answers is a way of introducing typos.
+
+**Used By** and **Used By Email** are filled in only where the number placed
+the handset with exactly one person *and* the handset is not a site phone. The
+email matters more than the name — that is what Freshservice resolves a
+requester on.
 
 Asset state is *In Use*, except test and supplier stock, which is *Reserved*.
 Rows with no model or no serial are left out rather than written as a row that

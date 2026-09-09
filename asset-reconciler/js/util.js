@@ -104,10 +104,18 @@
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   }
 
+  /* Truncated towards zero rather than floored, so a timestamp a few hours in
+     the future reads as today rather than "in 1 day".
+
+     That happens routinely: SOTI stamps its check-in times in the tenant's
+     local time with no offset, so an export taken this morning during British
+     Summer Time parses an hour ahead of the browser's clock, and every device
+     that checked in today would otherwise be reported as checking in
+     tomorrow. */
   function daysSince(v) {
     var d = v instanceof Date ? v : parseDate(v);
     if (!d) return null;
-    return Math.floor((Date.now() - d.getTime()) / 86400000);
+    return Math.trunc((Date.now() - d.getTime()) / 86400000);
   }
 
   function ageLabel(v) {

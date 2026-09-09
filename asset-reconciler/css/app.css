@@ -547,6 +547,15 @@ table.grid td.chips .badge { margin: 1px 2px 1px 0; }
 .drop.loaded { border-style: solid; border-color: color-mix(in srgb, var(--good) 55%, var(--border-strong)); }
 .drop .dz-title { font-weight: 600; font-size: 13.5px; margin-bottom: 3px; }
 .drop .dz-sub { font-size: 11.5px; color: var(--text-muted); }
+/* Said on the box rather than buried in the README: one of the inputs is
+   about people, and the person dropping it should be told before they do. */
+.drop .dz-caution {
+  font-size: 11px; margin-top: 6px; padding: 5px 7px; text-align: left;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface-1));
+  border-radius: var(--radius-sm);
+}
+
 .drop .dz-file { font-size: 12px; color: var(--success-text); font-weight: 600; margin-top: 6px; word-break: break-all; }
 .drop .dz-meta { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
 

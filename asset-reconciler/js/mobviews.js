@@ -8,7 +8,7 @@
 (function (global) {
   'use strict';
 
-  var U = global.U, N = global.Norm;
+  var U = global.U, N = global.Norm, PH = global.Phone;
 
   function yesNo(v) { return v === null || v === undefined ? '' : (v ? 'yes' : 'no'); }
 
@@ -30,6 +30,29 @@
     { key: 'formFactor', label: 'Type',         width: 90,  get: function (r) { return r.formFactor; } },
     { key: 'manufacturer', label: 'Make',       width: 100, get: function (r) { return r.manufacturer; } },
     { key: 'imei',       label: 'IMEI',         width: 150, get: function (r) { return r.imei; } },
+    { key: 'phone',      label: 'Phone number', width: 130,
+      // The way a person writes it, not E.164: this column gets read aloud.
+      get: function (r) { return r.phoneKey ? PH.national(r.phoneKey) : r.phone; } },
+    { key: 'phoneKey',   label: 'Phone (E.164)', width: 130, get: function (r) { return r.phoneKey; } },
+
+    { key: 'ownerName',  label: 'Held by',      width: 170, get: function (r) { return r.ownerName; } },
+    { key: 'ownerEmail', label: 'Email',        width: 210,
+      get: function (r) { return r.owner ? r.owner.email : ''; } },
+    { key: 'ownerTitle', label: 'Job title',    width: 190,
+      get: function (r) { return r.owner ? r.owner.jobTitle : ''; } },
+    { key: 'ownerDept',  label: 'Department',   width: 140,
+      get: function (r) { return r.owner ? r.owner.department : ''; } },
+    { key: 'ownerOffice',label: 'Office (Entra)', width: 170,
+      get: function (r) { return r.owner ? r.owner.office : ''; } },
+    { key: 'ownerManager', label: 'Manager',    width: 170,
+      get: function (r) { return r.owner ? r.owner.manager : ''; } },
+    { key: 'ownerEnabled', label: 'Account',    width: 100,
+      get: function (r) {
+        if (!r.owner || r.owner.enabled === null) return '';
+        return r.owner.enabled ? 'enabled' : 'disabled';
+      } },
+    { key: 'ownerCount', label: 'People with this number', width: 90, type: 'number',
+      get: function (r) { return (r.ownerCandidates || []).length; } },
     { key: 'osVersion',  label: 'Android',      width: 80,  type: 'number', get: function (r) { return r.osMajor; } },
     { key: 'encrypted',  label: 'Encrypted',    width: 95,  get: function (r) { return yesNo(r.encrypted); } },
 
@@ -70,7 +93,8 @@
     { key: 'modelKnown', label: 'Product known', width: 110, get: function (r) { return r.modelKnown ? 'yes' : 'no'; } }
   ];
 
-  var BASE_COLS = ['name', 'serial', 'modelName', 'formFactor', 'siteCode', 'location', 'checkIn', 'issues'];
+  var BASE_COLS = ['name', 'serial', 'modelName', 'formFactor', 'phone', 'ownerName',
+                   'siteCode', 'location', 'checkIn', 'issues'];
 
   var E = global.Views.engine(COLUMNS, BASE_COLS);
 
@@ -176,6 +200,36 @@
       'The site list marks the service closed, so devices still filed there need collecting or moving.',
       ['site-closed'],
       ['name', 'serial', 'modelName', 'siteCode', 'siteName', 'siteStatus', 'checkIn']),
+    issueView('mb-dup-number', 'One number, two devices',
+      'The same phone number on more than one handset. Usually the SIM has moved into a replacement and the ' +
+      'old device record was left behind, so the stale half of each pair is a device to retire.',
+      ['duplicate-number'],
+      ['name', 'serial', 'phone', 'modelName', 'deviceClass', 'folder', 'checkIn', 'daysSince', 'issues']),
+    {
+      id: 'mb-owners',
+      name: 'Who holds what',
+      description: 'Every handset the phone number placed with a member of staff, from their Entra profile. ' +
+        'Load the Entra export to fill this in.',
+      columns: ['name', 'phone', 'ownerName', 'ownerTitle', 'ownerDept', 'ownerOffice', 'ownerManager',
+                'modelName', 'deviceClass', 'checkIn'],
+      filter: { match: 'all', conditions: [{ field: 'ownerName', op: 'notEmpty' }] },
+      sort: { key: 'ownerName', dir: 'asc' }
+    },
+    issueView('mb-owner-gaps', 'Owner not established',
+      'A handset with a number that matches nobody in Entra, or matches two people, or no number at all. ' +
+      'These are the ones somebody has to ask about.',
+      ['owner-not-found', 'owner-ambiguous', 'no-phone-number'],
+      ['name', 'serial', 'phone', 'ownerCount', 'modelName', 'deviceClass', 'regionFolder', 'checkIn', 'issues']),
+    issueView('mb-owner-left', 'Out with a leaver',
+      'The number is recorded against somebody whose Entra account is switched off, so the handset needs ' +
+      'collecting.',
+      ['owner-left'],
+      ['name', 'serial', 'phone', 'ownerName', 'ownerTitle', 'ownerManager', 'checkIn', 'daysSince']),
+    issueView('mb-site-phone-owned', 'Site phone against a person',
+      'The number is in somebody’s Entra profile but the handset is filed at a service, so it is probably a ' +
+      'shared site phone they answer rather than their own. Worth checking before a record says they own it.',
+      ['owner-at-site'],
+      ['name', 'phone', 'ownerName', 'ownerTitle', 'siteCode', 'siteName', 'folder', 'checkIn']),
     {
       id: 'mb-tablets',
       name: 'Tablets',

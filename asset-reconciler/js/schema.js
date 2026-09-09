@@ -256,6 +256,7 @@
         { key: 'osVersion',    label: 'OS version',       aliases: ['os version', 'operating system version', 'os'] },
         { key: 'ipAddress',    label: 'IP address',       aliases: ['ip address', 'ip', 'ipv4 address', 'last known ip'] },
         { key: 'mac',          label: 'MAC address',      aliases: ['mac address', 'mac', 'wi-fi mac', 'physical address'] },
+        { key: 'phone',        label: 'Phone number',     aliases: ['phone number', 'telephone number', 'mobile number', 'msisdn', 'phone'] },
         { key: 'checkIn',      label: 'Last check-in',    type: 'date', aliases: ['agent check-in time', 'agent check in time', 'check-in time', 'last check-in', 'last checkin'] },
         { key: 'connected',    label: 'Last connected',   type: 'date', aliases: ['agent connect time', 'connect time', 'last connected'] },
         { key: 'disconnected', label: 'Last disconnected',type: 'date', aliases: ['agent disconnect time', 'disconnect time', 'last disconnected'] },
@@ -263,6 +264,42 @@
         { key: 'encrypted',    label: 'Encrypted',        aliases: ['encrypted', 'encryption', 'is encrypted'] },
         { key: 'storage',      label: 'Available storage',type: 'number', aliases: ['available storage', 'free storage', 'storage free'] },
         { key: 'memory',       label: 'Available memory', type: 'number', aliases: ['available memory', 'free memory', 'memory free'] }
+      ]
+    },
+
+    entra: {
+      id: 'entra',
+      label: 'Entra users',
+      short: 'Entra',
+      hint: 'Staff with a phone number (Graph PowerShell export) \u2014 puts a name to a handset',
+      /* The only input that is about people rather than equipment, so it is
+         the only one worth saying this about out loud. */
+      caution: 'Holds staff personal data. Export only the users who have a phone number, and remember it is ' +
+               'kept in this browser with the rest of the working set until you clear it.',
+      signature: ['userprincipalname', 'mobilephone', 'businessphone', 'officelocation',
+                  'manager', 'manageremail', 'jobtitle', 'samaccountname', 'accountenabled',
+                  'business phone', 'office location', 'user principal name', 'mobile phone'],
+      /* A Freshservice export shares Display Name, Location and Department, so
+         the asset columns are what rule it out. Entra describes people. */
+      anti: ['asset tag', 'asset state', 'asset type', 'serial number', 'imei / meid / esn',
+             'path', 'device family'],
+      fields: [
+        { key: 'name',        label: 'Full name',        required: true, aliases: ['displayname', 'display name', 'name', 'full name', 'user'] },
+        { key: 'upn',         label: 'Sign-in name',     aliases: ['userprincipalname', 'user principal name', 'upn', 'sign-in name', 'username'] },
+        { key: 'email',       label: 'Email',            aliases: ['mail', 'email', 'email address', 'primary email', 'smtp address'] },
+        { key: 'mobile',      label: 'Mobile number',    aliases: ['mobilephone', 'mobile phone', 'mobile number', 'mobile', 'cell', 'cell phone', 'mobile telephone'] },
+        { key: 'businessPhone', label: 'Business phone', aliases: ['businessphone', 'business phone', 'businessphones', 'telephonenumber', 'telephone number', 'office phone', 'work phone', 'phone'] },
+        { key: 'otherMobile', label: 'Other mobile',     aliases: ['othermobile', 'other mobile', 'alternate mobile', 'second mobile'] },
+        { key: 'jobTitle',    label: 'Job title',        aliases: ['jobtitle', 'job title', 'title', 'role', 'position'] },
+        { key: 'department',  label: 'Department',       aliases: ['department', 'department name', 'team'] },
+        { key: 'officeLocation', label: 'Office location', aliases: ['officelocation', 'office location', 'office', 'physicaldeliveryofficename', 'site'] },
+        { key: 'town',        label: 'Town / city',      aliases: ['city', 'town', 'l'] },
+        { key: 'company',     label: 'Company',          aliases: ['companyname', 'company name', 'company', 'organisation', 'organization'] },
+        { key: 'samAccount',  label: 'Windows logon',    aliases: ['samaccountname', 'onpremisessamaccountname', 'sam account name', 'logon name'] },
+        { key: 'employeeId',  label: 'Employee ID',      aliases: ['employeeid', 'employee id', 'staff number', 'payroll number'] },
+        { key: 'manager',     label: 'Manager',          aliases: ['manager', 'manager name', 'managerdisplayname', 'reports to', 'line manager'] },
+        { key: 'managerEmail',label: 'Manager email',    aliases: ['manageremail', 'manager email', 'managerupn', 'manager upn'] },
+        { key: 'enabled',     label: 'Account enabled',  aliases: ['accountenabled', 'account enabled', 'enabled', 'account status'] }
       ]
     },
 

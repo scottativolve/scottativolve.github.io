@@ -13,7 +13,7 @@
 (function (global) {
   'use strict';
 
-  var U = global.U, N = global.Norm, MB = global.Mobiles;
+  var U = global.U, N = global.Norm, MB = global.Mobiles, PH = global.Phone;
 
   var DEFAULT_HEADERS = {
     workspace:  'Workspace',
@@ -25,6 +25,9 @@
     state:      'Asset State',
     vendor:     'Vendor',
     imei:       'IMEI',
+    phone:      'Phone Number',
+    user:       'Used By',
+    userEmail:  'Used By Email',
     os:         'OS Version',
     ip:         'IP Address',
     mac:        'MAC Address',
@@ -48,6 +51,13 @@
       help: 'As SOTI reports it, capitalised — it arrives as "samsung".' },
     { key: 'imei',       label: 'IMEI',
       help: 'What the network operator needs to bar a lost handset.' },
+    { key: 'phone',      label: 'Phone Number',
+      help: 'The handset\u2019s own number, written the way people say it \u2014 07821 680115.' },
+    { key: 'user',       label: 'Used By',
+      help: 'Only where the number matched exactly one Entra profile. A number matching two people, or a ' +
+            'site phone somebody happens to answer, is left blank and flagged instead.' },
+    { key: 'userEmail',  label: 'Used By Email',
+      help: 'How Freshservice actually resolves a requester, so it matters more than the name.' },
     { key: 'os',         label: 'OS Version' },
     { key: 'ip',         label: 'IP Address',
       help: 'Off by default: a mobile’s address is whatever network it was last on, so it dates immediately.' },
@@ -97,7 +107,8 @@
       headers: Object.assign({}, DEFAULT_HEADERS),
       include: {
         workspace: true, name: true, assetType: true, product: true, serial: true,
-        location: true, state: true, vendor: true, imei: true, os: true,
+        location: true, state: true, vendor: true, imei: true, phone: true,
+        user: true, userEmail: true, os: true,
         ip: false, mac: false, tag: false, description: true
       },
       fixed: { workspace: 'IT' },
@@ -126,6 +137,13 @@
       case 'state':    return N.clean(row.stateShould);
       case 'vendor':   return vendorOf(row, config);
       case 'imei':     return N.clean(row.imei);
+      case 'phone':    return row.phoneKey ? PH.national(row.phoneKey) : N.clean(row.phone);
+      /* An owner only where the number placed it with exactly one person, and
+         only where the handset is theirs rather than a site phone they answer.
+         A shared phone recorded against one name reads as that person's, and
+         the next person to look at the record believes it. */
+      case 'user':     return ownable(row) ? N.clean(row.ownerName) : '';
+      case 'userEmail':return ownable(row) ? N.clean(row.owner.email) : '';
       case 'os':       return row.osMajor === null ? '' : 'Android ' + row.osMajor;
       case 'ip':       return N.clean(row.ip);
       case 'mac':      return N.clean(row.mac);
@@ -142,6 +160,10 @@
      anything else is passed through with its first letter raised rather than
      replaced, because guessing at a second maker's house style is worse than
      leaving it as reported. */
+  function ownable(row) {
+    return !!row.owner && !row.hasSiteFolder;
+  }
+
   function vendorOf(row, config) {
     var m = N.clean(row.manufacturer);
     if (!m) return '';
@@ -158,6 +180,12 @@
     if (row.deviceClass) bits.push(row.deviceClass);
     if (row.folder && row.folder !== row.siteName) bits.push('SOTI folder: ' + row.folder);
     if (row.siteCode) bits.push('Site ' + row.siteCode);
+    if (row.phoneKey) bits.push(PH.national(row.phoneKey));
+    if (row.owner && row.hasSiteFolder) {
+      // Said as the fact it is, not as ownership: the number is theirs, the
+      // handset is the service's.
+      bits.push('number recorded against ' + row.ownerName);
+    }
     if (row.checkIn) bits.push('SOTI check-in ' + U.fmtDate(row.checkIn));
     else bits.push('never checked in to SOTI');
     return bits.join('; ');
@@ -235,6 +263,21 @@
 
   /* A blank Location is not a rejected import, but it is a device that lands
      nowhere, so it is worth saying out loud before anyone uploads the file. */
+  /* How the owner column came out, for the dialog. Not a problem to fix so
+     much as the shape of what you are about to import. */
+  function ownerSummary(rows, config) {
+    var out = { matched: 0, sitePhone: 0, ambiguous: 0, unmatched: 0, noNumber: 0 };
+    (rows || []).forEach(function (r) {
+      if (!r.phoneKey) { out.noNumber++; return; }
+      var n = (r.ownerCandidates || []).length;
+      if (!n) out.unmatched++;
+      else if (n > 1) out.ambiguous++;
+      else if (r.hasSiteFolder) out.sitePhone++;
+      else out.matched++;
+    });
+    return out;
+  }
+
   function blankLocation(rows, config) {
     if (!config.include.location) return 0;
     return rows.filter(function (r) { return !cellValue(r, 'location', config); }).length;
@@ -288,18 +331,26 @@
   /* What the import claimed, for the record — and for checking a site's
      devices against what actually turned up there. */
   function toManifestCsv(rows, config) {
-    var headers = ['Device name', 'Serial', 'IMEI', 'Model code', 'Product', 'Asset Type',
+    var headers = ['Device name', 'Serial', 'IMEI', 'Phone number', 'Model code', 'Product', 'Asset Type',
                    'SOTI class', 'SOTI folder', 'Site code', 'Site', 'Matched by',
-                   'Location', 'Asset State', 'Last check-in'];
+                   'Location', 'Used By', 'Used By Email', 'Owner match', 'Asset State', 'Last check-in'];
     var out = rows.map(function (r) {
       return {
         'Device name': r.name, 'Serial': r.serial, 'IMEI': r.imei,
+        'Phone number': cellValue(r, 'phone', config),
         'Model code': r.model, 'Product': cellValue(r, 'product', config),
         'Asset Type': cellValue(r, 'assetType', config),
         'SOTI class': r.deviceClass, 'SOTI folder': r.folder,
         'Site code': r.siteCode, 'Site': r.siteName,
         'Matched by': r.hasSiteFolder ? (r.siteMatch || 'nothing') : 'no site folder',
         'Location': cellValue(r, 'location', config),
+        'Used By': cellValue(r, 'user', config),
+        'Used By Email': cellValue(r, 'userEmail', config),
+        'Owner match': !r.phoneKey ? 'no number'
+          : !(r.ownerCandidates || []).length ? 'number matches nobody'
+          : (r.ownerCandidates || []).length > 1 ? 'number matches ' + r.ownerCandidates.length + ' people'
+          : r.hasSiteFolder ? 'site phone, number recorded against ' + r.ownerName
+          : 'matched',
         'Asset State': cellValue(r, 'state', config),
         'Last check-in': r.checkIn ? U.fmtDate(r.checkIn) : 'never'
       };
@@ -324,6 +375,8 @@
     missingRequired: missingRequired,
     blankRequired: blankRequired,
     blankLocation: blankLocation,
+    ownerSummary: ownerSummary,
+    ownable: ownable,
     toImportCsv: toImportCsv,
     splitByAssetType: splitByAssetType,
     typeSlug: typeSlug,
