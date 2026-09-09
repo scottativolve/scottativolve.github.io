@@ -6,15 +6,21 @@
   var U = global.U, V = global.Views, R = global.Rules, N = global.Norm,
       S = global.Schema, C = global.Charts, T = global.Table, FX = global.FSExport,
       NV = global.NetViews, NM = global.NetMatch, NX = global.NetExport, FT = global.Fortinet,
-      PV = global.PrintViews, PM = global.Printers, PX2 = global.PrintExport;
+      PV = global.PrintViews, PM = global.Printers, PX2 = global.PrintExport,
+      MBV = global.MobViews, MB = global.Mobiles, MBX = global.MobExport;
 
-  /* Two populations, reconciled separately. PC_SOURCES feed the device
-     reconciliation; NET_SOURCES feed the network one. The location lookup is
-     shared, because a site is a site. */
+  /* Four populations, worked out separately. Each list names the exports
+     that feed one of them; the location lookup is shared, because a site is a
+     site whatever is standing in it.
+
+     Mobiles are the odd one out: there is no second system to reconcile
+     against, because none of them is in Freshservice yet. That population is
+     a site-mapping and creation job until the first import lands. */
   var PC_SOURCES = ['freshservice', 'intune', 'arcticwolf', 'locations', 'verification'];
   var NET_SOURCES = ['fortimanager', 'fsnetwork'];
   var PRINT_SOURCES = ['onestop', 'fsprinter'];
-  var SOURCE_IDS = PC_SOURCES.concat(NET_SOURCES, PRINT_SOURCES);
+  var MOB_SOURCES = ['soti'];
+  var SOURCE_IDS = PC_SOURCES.concat(NET_SOURCES, PRINT_SOURCES, MOB_SOURCES);
 
   /* Sources that arrive as several exports and are appended on load.
 
@@ -112,6 +118,16 @@
     return out;
   }
 
+  function mergeMobConfig(saved) {
+    var base = MBX.defaultConfig();
+    if (!saved || typeof saved !== 'object') return base;
+    var out = Object.assign({}, base, saved);
+    ['headers', 'include', 'fixed', 'products', 'assetTypes'].forEach(function (k) {
+      out[k] = Object.assign({}, base[k], saved[k] || {});
+    });
+    return out;
+  }
+
   var state = {
     sources: {},                 // id -> { fileName, headers, raw, mapping, records }
     result: null,
@@ -167,7 +183,23 @@
     printSelectedIds: [],
     printSiteFilter: null,
     printCustomViews: global.Store.get('printCustomViews', []),
-    printConfig: mergePrintConfig(global.Store.get('printConfig', {}))
+    printConfig: mergePrintConfig(global.Store.get('printConfig', {})),
+
+    /* --- mobiles and tablets, from SOTI --- */
+    mobResult: null,
+    mobCfg: MB.settings(global.Store.get('mobCfg', null) || {}),
+    mobEnabledRules: global.Store.get('mobEnabledRules', {}),
+    mobViewId: 'mb-attention',
+    mobSearch: '',
+    mobColumns: null,
+    mobColumnsById: global.Store.get('mobColumns', {}),
+    mobSelectedIds: [],
+    mobSiteFilter: null,
+    mobCustomViews: global.Store.get('mobCustomViews', []),
+    mobConfig: mergeMobConfig(global.Store.get('mobConfig', {})),
+    // SOTI folder key -> site code, on top of the seeds in Mobiles.
+    mobOverrides: global.Store.get('mobOverrides', {}),
+    mobExportScope: 'view'
   };
 
   var grid = null;
@@ -189,6 +221,7 @@
     var hadPc = !!(state.sources.freshservice && state.sources.intune);
     var hadNet = !!(state.sources.fortimanager && state.sources.fsnetwork);
     var hadPrint = !!(state.sources.onestop && state.sources.fsprinter);
+    var hadMob = !!state.sources.soti;
 
     var jobs = list.map(function (file) {
       return global.CSV.readFile(file).then(function (parsed) {
@@ -295,9 +328,13 @@
         var hasPc = !!(state.sources.freshservice && state.sources.intune);
         var hasNet = !!(state.sources.fortimanager && state.sources.fsnetwork);
         var hasPrint = !!(state.sources.onestop && state.sources.fsprinter);
+        // Mobiles need only the one export, since there is nothing to
+        // reconcile them against yet.
+        var hasMob = !!state.sources.soti;
         if (hasPc && !hadPc) setTab('dashboard');
         else if (hasNet && !hadNet) setTab('network');
         else if (hasPrint && !hadPrint) setTab('printers');
+        else if (hasMob && !hadMob) setTab('mobiles');
       }
     }).catch(function (err) {
       U.toast(err.message || String(err), 'err', 8000);
@@ -354,6 +391,7 @@
     }
     recomputeNet(data);
     recomputePrinters(data);
+    recomputeMobiles(data);
     saveWorkingSet();
   }
 
@@ -369,6 +407,7 @@
       out[code] = {
         code: code, name: N.clean(r.location), town: N.clean(r.town),
         postcode: N.clean(r.postcode), region: N.clean(r.region),
+        siteType: N.clean(r.siteType), status: N.clean(r.status),
         lat: r.lat, lon: r.lon, subnet: r.subnet
       };
     });
@@ -434,6 +473,11 @@
       printEnabledRules: state.printEnabledRules,
       printConfig: state.printConfig,
       printCustomViews: state.printCustomViews,
+      mobCfg: state.mobCfg,
+      mobEnabledRules: state.mobEnabledRules,
+      mobConfig: state.mobConfig,
+      mobCustomViews: state.mobCustomViews,
+      mobOverrides: state.mobOverrides,
       favourites: state.favourites,
       siteOverrides: state.siteOverrides,
       envLabels: state.envLabels,
@@ -502,6 +546,11 @@
       if (payload.printCfg) state.printCfg = PM.settings(payload.printCfg);
       if (payload.printEnabledRules) state.printEnabledRules = payload.printEnabledRules;
       if (payload.printConfig) state.printConfig = mergePrintConfig(payload.printConfig);
+      if (payload.mobCfg) state.mobCfg = MB.settings(payload.mobCfg);
+      if (payload.mobEnabledRules) state.mobEnabledRules = payload.mobEnabledRules;
+      if (payload.mobConfig) state.mobConfig = mergeMobConfig(payload.mobConfig);
+      if (payload.mobCustomViews) state.mobCustomViews = payload.mobCustomViews;
+      if (payload.mobOverrides) state.mobOverrides = payload.mobOverrides;
       if (payload.printCustomViews) state.printCustomViews = payload.printCustomViews;
       if (payload.favourites) state.favourites = payload.favourites;
       if (payload.siteOverrides) state.siteOverrides = payload.siteOverrides;
@@ -580,6 +629,18 @@
     state.printResult = PM.apply(
       PM.reconcile(os, fsp, state.printCfg, siteIndex()),
       state.printCfg, state.printEnabledRules);
+  }
+
+  function recomputeMobiles(data) {
+    data = data || {};
+    var soti = data.soti || [];
+    if (!soti.length) {
+      state.mobResult = null;
+      return;
+    }
+    state.mobResult = MB.apply(
+      MB.resolve(soti, state.mobCfg, siteIndex(), state.mobOverrides),
+      state.mobCfg, state.mobEnabledRules);
   }
 
   /* ---------------------------------------------------- network views */
@@ -679,6 +740,54 @@
     setPrintView('pr-all');
   }
 
+  /* ---------------------------------------------------- mobile views */
+
+  function mobViews() {
+    return MBV.BUILT_IN.concat(state.mobCustomViews.map(function (v) {
+      return Object.assign({}, v, { isCustom: true });
+    }));
+  }
+
+  function mobViewById(id) {
+    return mobViews().filter(function (v) { return v.id === id; })[0] || MBV.BUILT_IN[0];
+  }
+
+  function mobRowsForView(view, withSearch) {
+    if (!state.mobResult) return [];
+    var rows = MBV.applyView(view, state.mobResult.rows);
+    if (state.mobSiteFilter) {
+      rows = rows.filter(function (r) { return r.locationKey === state.mobSiteFilter.key; });
+    }
+    if (withSearch && state.mobSearch) rows = MBV.searchRows(rows, state.mobSearch);
+    return rows;
+  }
+
+  function mobViewCount(view) {
+    if (!state.mobResult) return 0;
+    try { return MBV.applyView(view, state.mobResult.rows).length; } catch (e) { return 0; }
+  }
+
+  function mobSelectedRows() {
+    if (!state.mobResult || !state.mobSelectedIds.length) return [];
+    var wanted = {};
+    state.mobSelectedIds.forEach(function (id) { wanted[id] = true; });
+    return state.mobResult.rows.filter(function (r) { return wanted[r.id]; });
+  }
+
+  function setMobView(id) {
+    if (id !== state.mobViewId) {
+      state.mobSearch = '';
+      state.mobSelectedIds = [];
+    }
+    state.mobViewId = id;
+    setTab('mobiles');
+  }
+
+  function setMobSite(site) {
+    state.mobSiteFilter = { key: site.key, name: site.name };
+    setMobView('mb-all');
+  }
+
   function selectedRows() {
     if (!state.result || !state.selectedIds.length) return [];
     var wanted = {};
@@ -724,6 +833,7 @@
       ['devices', 'Devices'],
       ['network', 'Network'],
       ['printers', 'Printers'],
+      ['mobiles', 'Mobiles'],
       ['map', 'Map'],
       ['export', 'Freshservice import'],
       ['settings', 'Settings']
@@ -732,8 +842,8 @@
       // The two populations load independently: network exports alone should
       // open the Network tab without the PC reconciliation being present.
       var needs = { network: !!state.netResult, printers: !!state.printResult,
-                    data: true, settings: true,
-                    map: !!(state.result || state.netResult || state.printResult) };
+                    mobiles: !!state.mobResult, data: true, settings: true,
+                    map: !!(state.result || state.netResult || state.printResult || state.mobResult) };
       var disabled = !(Object.prototype.hasOwnProperty.call(needs, t[0]) ? needs[t[0]] : !!state.result);
       host.appendChild(U.el('button', {
         class: 'tab' + (state.tab === t[0] ? ' active' : ''),
@@ -745,7 +855,12 @@
 
     host.appendChild(U.el('div', { class: 'spacer' }));
 
-    if (state.tab === 'printers' && state.printResult) {
+    if (state.tab === 'mobiles' && state.mobResult) {
+      host.appendChild(U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } },
+        U.num(state.mobResult.rows.length) + ' mobiles \u00b7 ' +
+        U.num(state.mobResult.counts.atSite) + ' at a site \u00b7 ' +
+        U.num(state.mobResult.rows.filter(function (r) { return r.issueCount; }).length) + ' flagged'));
+    } else if (state.tab === 'printers' && state.printResult) {
       host.appendChild(U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } },
         U.num(state.printResult.rows.length) + ' printers \u00b7 ' +
         U.num(state.printResult.rows.filter(function (r) { return r.issueCount; }).length) + ' flagged'));
@@ -922,6 +1037,7 @@
     if (state.result) contexts.push(pcCtx());
     if (state.netResult) contexts.push(netCtx());
     if (state.printResult) contexts.push(printCtx());
+    if (state.mobResult) contexts.push(mobCtx());
     if (!contexts.length) return;
 
     /* Favourites first: the whole point is that the views someone uses every
@@ -970,6 +1086,10 @@
       filters.push(['Network site: ' + U.truncate(state.netSiteFilter.name, 14),
                     function () { state.netSiteFilter = null; render(); }]);
     }
+    if (state.mobSiteFilter) {
+      filters.push(['Mobile site: ' + U.truncate(state.mobSiteFilter.name, 15),
+                    function () { state.mobSiteFilter = null; render(); }]);
+    }
     if (state.printSiteFilter) {
       filters.push(['Printer site: ' + U.truncate(state.printSiteFilter.name, 14),
                     function () { state.printSiteFilter = null; render(); }]);
@@ -1016,6 +1136,7 @@
         devices: renderDevices,
         network: renderNetwork,
         printers: renderPrinters,
+        mobiles: renderMobiles,
         map: renderMap,
         export: renderExport,
         settings: renderSettings
@@ -1024,7 +1145,8 @@
         ? true
         : state.tab === 'network' ? !!state.netResult
         : state.tab === 'printers' ? !!state.printResult
-        : state.tab === 'map' ? !!(state.result || state.netResult || state.printResult)
+        : state.tab === 'mobiles' ? !!state.mobResult
+        : state.tab === 'map' ? !!(state.result || state.netResult || state.printResult || state.mobResult)
         : !!state.result;
       (ready ? page : renderData)(main);
     } finally {
@@ -1783,7 +1905,7 @@
   /*  tab: duplicates within each source file                             */
   /* ==================================================================== */
 
-  var DUPE_SOURCES = ['freshservice', 'intune', 'arcticwolf'];
+  var DUPE_SOURCES = ['freshservice', 'intune', 'arcticwolf', 'soti'];
 
   function dupeGroupsFor(sourceId) {
     var src = state.sources[sourceId];
@@ -2209,10 +2331,19 @@
   }
 
   /* Redraw whichever device list is currently on screen. */
+  /* Redraw whichever list is on screen. Naming the tabs one by one rather
+     than falling through to the PC grid: a note added on Printers or Mobiles
+     used to redraw the device list instead of the one being looked at. */
   function refreshLists() {
     if (state.tab === 'network') {
       if (netGrid) netGrid.render();
       renderNetNoteBar();
+    } else if (state.tab === 'printers') {
+      if (printGrid) printGrid.render();
+      renderPrintNoteBar();
+    } else if (state.tab === 'mobiles') {
+      if (mobGrid) mobGrid.render();
+      renderMobNoteBar();
     } else {
       if (grid) grid.render();
       renderNoteBar();
@@ -3282,6 +3413,569 @@
 
   function P_stripCompany(v) { return PM.stripCompany(v); }
 
+
+  /* ==================================================================== */
+  /*  tab: mobiles                                                        */
+  /* ==================================================================== */
+
+  var mobGrid = null;
+  var renderMobNoteBar = function () {};
+
+  function renderMobiles(main) {
+    var view = mobViewById(state.mobViewId);
+    var rows = mobRowsForView(view);
+    var counts = state.mobResult.counts;
+
+    main.appendChild(U.el('div', { class: 'page-head' }, [
+      U.el('h1', {}, view.name),
+      U.el('div', { class: 'sub' }, view.description || ''),
+      state.mobSiteFilter ? U.el('div', { class: 'row tight', style: { marginTop: '6px' } }, [
+        U.el('span', { class: 'pill' }, 'Site: ' + state.mobSiteFilter.name),
+        U.el('button', {
+          class: 'btn sm ghost',
+          onclick: function () { state.mobSiteFilter = null; render(); }
+        }, 'Clear filter')
+      ]) : null
+    ]));
+
+    function inView(id) { return mobViewCount(mobViewById(id)); }
+    main.appendChild(U.el('div', { class: 'tiles', style: { marginBottom: '14px' } }, [
+      C.tile('At a site', counts.atSite,
+        'across ' + U.num(counts.sites) + ' sites', function () { setMobView('mb-at-site'); }),
+      C.tile('Home and office', counts.homeWorker,
+        'filed by region, not by site', function () { setMobView('mb-home'); }),
+      C.tile('Site not recognised', counts.unresolved,
+        counts.unresolved ? 'map the folder to a site' : 'every folder resolved',
+        function () { setMobView('mb-site-unresolved'); }),
+      C.tile('Cannot be imported', inView('mb-import-blocked'),
+        'no serial, model or product', function () { setMobView('mb-import-blocked'); }),
+      C.tile('Silent for months', inView('mb-silent'),
+        'lost, broken or in a drawer', function () { setMobView('mb-silent'); }),
+      C.tile('Tablets', counts.tablets,
+        'their own asset type and file', function () { setMobView('mb-tablets'); })
+    ]));
+
+    var controls = U.el('div', { class: 'row no-print', style: { marginBottom: '12px' } });
+    controls.appendChild(U.el('input', {
+      type: 'search', placeholder: 'Search these mobiles…', style: { minWidth: '220px' },
+      value: state.mobSearch,
+      oninput: U.debounce(function (e) {
+        state.mobSearch = e.target.value;
+        mobGrid.setSearch(state.mobSearch);
+        mobGrid.render();
+        renderMobNoteBar();
+      }, 180)
+    }));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      onclick: function () { openColumnPicker(mobCtx(), view, function () { return mobGrid; }); }
+    }, 'Columns'));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      title: view.isCustom ? 'Change this view’s conditions' : 'See how this view is defined, and copy it',
+      onclick: function () { openViewBuilder(mobCtx(), view, view.isCustom ? 'edit' : 'inspect'); }
+    }, view.isCustom ? 'Edit view' : 'View settings'));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      title: 'Map a SOTI folder to a site code, for folders whose name matches no site',
+      onclick: function () { openMobOverrides(); }
+    }, 'Site folders'));
+    controls.appendChild(U.el('label', { class: 'check' }, [
+      U.el('input', {
+        type: 'checkbox', checked: false,
+        onchange: function (e) { mobGrid.setGroup(e.target.checked ? 'siteName' : null); mobGrid.render(); }
+      }),
+      'Group by site'
+    ]));
+    controls.appendChild(U.el('div', { class: 'spacer' }));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      onclick: function () {
+        var visible = mobGrid.visibleRows();
+        U.download('mobiles-' + view.id + '-' + U.todayStamp() + '.csv',
+          popViewCsv(MBV, MB, visible, mobGrid.state.columns));
+        U.toast('Exported ' + U.num(visible.length) + ' rows.', 'ok');
+      }
+    }, 'Export this view'));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm primary',
+      title: 'Build the Freshservice creation files from the mobiles you are looking at',
+      onclick: function () { openMobImport(); }
+    }, 'Build import file'));
+    main.appendChild(controls);
+
+    var noteBar = U.el('div', { class: 'row no-print', style: { marginBottom: '10px' } });
+    main.appendChild(noteBar);
+    var gridHost = U.el('div');
+    main.appendChild(gridHost);
+
+    renderMobNoteBar = function () {
+      U.clear(noteBar);
+      var chosen = mobGrid ? mobGrid.selected() : [];
+      var visible = mobGrid ? mobGrid.visibleRows() : [];
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm' + (chosen.length ? ' primary' : ''),
+        disabled: !chosen.length,
+        onclick: function () { openNotes(chosen); }
+      }, chosen.length ? 'Add note to ' + U.num(chosen.length) + ' selected' : 'Add note to selected'));
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm',
+        onclick: function () {
+          if (!visible.length) return;
+          if (visible.length > 50 &&
+              !confirm('Add the same note to all ' + visible.length + ' mobiles in this view?')) return;
+          openNotes(visible);
+        }
+      }, 'Add note to all ' + U.num(visible.length) + ' in view'));
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm ghost',
+        onclick: function () {
+          visible.forEach(function (r) { mobGrid.state.selection.add(r.id); });
+          mobGrid.render(); renderMobNoteBar();
+        }
+      }, 'Select all in view'));
+      noteBar.appendChild(U.el('div', { class: 'spacer' }));
+      noteBar.appendChild(U.el('span', { class: 'hint' },
+        U.num(visible.length) + ' of ' + U.num(rows.length) + ' shown'));
+    };
+
+    mobGrid = T.create(gridHost, {
+      views: MBV,
+      rules: MB,
+      selectable: true,
+      pageSize: 150,
+      onRowClick: function (r) {
+        T.openDrawer(r, null, {
+          views: MBV,
+          rules: MB,
+          fieldRows: mobFieldRows,
+          /* Not two systems being compared: the left column is what SOTI
+             reports, the right is what the import would write. */
+          sideLabels: ['SOTI', 'Into Freshservice'],
+          cleanText: 'Nothing outstanding on this device.',
+          onAddNote: function (row) { openNotes([row]); }
+        });
+      },
+      onChipClick: function (code) {
+        var rule = MB.RULE_BY_CODE[code];
+        if (rule) U.toast(rule.label + (rule.hint ? ' — ' + rule.hint : ''), 'ok', 9000);
+      },
+      onNotesClick: function (r) { openNotes([r]); },
+      onSelectionChange: function (sel) {
+        state.mobSelectedIds = Array.from(sel);
+        renderMobNoteBar();
+      },
+      emptyText: 'Nothing in this view.'
+    });
+    mobGrid.setRows(rows);
+    var cols = (state.mobColumnsById[view.id] || view.columns || MBV.BASE_COLS).slice();
+    if (cols.indexOf('notes') < 0) cols.unshift('notes');
+    mobGrid.setColumns(cols);
+    state.mobColumns = cols;
+    mobGrid.setSearch(state.mobSearch);
+    state.mobSelectedIds.forEach(function (id) { mobGrid.state.selection.add(id); });
+    if (view.sort) mobGrid.setSort(view.sort);
+    mobGrid.render();
+    renderMobNoteBar();
+  }
+
+  /* The drawer's two columns: what SOTI says on the left, what the import
+     would write on the right. */
+  function mobFieldRows(row) {
+    var cfg = state.mobConfig;
+    function out(key) { return MBX.cellValue(row, key, cfg); }
+    return [
+      ['Device name', row.name, out('name')],
+      ['Serial number', row.serial, out('serial')],
+      ['IMEI', row.imei, out('imei')],
+      ['Model', row.model, out('product')],
+      ['Type', row.formFactor, out('assetType')],
+      ['Make', row.manufacturer, out('vendor')],
+      ['Android', row.osMajor === null ? '' : String(row.osMajor), out('os')],
+      ['Encrypted', row.encrypted === null ? '' : (row.encrypted ? 'yes' : 'no'), '—'],
+      ['SOTI path', row.path, '—'],
+      ['Site folder', row.folder || '(filed by region only)', '—'],
+      ['Site resolved', row.siteCode ? row.siteCode + ' ' + row.siteName : 'none', out('location')],
+      ['Matched by', row.hasSiteFolder ? (row.siteMatch || 'nothing') : 'no site folder', '—'],
+      ['Region folder', row.regionFolder, row.site ? N.clean(row.site.region) : '—'],
+      ['Asset state', row.isTest ? 'test or supplier stock' : 'issued', out('state')],
+      ['Last check-in', row.checkIn ? U.fmtDate(row.checkIn) : 'never', '—'],
+      ['Days silent', row.daysSince === null ? 'never reported' : U.num(row.daysSince), '—'],
+      ['Connected now', row.online ? 'yes' : 'no', '—'],
+      ['SOTI agent', row.agentVersion, '—'],
+      ['IP address', row.ip, out('ip') || '(not written)'],
+      ['MAC address', row.mac, out('mac') || '(not written)'],
+      ['Description', '—', out('description')]
+    ];
+  }
+
+  /* ------------------------------------------- SOTI folder -> site code */
+
+  /* Some SOTI folders will never match a site name, and no amount of clever
+     matching would find them: Whitley Park is Garmsway, Cannon Court is
+     Ripon, Wolsey Camascope Pilot is at Wolsey House. Those are answers only
+     somebody who knows the estate can give, so they are typed here and kept.
+     The seeded ones are shown too, so the list is the whole story rather than
+     just the exceptions to the exceptions. */
+  function openMobOverrides() {
+    if (!state.mobResult) return;
+    var body = U.el('div', { class: 'body' });
+    var sites = siteIndex();
+    var codes = Object.keys(sites).sort();
+
+    body.appendChild(U.el('p', { class: 'hint' },
+      'Every site folder SOTI uses, and the site it resolved to. Folders matched on the name need nothing ' +
+      'from you; the ones that could not be matched need a site code. Leave a box empty to go back to ' +
+      'matching on the name.'));
+
+    // Above the list, not below it: with a hundred and seventy folders the
+    // count is off the bottom of the dialog by the time you have scrolled to it.
+    var summary = U.el('div', { style: { marginBottom: '10px' } });
+    body.appendChild(summary);
+    var list = U.el('div');
+    body.appendChild(list);
+
+    function draw() {
+      U.clear(list);
+      var folders = MB.folders(state.mobResult.rows);
+      var unresolved = folders.filter(function (f) { return !f.siteCode; });
+
+      U.clear(summary);
+      summary.appendChild(U.el('div', { class: 'hint' },
+        U.num(folders.length) + ' site folders · ' +
+        U.num(folders.length - unresolved.length) + ' resolved · ' +
+        U.num(unresolved.length) + ' still to map'));
+
+      var kv = U.el('div', { class: 'kv two' });
+      kv.appendChild(U.el('div', { class: 'hdr' }, 'SOTI folder'));
+      kv.appendChild(U.el('div', { class: 'hdr' }, 'Site code'));
+      // Unresolved first: they are the work.
+      folders.slice().sort(function (a, b) {
+        if (!a.siteCode !== !b.siteCode) return a.siteCode ? 1 : -1;
+        return a.folder < b.folder ? -1 : 1;
+      }).forEach(function (f) {
+        kv.appendChild(U.el('div', { class: 'k' }, [
+          U.el('div', {}, f.folder),
+          U.el('div', { class: 'hint' },
+            U.num(f.count) + ' device' + (f.count === 1 ? '' : 's') +
+            (f.regionFolder ? ' · ' + f.regionFolder : '') +
+            (f.siteCode ? ' · matched by ' + f.match : ' · no match'))
+        ]));
+        var input = U.el('input', {
+          type: 'text', value: state.mobOverrides[f.key] || '',
+          placeholder: f.siteCode ? f.siteCode + ' ' + f.siteName : 'site code…',
+          list: 'mob-site-codes',
+          style: f.siteCode ? null : { borderColor: 'var(--critical)' },
+          onchange: function (e) {
+            var v = normCode(e.target.value.trim());
+            if (v) state.mobOverrides[f.key] = v;
+            else delete state.mobOverrides[f.key];
+            global.Store.set('mobOverrides', state.mobOverrides);
+            recompute();
+            draw();
+          }
+        });
+        kv.appendChild(U.el('div', {}, [
+          input,
+          f.siteCode ? U.el('div', { class: 'hint' }, f.siteCode + ' ' + f.siteName) : null
+        ]));
+      });
+      list.appendChild(kv);
+    }
+
+    // A datalist so the site codes can be picked rather than remembered.
+    var dl = U.el('datalist', { id: 'mob-site-codes' }, codes.map(function (c) {
+      return U.el('option', { value: c }, c + ' — ' + sites[c].name);
+    }));
+    body.appendChild(dl);
+
+    draw();
+
+    modal('SOTI site folders', body, [
+      { label: 'Done', primary: true },
+      { label: 'Reset my overrides', ghost: true, keepOpen: true, action: function () {
+        if (!Object.keys(state.mobOverrides).length) {
+          U.toast('You have not added any.', 'ok');
+          return;
+        }
+        if (!confirm('Remove the folder mappings you have typed? The ones built into the tool stay.')) return;
+        state.mobOverrides = {};
+        global.Store.set('mobOverrides', state.mobOverrides);
+        recompute();
+        draw();
+        U.toast('Your overrides cleared. The built-in ones are still applied.', 'ok');
+      } }
+    ]);
+  }
+
+  /* -------------------------------------------------- mobile FS import */
+
+  function openMobImport() {
+    var view = mobViewById(state.mobViewId);
+    var scope = state.mobExportScope;
+    var pool = scope === 'selection' ? mobSelectedRows() : mobRowsForView(view, true);
+    var blocked = MBX.unimportable(pool);
+    var rows = MBX.importable(pool);
+
+    var body = U.el('div', { class: 'body' });
+    var cfg = state.mobConfig;
+    var dlg = null;
+
+    var head = U.el('div', { style: { marginBottom: '12px' } });
+    body.appendChild(head);
+
+    var scopeRow = U.el('div', { class: 'row', style: { marginBottom: '10px' } });
+    [['view', 'Everything in "' + view.name + '"' + (state.mobSearch ? ' matching your search' : '')],
+     ['selection', U.num(state.mobSelectedIds.length) + ' selected']].forEach(function (o) {
+      scopeRow.appendChild(U.el('label', { class: 'check' }, [
+        U.el('input', {
+          type: 'radio', name: 'mobscope', checked: scope === o[0],
+          disabled: o[0] === 'selection' && !state.mobSelectedIds.length,
+          onchange: function () { state.mobExportScope = o[0]; if (dlg) dlg.close(); openMobImport(); }
+        }),
+        o[1]
+      ]));
+    });
+    body.appendChild(scopeRow);
+
+    var lookupHost = U.el('div');
+    body.appendChild(lookupHost);
+
+    function drawLookups() {
+      U.clear(lookupHost);
+      MBX.LOOKUPS.forEach(function (l) {
+        var keys = MBX.lookupKeys(rows, cfg, l.id);
+        if (!keys.length) return;
+        var blank = keys.filter(function (k) { return !k.value; }).length;
+        var card = U.el('details', { class: 'card', open: blank > 0, style: { marginBottom: '10px' } });
+        card.appendChild(U.el('summary', {}, [
+          U.el('strong', {}, l.label),
+          U.el('span', { class: 'hint', style: { marginLeft: '8px' } },
+            blank ? blank + ' of ' + keys.length + ' still to answer'
+                  : 'all ' + keys.length + ' mapped')
+        ]));
+        var kv = U.el('div', { class: 'kv two', style: { marginTop: '8px' } });
+        kv.appendChild(U.el('div', { class: 'hdr' }, l.keyLabel));
+        kv.appendChild(U.el('div', { class: 'hdr' }, l.valueLabel));
+        keys.forEach(function (k) {
+          kv.appendChild(U.el('div', { class: 'k' }, [
+            U.el('div', {}, k.key + (k.hint ? '  —  ' + k.hint : '')),
+            U.el('div', { class: 'hint' }, U.num(k.count) + ' device' + (k.count === 1 ? '' : 's') +
+              ' · e.g. ' + k.examples.slice(0, 2).join(', '))
+          ]));
+          kv.appendChild(U.el('input', {
+            type: 'text', value: k.value, placeholder: 'Freshservice value…',
+            style: k.value ? null : { borderColor: 'var(--critical)' },
+            oninput: function (e) {
+              cfg[l.id][k.key] = e.target.value;
+              drawStatus();
+            },
+            onchange: function () { persistMobConfig(); }
+          }));
+        });
+        card.appendChild(kv);
+        lookupHost.appendChild(card);
+      });
+    }
+
+    var colCard = U.el('details', { class: 'card', style: { marginBottom: '10px' } });
+    colCard.appendChild(U.el('summary', {}, [
+      U.el('strong', {}, 'Columns and fixed values'),
+      U.el('span', { class: 'hint', style: { marginLeft: '8px' } }, 'headers must match your instance')
+    ]));
+    var colKv = U.el('div', { class: 'kv two', style: { marginTop: '8px' } });
+    colKv.appendChild(U.el('div', { class: 'hdr' }, 'Include'));
+    colKv.appendChild(U.el('div', { class: 'hdr' }, 'Header in Freshservice'));
+    MBX.COLUMNS.forEach(function (col) {
+      colKv.appendChild(U.el('div', { class: 'k' }, [
+        U.el('label', { class: 'check' }, [
+          U.el('input', {
+            type: 'checkbox', checked: !!cfg.include[col.key], disabled: col.required,
+            title: col.required ? 'Freshservice rejects an asset import without this column' : null,
+            onchange: function (e) {
+              cfg.include[col.key] = e.target.checked;
+              persistMobConfig();
+              drawLookups(); drawStatus();
+            }
+          }),
+          col.label + (col.required ? ' (required)' : '')
+        ]),
+        col.fixed ? U.el('div', { class: 'row tight', style: { marginTop: '4px' } }, [
+          U.el('span', { class: 'hint' }, 'same on every row:'),
+          U.el('input', {
+            type: 'text', value: cfg.fixed[col.key] || '', style: { maxWidth: '140px' },
+            oninput: function (e) { cfg.fixed[col.key] = e.target.value; drawStatus(); },
+            onchange: function () { persistMobConfig(); }
+          })
+        ]) : null,
+        col.help ? U.el('div', { class: 'hint', style: { marginTop: '2px' } }, col.help) : null
+      ]));
+      colKv.appendChild(U.el('input', {
+        type: 'text', value: MBX.header(col, cfg),
+        oninput: function (e) { cfg.headers[col.key] = e.target.value; },
+        onchange: function () { persistMobConfig(); drawStatus(); }
+      }));
+    });
+    colCard.appendChild(colKv);
+    colCard.appendChild(U.el('label', { class: 'field', style: { marginTop: '8px', maxWidth: '260px' } }, [
+      U.el('span', {}, 'How to spell Samsung'),
+      U.el('input', {
+        type: 'text', value: cfg.vendorText || '',
+        oninput: function (e) { cfg.vendorText = e.target.value; drawStatus(); },
+        onchange: function () { persistMobConfig(); }
+      })
+    ]));
+    colCard.appendChild(U.el('label', { class: 'check', style: { marginTop: '8px' } }, [
+      U.el('input', {
+        type: 'checkbox', checked: !!cfg.describeSoti,
+        onchange: function (e) {
+          cfg.describeSoti = e.target.checked;
+          persistMobConfig();
+          drawStatus();
+        }
+      }),
+      'Record the SOTI folder, site code and last check-in in Description'
+    ]));
+    body.appendChild(colCard);
+
+    var status = U.el('div');
+    body.appendChild(status);
+    var preview = U.el('div', { style: { marginTop: '10px' } });
+    body.appendChild(preview);
+
+    var canExport = false;
+
+    function drawStatus() {
+      U.clear(status);
+      U.clear(preview);
+      var un = MBX.unmapped(rows, cfg);
+      var blanks = MBX.blankRequired(rows, cfg);
+      var missingCols = MBX.missingRequired(cfg);
+      var noLoc = MBX.blankLocation(rows, cfg);
+      canExport = rows.length > 0 && !un.length && !blanks.length && !missingCols.length;
+
+      U.clear(head);
+      head.appendChild(U.el('div', { class: 'row tight' }, [
+        U.el('strong', {}, U.num(rows.length) + ' mobile' + (rows.length === 1 ? '' : 's')),
+        U.el('span', { class: 'hint' }, 'will be created in Freshservice')
+      ]));
+
+      if (!pool.length) {
+        status.appendChild(note('err', 'Nothing to export', 'This view has no devices in it.'));
+      }
+      if (blocked.length) {
+        status.appendChild(note('warn',
+          U.num(blocked.length) + ' row' + (blocked.length === 1 ? '' : 's') + ' left out',
+          'No serial or no model reported, so there is no Product to write and Freshservice would reject the ' +
+          'row: ' + blocked.slice(0, 6).map(function (r) { return r.name; }).join(', ') +
+          (blocked.length > 6 ? ' and ' + (blocked.length - 6) + ' more' : '') +
+          '. They are listed under "Cannot be imported".'));
+      }
+      if (missingCols.length) {
+        status.appendChild(note('err', 'A required column is switched off',
+          missingCols.join(', ') + ' — Freshservice rejects an asset import without it.'));
+      }
+      if (un.length) {
+        status.appendChild(note('err',
+          U.num(un.length) + ' value' + (un.length === 1 ? '' : 's') + ' still to map',
+          un.slice(0, 8).map(function (u) {
+            return u.key + (u.hint ? ' (' + u.hint + ')' : '') + ' → ' + u.lookupLabel;
+          }).join('; ') + (un.length > 8 ? '; and ' + (un.length - 8) + ' more' : '')));
+      }
+      if (blanks.length) {
+        status.appendChild(note('err', 'A required column would be blank',
+          blanks.map(function (b) { return b.label + ' on ' + U.num(b.rows) + ' rows'; }).join('; ')));
+      }
+      if (noLoc) {
+        status.appendChild(note('warn', U.num(noLoc) + ' rows with no Location',
+          'Test and supplier stock is imported without a location rather than being given one it does not ' +
+          'have. Everything else lands at a site or at your home-worker label.'));
+      }
+      if (canExport) {
+        var parts = MBX.splitByAssetType(rows, cfg);
+        status.appendChild(note('ok',
+          'Ready — ' + parts.length + ' file' + (parts.length === 1 ? '' : 's'),
+          'Freshservice imports one asset type at a time, so this is written as ' +
+          (parts.length === 1 ? 'a single file' : 'one file per type') + ': ' +
+          parts.map(function (g) { return g.type + ' (' + U.num(g.rows.length) + ')'; }).join(', ') +
+          '. Upload the file as it is — opening it in Excel first strips the leading zero off every ' +
+          'device name.'));
+
+        if (parts.length > 1) {
+          var each = U.el('div', { class: 'row tight', style: { margin: '0 0 10px' } });
+          each.appendChild(U.el('span', { class: 'hint' }, 'Or one at a time:'));
+          parts.forEach(function (g) {
+            each.appendChild(U.el('button', {
+              class: 'btn sm',
+              onclick: function () { downloadPart(g); }
+            }, g.type + ' (' + U.num(g.rows.length) + ')'));
+          });
+          status.appendChild(each);
+        }
+      }
+
+      if (rows.length) {
+        var firstPart = MBX.splitByAssetType(rows, cfg)[0];
+        var csv = MBX.toImportCsv(firstPart.rows.slice(0, 4), cfg);
+        preview.appendChild(U.el('div', { class: 'side-head' },
+          'First rows of the ' + firstPart.type + ' file, as they will be written'));
+        preview.appendChild(U.el('pre', {
+          style: {
+            overflowX: 'auto', fontSize: '11px', background: 'var(--surface-2)',
+            padding: '8px', border: '1px solid var(--grid)', maxHeight: '150px'
+          }
+        }, csv));
+      }
+    }
+
+    function downloadPart(g, quiet) {
+      U.download('freshservice-mobile-import-' + MBX.typeSlug(g.type) + '-' + U.todayStamp() + '.csv',
+        MBX.toImportCsv(g.rows, cfg));
+      if (!quiet) {
+        U.toast(U.num(g.rows.length) + ' ' + g.type + ' row' + (g.rows.length === 1 ? '' : 's') + ' written.', 'ok');
+      }
+    }
+
+    function note(kind, title, text) {
+      var colour = kind === 'err' ? 'var(--critical)' : kind === 'warn' ? 'var(--warning)' : 'var(--good)';
+      return U.el('div', {
+        class: 'card',
+        style: { borderLeft: '3px solid ' + colour, marginBottom: '8px', padding: '8px 10px' }
+      }, [
+        U.el('strong', {}, title),
+        U.el('div', { class: 'hint' }, text)
+      ]);
+    }
+
+    drawLookups();
+    drawStatus();
+
+    dlg = modal('Build Freshservice import — mobiles and tablets', body, [
+      { label: 'Cancel', ghost: true },
+      { label: 'Download manifest', ghost: true, action: function () {
+        if (!rows.length) { U.toast('Nothing to export.', 'err'); return; }
+        U.download('mobile-import-manifest-' + U.todayStamp() + '.csv', MBX.toManifestCsv(rows, cfg));
+      } },
+      { label: 'Download import files', primary: true, keepOpen: true, action: function () {
+        if (!canExport) {
+          U.toast('Fill in the highlighted mappings first — an import missing Product or Asset Type ' +
+                  'is rejected by Freshservice.', 'err', 9000);
+          return;
+        }
+        persistMobConfig();
+        var parts = MBX.splitByAssetType(rows, cfg);
+        parts.forEach(function (g, i) { setTimeout(function () { downloadPart(g, true); }, i * 400); });
+        U.toast(parts.length + ' import file' + (parts.length === 1 ? '' : 's') + ' written for ' +
+          U.num(rows.length) + ' devices — one per asset type.', 'ok', 8000);
+      } }
+    ]);
+  }
+
+  function persistMobConfig() {
+    global.Store.set('mobConfig', state.mobConfig);
+    saveWorkingSet();
+  }
+
   /* One view-to-CSV for any population: the column registry and the rule
      registry come in, so the issue chips export as their labels. */
   function popViewCsv(VE, RE, rows, columns) {
@@ -3306,16 +4000,20 @@
 
     // Only offer a population there is data for, and never leave the selector
     // pointing at an empty one.
-    var have = { pc: !!state.result, net: !!state.netResult, print: !!state.printResult };
-    have.both = [have.pc, have.net, have.print].filter(Boolean).length > 1;
+    var have = { pc: !!state.result, net: !!state.netResult,
+                 print: !!state.printResult, mob: !!state.mobResult };
+    have.both = [have.pc, have.net, have.print, have.mob].filter(Boolean).length > 1;
     var population = state.mapPopulation;
-    if (!have[population]) population = have.pc ? 'pc' : have.net ? 'net' : 'print';
+    if (!have[population]) {
+      population = have.pc ? 'pc' : have.net ? 'net' : have.print ? 'print' : 'mob';
+    }
     state.mapPopulation = population;
 
     var agg = M.aggregate({
       pc: state.result ? state.result.rows : [],
       net: state.netResult ? state.netResult.rows : [],
-      print: state.printResult ? state.printResult.rows : []
+      print: state.printResult ? state.printResult.rows : [],
+      mob: state.mobResult ? state.mobResult.rows : []
     }, { includeOther: state.includeOtherOnMap, population: population });
 
     var modes = M.modesFor(population);
@@ -3361,7 +4059,7 @@
           return U.el('option', { value: k, selected: state.mapMode === k }, M.COLOUR_MODES[k].label);
         }))
       ]),
-      (population === 'net' || population === 'print') ? null : U.el('label', { class: 'check' }, [
+      (population === 'pc' || population === 'both') === false ? null : U.el('label', { class: 'check' }, [
         U.el('input', {
           type: 'checkbox', checked: state.includeOtherOnMap,
           onchange: function (e) { state.includeOtherOnMap = e.target.checked; render(); }
@@ -3418,9 +4116,11 @@
       C.tile('Locations not in the lookup', agg.unmatched.length,
         agg.unmatched.length ? 'add them to the lookup file' : 'all recognised'),
       C.tile(population === 'net' ? 'Network kit with no site'
-        : population === 'print' ? 'Printers with no site' : 'Devices with no location',
+        : population === 'print' ? 'Printers with no site'
+        : population === 'mob' ? 'Mobiles with no site' : 'Devices with no location',
         agg.unlocated.length,
-        population === 'net' && agg.unlocated.length ? 'add a site override' : ''),
+        population === 'net' && agg.unlocated.length ? 'add a site override'
+          : population === 'mob' && agg.unlocated.length ? 'home workers and test stock' : ''),
       (population === 'net' || population === 'both') && state.netResult
         ? C.tile('Network kit not in Freshservice',
             agg.mappable.reduce(function (n, s) { return n + s.netMissing; }, 0),
@@ -3430,6 +4130,11 @@
         ? C.tile('Printers not reporting',
             agg.mappable.reduce(function (n, s) { return n + s.printSilent; }, 0),
             'across the sites on the map', function () { setPrintView('pr-silent'); })
+        : null,
+      (population === 'mob' || population === 'both') && state.mobResult
+        ? C.tile('Mobiles not checking in',
+            agg.mappable.reduce(function (n, s) { return n + s.mobSilent; }, 0),
+            'across the sites on the map', function () { setMobView('mb-silent'); })
         : null
     ]);
     main.appendChild(stats);
@@ -3477,6 +4182,7 @@
       onSelect: function (site, which) {
         if (which === 'net') { setNetSite(site); return; }
         if (which === 'print') { setPrintSite(site); return; }
+        if (which === 'mob') { setMobSite(site); return; }
         state.siteFilter = { key: site.key, name: site.name };
         setView('all');
       }
@@ -4225,6 +4931,84 @@
       main.appendChild(prCard);
     }
 
+    if (state.mobResult) {
+      var mbCard = U.el('div', { class: 'card' });
+      mbCard.appendChild(U.el('h2', {}, 'Mobile checks'));
+      mbCard.appendChild(U.el('p', { class: 'hint' },
+        'These apply to the SOTI export. The two words below are written straight into the Freshservice ' +
+        'import, so they have to be values your instance already accepts.'));
+
+      [['staleDays', 'Days without a SOTI check-in before a handset looks neglected', 1, 365],
+       ['lostDays', 'Days without a check-in before it looks lost', 1, 730],
+       ['minOs', 'Lowest Android version still receiving security updates', 5, 30]]
+        .forEach(function (f) {
+          mbCard.appendChild(U.el('label', { class: 'field' }, [
+            U.el('span', {}, f[1]),
+            U.el('input', {
+              type: 'number', min: String(f[2]), max: String(f[3]), value: String(state.mobCfg[f[0]]),
+              onchange: function (e) {
+                var v = parseInt(e.target.value, 10);
+                if (isNaN(v)) return;
+                state.mobCfg[f[0]] = Math.min(f[3], Math.max(f[2], v));
+                global.Store.set('mobCfg', state.mobCfg);
+                recompute(); render();
+              }
+            })
+          ]));
+        });
+
+      [['homeLocation', 'Location for a device SOTI files by region rather than by site',
+        'SOTI does not say who holds an office-worker device, so it cannot say which building it is in.'],
+       ['inUseState', 'Asset state for a device that is issued', ''],
+       ['testState', 'Asset state for test and supplier stock', '']]
+        .forEach(function (f) {
+          mbCard.appendChild(U.el('label', { class: 'field' }, [
+            U.el('span', {}, f[1]),
+            U.el('input', {
+              type: 'text', value: state.mobCfg[f[0]] || '',
+              onchange: function (e) {
+                state.mobCfg[f[0]] = e.target.value.trim();
+                global.Store.set('mobCfg', state.mobCfg);
+                recompute(); render();
+              }
+            }),
+            f[2] ? U.el('span', { class: 'hint' }, f[2]) : null
+          ]));
+        });
+
+      mbCard.appendChild(U.el('div', { class: 'row tight', style: { marginTop: '10px' } }, [
+        U.el('button', {
+          class: 'btn sm',
+          title: 'Map a SOTI folder whose name matches no site to a site code',
+          onclick: function () { openMobOverrides(); }
+        }, 'SOTI site folders'),
+        U.el('span', { class: 'hint' },
+          U.num(Object.keys(state.mobOverrides).length) + ' of your own, on top of ' +
+          U.num(Object.keys(MB.SEED_OVERRIDES).length) + ' built in')
+      ]));
+
+      mbCard.appendChild(U.el('div', { class: 'side-head', style: { marginTop: '14px' } }, 'Checks'));
+      MB.RULES.forEach(function (rule) {
+        mbCard.appendChild(U.el('div', { style: { padding: '7px 0', borderBottom: '1px solid var(--grid)' } }, [
+          U.el('label', { class: 'check' }, [
+            U.el('input', {
+              type: 'checkbox', checked: MB.isEnabled(rule, state.mobEnabledRules),
+              onchange: function (e) {
+                state.mobEnabledRules[rule.code] = e.target.checked;
+                global.Store.set('mobEnabledRules', state.mobEnabledRules);
+                recompute(); render();
+              }
+            }),
+            U.el('span', { class: 'badge ' + rule.severity }, [U.el('span', { class: 'sev sev-' + rule.severity }), rule.label]),
+            U.el('span', { class: 'hint' }, U.num(state.mobResult.tally[rule.code] || 0) + ' mobiles' +
+              (rule.defaultOff ? ' \u00b7 off by default' : ''))
+          ]),
+          rule.hint ? U.el('div', { class: 'hint', style: { marginLeft: '24px' } }, rule.hint) : null
+        ]));
+      });
+      main.appendChild(mbCard);
+    }
+
     var notesCard = U.el('div', { class: 'card' });
     var ns = global.Notes.stats();
     notesCard.appendChild(U.el('h2', {}, 'Device notes'));
@@ -4452,8 +5236,38 @@
     };
   }
 
+  function mobCtx() {
+    return {
+      key: 'mob',
+      label: 'Mobile views',
+      noun: 'mobile',
+      listName: 'mobile list',
+      tab: 'mobiles',
+      views: MBV,
+      rules: MB,
+      result: state.mobResult,
+      builtIn: MBV.BUILT_IN,
+      custom: state.mobCustomViews,
+      saveCustom: function (list) {
+        state.mobCustomViews = list;
+        global.Store.set('mobCustomViews', list);
+      },
+      columnsById: state.mobColumnsById,
+      saveColumns: function () { global.Store.set('mobColumns', state.mobColumnsById); },
+      all: mobViews,
+      count: mobViewCount,
+      currentId: function () { return state.mobViewId; },
+      isActive: function () { return state.tab === 'mobiles'; },
+      open: setMobView,
+      fallbackId: 'mb-attention'
+    };
+  }
+
   function ctxFor(key) {
-    return key === 'net' ? netCtx() : key === 'print' ? printCtx() : pcCtx();
+    return key === 'net' ? netCtx()
+         : key === 'print' ? printCtx()
+         : key === 'mob' ? mobCtx()
+         : pcCtx();
   }
 
   function openViewBuilder(ctx, existing, mode) {
@@ -4922,7 +5736,8 @@
          reads that result unconditionally. */
       setTab(state.result ? 'dashboard'
         : state.netResult ? 'network'
-        : state.printResult ? 'printers' : 'data');
+        : state.printResult ? 'printers'
+        : state.mobResult ? 'mobiles' : 'data');
       U.toast('Picked up where you left off — ' +
         Object.keys(state.sources).map(function (id) {
           return S.SOURCES[id].short + ' ' + U.num(state.sources[id].records.length);

@@ -21,13 +21,15 @@
   var RECENCY = {
     freshservice: ['lastAudit', 'createdAt'],
     intune: ['lastCheckIn', 'enrolled'],
-    arcticwolf: ['lastSeen', 'lastScan']
+    arcticwolf: ['lastSeen', 'lastScan'],
+    soti: ['checkIn', 'connected']
   };
 
   var LABEL_FIELDS = {
     freshservice: ['name', 'assetTag', 'state', 'user', 'location'],
     intune: ['name', 'primaryUser', 'compliance', 'ownership'],
-    arcticwolf: ['name', 'riskScore', 'risks', 'criticality']
+    arcticwolf: ['name', 'riskScore', 'risks', 'criticality'],
+    soti: ['name', 'model', 'path', 'imei']
   };
 
   function prefixRegex(prefixes) {

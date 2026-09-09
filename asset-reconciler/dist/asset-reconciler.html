@@ -1571,7 +1571,11 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
   /* Parse the date formats that turn up in Freshservice / Intune exports.
      Returns a Date or null. Ambiguous all-numeric dates are read as
      day-first (UK), which is what both portals emit for a UK tenant. */
-  function parseDate(v) {
+  /* order is 'mdy' for a source that emits month-first, which SOTI does. The
+     guess below only rescues a date whose first field cannot be a day, so
+     3/4/2026 from a month-first export would otherwise be read as 3 April
+     without a word about it. Left unset, behaviour is exactly as before. */
+  function parseDate(v, order) {
     if (!v) return null;
     if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
     var s = String(v).trim();
@@ -1588,8 +1592,13 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     if (dmy) {
       var d = +dmy[1], mo = +dmy[2], y = +dmy[3];
       if (y < 100) y += 2000;
+      if (order === 'mdy') {
+        // Stated by the caller, so no guessing: swap unless the first field
+        // is impossible as a month, which means the export lied.
+        if (d <= 12) { var sw = d; d = mo; mo = sw; }
+      }
       // If the first field can't be a day but the second can, it was m/d/Y.
-      if (d > 12 && mo <= 12) { /* day-first, as read */ }
+      else if (d > 12 && mo <= 12) { /* day-first, as read */ }
       else if (mo > 12 && d <= 12) { var t = d; d = mo; mo = t; }
       var hh = +(dmy[4] || 0);
       if (dmy[7]) {
@@ -2219,6 +2228,42 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
       ]
     },
 
+    soti: {
+      id: 'soti',
+      label: 'SOTI mobiles',
+      short: 'SOTI',
+      hint: 'Mobile devices export from SOTI MobiControl (phones and tablets)',
+      signature: ['path', 'device family', 'agent version', 'agent check-in time', 'agent connect time',
+                  'agent disconnect time', 'hardware serial number', 'imei / meid / esn', 'agent compatible',
+                  'available storage', 'agent upgrade enabled'],
+      /* No asset state, no location column and no owner: SOTI describes the
+         device, not the record. Ruling those out keeps a Freshservice export
+         from scoring here on its shared serial and model columns. */
+      anti: ['asset state', 'asset tag', 'used by', 'location', 'printer type', 'firmware version'],
+      /* SOTI writes month-first timestamps, which the shared parser would
+         otherwise read day-first for any day of the month under 13. */
+      dateOrder: 'mdy',
+      fields: [
+        { key: 'name',         label: 'Device name',      required: true, aliases: ['device name', 'devicename', 'name'] },
+        { key: 'serial',       label: 'Serial number',    aliases: ['hardware serial number', 'serial number', 'manufacturer serial number', 'serial'] },
+        { key: 'imei',         label: 'IMEI / MEID',      aliases: ['imei / meid / esn', 'imei/meid/esn', 'imei', 'meid', 'esn'] },
+        { key: 'model',        label: 'Model',            aliases: ['model', 'device model', 'model name', 'model number'] },
+        { key: 'manufacturer', label: 'Manufacturer',     aliases: ['manufacturer', 'make', 'vendor', 'oem'] },
+        { key: 'family',       label: 'Device family',    aliases: ['device family', 'family', 'platform'] },
+        { key: 'path',         label: 'SOTI path',        required: true, aliases: ['path', 'device group path', 'group path', 'folder', 'device group'] },
+        { key: 'osVersion',    label: 'OS version',       aliases: ['os version', 'operating system version', 'os'] },
+        { key: 'ipAddress',    label: 'IP address',       aliases: ['ip address', 'ip', 'ipv4 address', 'last known ip'] },
+        { key: 'mac',          label: 'MAC address',      aliases: ['mac address', 'mac', 'wi-fi mac', 'physical address'] },
+        { key: 'checkIn',      label: 'Last check-in',    type: 'date', aliases: ['agent check-in time', 'agent check in time', 'check-in time', 'last check-in', 'last checkin'] },
+        { key: 'connected',    label: 'Last connected',   type: 'date', aliases: ['agent connect time', 'connect time', 'last connected'] },
+        { key: 'disconnected', label: 'Last disconnected',type: 'date', aliases: ['agent disconnect time', 'disconnect time', 'last disconnected'] },
+        { key: 'agentVersion', label: 'Agent version',    aliases: ['agent version', 'mobicontrol agent version'] },
+        { key: 'encrypted',    label: 'Encrypted',        aliases: ['encrypted', 'encryption', 'is encrypted'] },
+        { key: 'storage',      label: 'Available storage',type: 'number', aliases: ['available storage', 'free storage', 'storage free'] },
+        { key: 'memory',       label: 'Available memory', type: 'number', aliases: ['available memory', 'free memory', 'memory free'] }
+      ]
+    },
+
     locations: {
       id: 'locations',
       label: 'Location lookup',
@@ -2237,6 +2282,7 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
         { key: 'expected',  label: 'Expected devices',type: 'number', aliases: ['expected devices', 'expected', 'expected pcs', 'device allowance', 'allowance', 'budget', 'establishment'] },
         { key: 'region',    label: 'Region / area',   aliases: ['region', 'area', 'division', 'service area', 'operational region', 'patch', 'cluster'] },
         { key: 'siteType',  label: 'Site type',       aliases: ['site type', 'service type', 'type', 'category'] },
+        { key: 'status',    label: 'Status',          aliases: ['status', 'site status', 'service status', 'open status'] },
         { key: 'contact',   label: 'Site contact',    aliases: ['contact', 'site contact', 'manager', 'service manager', 'contact name', 'contact email'] }
       ]
     },
@@ -2648,15 +2694,26 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
 
   var SEPARATORS = /\s*(?:>|»|\/|\\|\||::)\s*/;
 
+  /* A slash between two digits is a house-number range, not a hierarchy.
+
+     Three sites are named that way — "Hill End Lane (31/33) SL",
+     "Hill End Lane (35/37) SL", "Woodhurst Avenue (86/88) SL" — and splitting
+     them as a path left the leaf as "33) SL", so those sites keyed on "33sl"
+     and matched nothing that was worded any other way. Protect the range
+     before splitting and put it back afterwards. */
+  var RANGE_SLASH = /(\d)\s*\/\s*(\d)/g;
+  var RANGE_BACK  = /(\d)\s*\\\s*(\d)/g;
+
   /* strategy: 'leaf' (default), 'full', 'root' */
   function location(v, strategy) {
     var s = clean(v);
     if (!s) return '';
     if (strategy === 'full') return s.replace(/\s+/g, ' ').trim();
-    var parts = s.split(SEPARATORS).filter(function (p) { return p.trim(); });
+    var guarded = s.replace(RANGE_SLASH, '$1\u0001$2').replace(RANGE_BACK, '$1\u0002$2');
+    var parts = guarded.split(SEPARATORS).filter(function (p) { return p.trim(); });
     if (!parts.length) return '';
     var pick = strategy === 'root' ? parts[0] : parts[parts.length - 1];
-    return pick.replace(/\s+/g, ' ').trim();
+    return pick.replace(/\u0001/g, '/').replace(/\u0002/g, '\\').replace(/\s+/g, ' ').trim();
   }
 
   function locationKey(v, strategy) {
@@ -5646,20 +5703,36 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
                   populations: ['net', 'both'] },
     printSilent: { label: 'Printers not reporting',
                    legend: 'Darker = more of the site\u2019s printers are silent',
-                   populations: ['print', 'both'] }
+                   populations: ['print', 'both'] },
+    mobSilent:  { label: 'Mobiles not checking in',
+                  legend: 'Darker = more of the site\u2019s handsets have gone quiet',
+                  populations: ['mob', 'both'] }
   };
 
   /* Which populations a dot can count. members lists the row sets that
      contribute; a single-population choice is just a set of one. */
+  var KINDS = ['pc', 'net', 'print', 'mob'];
+
   var POPULATIONS = {
     pc:    { label: 'PCs',             noun: 'device',         members: ['pc'] },
     net:   { label: 'Network assets',  noun: 'network device', members: ['net'] },
     print: { label: 'Printers',        noun: 'printer',        members: ['print'] },
-    both:  { label: 'Everything',      noun: 'device',         members: ['pc', 'net', 'print'] }
+    mob:   { label: 'Mobiles',         noun: 'mobile',         members: ['mob'] },
+    both:  { label: 'Everything',      noun: 'device',         members: KINDS }
   };
 
   function members(population) {
     return (POPULATIONS[population] || POPULATIONS.pc).members;
+  }
+
+  /* Does the population on screen include this kind of row?
+
+     The popup used to ask with chains like "population !== 'pc' && population
+     !== 'net'", which meant every new population had to be added to five of
+     them and read correctly by luck. One membership test cannot be half
+     updated. */
+  function counts(population, kind) {
+    return members(population).indexOf(kind) >= 0;
   }
 
   /* Which colour modes make sense for the population on screen. */
@@ -5683,7 +5756,7 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     if (Array.isArray(sets)) sets = { pc: sets };
     var population = opts.population || 'pc';
     var counting = members(population);
-    var lists = ['pc', 'net', 'print'].map(function (k) {
+    var lists = KINDS.map(function (k) {
       return { kind: k, rows: sets[k] || [] };
     });
 
@@ -5712,7 +5785,7 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
             key: key,
             name: N.clean(r.site.location) || N.clean(r.site.name) || r.location,
             site: r.site,
-            rows: [], pcRows: [], netRows: [], printRows: [],
+            rows: [], pcRows: [], netRows: [], printRows: [], mobRows: [],
             region: N.clean(r.site.region),
             expected: typeof r.site.expected === 'number' ? r.site.expected : null
           });
@@ -5743,6 +5816,17 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
       var printSilent = printOn.filter(function (r) { return !r.reporting; }).length;
       var pages = g.printRows.reduce(function (n, r) { return n + (r.pages || 0); }, 0);
 
+      /* Handsets past the staleness window, which the mobile rules have
+         already flagged; the map only has to count them. The stale window
+         and not just the "lost" one, because every device silent for months
+         turns out to be an office handset with no site at all — a map mode
+         reading zero everywhere tells you nothing. */
+      var mobSilent = g.mobRows.filter(function (r) {
+        var i = r.issues || [];
+        return i.indexOf('stale') >= 0 || i.indexOf('long-silent') >= 0 ||
+               i.indexOf('never-checked-in') >= 0;
+      }).length;
+
       var s = {
         key: g.key,
         name: g.name,
@@ -5750,8 +5834,11 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
         region: g.region,
         rows: g.rows,
         count: g.rows.length,
-        pcRows: g.pcRows, netRows: g.netRows, printRows: g.printRows,
+        pcRows: g.pcRows, netRows: g.netRows, printRows: g.printRows, mobRows: g.mobRows,
         pcCount: g.pcRows.length, netCount: g.netRows.length, printCount: g.printRows.length,
+        mobCount: g.mobRows.length,
+        mobSilent: mobSilent,
+        mobSilentRate: g.mobRows.length ? mobSilent / g.mobRows.length : 0,
         kinds: kinds,
         netMissing: netMissing,
         netMissingRate: netForti.length ? netMissing / netForti.length : 0,
@@ -5806,6 +5893,10 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     if (mode === 'printSilent') {
       if (!site.printCount) return 'var(--text-muted)';
       return ramp(site.printSilentRate);
+    }
+    if (mode === 'mobSilent') {
+      if (!site.mobCount) return 'var(--text-muted)';
+      return ramp(site.mobSilentRate);
     }
     return 'var(--series-1)';
   }
@@ -5901,6 +5992,7 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
 
     var mode = opts.mode || 'count';
     var population = opts.population || 'pc';
+    var noun = (POPULATIONS[population] || POPULATIONS.pc).noun;
     if (modesFor(population).indexOf(mode) < 0) mode = 'count';
     var pts = agg.mappable;
     if (!pts.length) {
@@ -5951,31 +6043,36 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
         s.address ? '<div style="color:var(--text-secondary)">' + U.escapeHtml(s.address) + '</div>' : '',
         s.region ? '<div style="color:var(--text-muted)">' + U.escapeHtml(s.region) + '</div>' : '',
         '<div style="margin-top:8px"><strong>' + U.num(s.count) + '</strong> ' +
-          (population === 'net' ? 'network device' : 'device') + (s.count === 1 ? '' : 's'),
-        s.expected !== null && population !== 'net'
+          U.escapeHtml(noun) + (s.count === 1 ? '' : 's'),
+        s.expected !== null && counts(population, 'pc')
           ? ' \u00b7 expected <strong>' + U.num(s.expected) + '</strong>' : '',
         '</div>',
         // Always show the split, whichever population is being sized: the
-        // point of one map is seeing both without switching.
+        // point of one map is seeing all of them without switching.
         population === 'both'
           ? '<div style="color:var(--text-secondary)">' + U.num(s.pcCount) + ' PC' + (s.pcCount === 1 ? '' : 's') +
             ' \u00b7 ' + U.num(s.netCount) + ' network \u00b7 ' + U.num(s.printCount) + ' printer' +
-            (s.printCount === 1 ? '' : 's') + '</div>'
+            (s.printCount === 1 ? '' : 's') + ' \u00b7 ' + U.num(s.mobCount) + ' mobile' +
+            (s.mobCount === 1 ? '' : 's') + '</div>'
           : '',
-        s.printCount && population !== 'pc' && population !== 'net'
+        s.printCount && counts(population, 'print')
           ? '<div style="color:var(--text-secondary)">' + U.num(s.pages) + ' pages printed in their lifetimes</div>'
           : '',
-        s.printSilent && population !== 'pc' && population !== 'net'
+        s.printSilent && counts(population, 'print')
           ? '<div style="font-weight:600"><strong>' + U.num(s.printSilent) + '</strong> printer' +
             (s.printSilent === 1 ? '' : 's') + ' not reporting</div>'
           : '',
-        kindBits.length && population !== 'pc'
+        s.mobSilent && counts(population, 'mob')
+          ? '<div style="font-weight:600"><strong>' + U.num(s.mobSilent) + '</strong> mobile' +
+            (s.mobSilent === 1 ? '' : 's') + ' not checking in</div>'
+          : '',
+        kindBits.length && !counts(population, 'pc')
           ? '<div style="color:var(--text-secondary)">' + U.escapeHtml(kindBits.join(' \u00b7 ')) + '</div>' : '',
-        s.variance !== null && s.variance !== 0 && population !== 'net'
+        s.variance !== null && s.variance !== 0 && counts(population, 'pc')
           ? '<div style="color:' + (s.variance > 0 ? 'var(--div-pos-strong)' : 'var(--div-neg-strong)') + ';font-weight:600">' +
             (s.variance > 0 ? '+' : '') + s.variance + ' PCs vs expected</div>'
           : '',
-        s.netMissing && population !== 'pc'
+        s.netMissing && counts(population, 'net')
           ? '<div style="font-weight:600"><strong>' + U.num(s.netMissing) + '</strong> network device' +
             (s.netMissing === 1 ? '' : 's') + ' not in Freshservice</div>'
           : '',
@@ -5988,29 +6085,22 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
       // With both populations on one dot, "view these devices" is two
       // different lists, so offer whichever ones exist rather than guessing.
       var actions = U.el('div', { class: 'row tight', style: { marginTop: '10px' } });
-      if (s.pcCount && population !== 'net') {
+      [['pc', s.pcCount, 'PCs', 'devices'],
+       ['net', s.netCount, 'network', 'devices'],
+       ['print', s.printCount, 'printers', 'printers'],
+       ['mob', s.mobCount, 'mobiles', 'mobiles']].forEach(function (a) {
+        var kind = a[0], n = a[1];
+        if (!n || !counts(population, kind)) return;
         actions.appendChild(U.el('button', {
-          class: 'btn sm primary',
-          onclick: function () { if (opts.onSelect) opts.onSelect(s, 'pc'); }
-        }, population === 'both' ? 'View ' + s.pcCount + ' PCs' : 'View these ' + s.count + ' devices'));
-      }
-      if (s.netCount && population !== 'pc' && population !== 'print') {
-        actions.appendChild(U.el('button', {
-          class: 'btn sm' + (population === 'net' ? ' primary' : ''),
-          onclick: function () { if (opts.onSelect) opts.onSelect(s, 'net'); }
-        }, population === 'both' ? 'View ' + s.netCount + ' network' : 'View these ' + s.count + ' devices'));
-      }
-      if (s.printCount && population !== 'pc' && population !== 'net') {
-        actions.appendChild(U.el('button', {
-          class: 'btn sm' + (population === 'print' ? ' primary' : ''),
-          onclick: function () { if (opts.onSelect) opts.onSelect(s, 'print'); }
-        }, population === 'both' ? 'View ' + s.printCount + ' printers' : 'View these ' + s.count + ' printers'));
-      }
+          class: 'btn sm' + (population === kind || (population === 'both' && kind === 'pc') ? ' primary' : ''),
+          onclick: function () { if (opts.onSelect) opts.onSelect(s, kind); }
+        }, population === 'both' ? 'View ' + n + ' ' + a[2] : 'View these ' + s.count + ' ' + a[3]));
+      });
       content.appendChild(actions);
 
       marker.bindPopup(content, { maxWidth: 300 });
-      marker.bindTooltip(s.name + ' \u00b7 ' + s.count + ' ' +
-        (population === 'net' ? 'network device' : 'device') + (s.count === 1 ? '' : 's'), { direction: 'top' });
+      marker.bindTooltip(s.name + ' \u00b7 ' + s.count + ' ' + noun + (s.count === 1 ? '' : 's'),
+        { direction: 'top' });
       marker.addTo(layer);
     });
 
@@ -6041,7 +6131,8 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
       if (mode !== 'count') {
         var titles = { variance: 'Variance', issues: 'Issue rate',
                        netMissing: 'Network kit not in Freshservice',
-                       printSilent: 'Printers not reporting' };
+                       printSilent: 'Printers not reporting',
+                       mobSilent: 'Mobiles not checking in' };
         div.appendChild(U.el('div', { class: 'lg-title' }, titles[mode] || 'Colour'));
         var bands = [['var(--seq-100)', 'None'], ['var(--seq-250)', 'Under 20%'], ['var(--seq-400)', '20\u201340%'],
                      ['var(--seq-550)', '40\u201360%'], ['var(--seq-700)', 'Over 60%']];
@@ -6114,6 +6205,7 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     fitHome: function () { if (map) fitHome(map); },
     COLOUR_MODES: COLOUR_MODES,
     POPULATIONS: POPULATIONS,
+    counts: counts,
     modesFor: modesFor,
     members: members,
     radiusFor: radiusFor
@@ -7532,6 +7624,597 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
 
 </script>
 <script>
+/* js/mobiles.js */
+/* Mobiles and tablets, from SOTI MobiControl.
+
+   The other three populations reconcile two systems against each other. This
+   one has nothing to reconcile against yet: none of these devices is in
+   Freshservice, so the job is to work out where each one lives and produce a
+   file that creates it. That makes the site resolution the whole game.
+
+   SOTI files a device by its folder in a UNC-style hierarchy:
+
+     \\Support Worker Devices\Region 1\Wolsey House    a site
+     \\Office Worker Devices\Region 1                  a region, and no site
+
+   Care-site devices are filed by place; office-worker devices are filed by
+   region only, because they follow a person rather than a building. So the
+   last path segment is a site only at depth three, and reading it as one
+   unconditionally would file six hundred devices at a site called
+   "Region 1". */
+(function (global) {
+  'use strict';
+
+  var U = global.U, N = global.Norm;
+
+  var DEFAULTS = {
+    staleDays: 30,          // no check-in this long looks neglected
+    lostDays: 90,           // no check-in this long looks gone
+    minOs: 13,              // Android below this no longer gets security patches
+    homeLocation: 'Remote/Home Worker',
+    testState: 'Reserved',
+    inUseState: 'In Use'
+  };
+
+  function settings(saved) { return Object.assign({}, DEFAULTS, saved || {}); }
+
+  var SEVERITY_ORDER = { low: 1, medium: 2, high: 3 };
+
+  /* Top-level folders that hold stock and pilots rather than deployed
+     devices. Everything under them is somebody's test handset or a phone
+     still in its box at the supplier. */
+  var TEST_CLASSES = ['Testing', 'Ice Telecommunications'];
+
+  /* Models seen in the estate, with the Freshservice product name and whether
+     the thing is a phone or a tablet. SOTI reports only the model code, and a
+     code is not a product name — "SM-A165F" in a Freshservice Product field
+     would be a new product nobody recognises. Both mappings are seeds: the
+     import dialog lets you change any of them, and a code that is not here
+     is flagged rather than guessed at. */
+  var MODELS = {
+    'SM-A135F':  { product: 'Galaxy A13',        kind: 'Phone' },
+    'SM-A137F':  { product: 'Galaxy A13',        kind: 'Phone' },
+    'SM-A145R':  { product: 'Galaxy A14 4G',     kind: 'Phone' },
+    'SM-A146P':  { product: 'Galaxy A14 5G',     kind: 'Phone' },
+    'SM-A155F':  { product: 'Galaxy A15 4G',     kind: 'Phone' },
+    'SM-A156B':  { product: 'Galaxy A15 5G',     kind: 'Phone' },
+    'SM-A165F':  { product: 'Galaxy A16 4G',     kind: 'Phone' },
+    'SM-A166B':  { product: 'Galaxy A16 5G',     kind: 'Phone' },
+    'SM-A175F':  { product: 'Galaxy A17 4G',     kind: 'Phone' },
+    'SM-A176B':  { product: 'Galaxy A17 5G',     kind: 'Phone' },
+    'SM-A226B':  { product: 'Galaxy A22 5G',     kind: 'Phone' },
+    'SM-A236B':  { product: 'Galaxy A23 5G',     kind: 'Phone' },
+    'SM-G525F':  { product: 'Galaxy XCover 5',   kind: 'Phone' },
+    'SM-T290':   { product: 'Galaxy Tab A 8.0 (2019) Wi-Fi', kind: 'Tablet' },
+    'SM-T295':   { product: 'Galaxy Tab A 8.0 (2019) LTE',   kind: 'Tablet' },
+    'SM-T575':   { product: 'Galaxy Tab Active3', kind: 'Tablet' },
+    'SM-X306B':  { product: 'Galaxy Tab Active5 5G', kind: 'Tablet' },
+    '8094X_EEA': { product: 'Alcatel 3T',        kind: 'Tablet' },
+    '9160G':     { product: 'TCL Tab10',         kind: 'Tablet' }
+  };
+
+  /* SOTI folder names that do not match a site name and never will, with the
+     site code they belong to. Three of these are the reason this table exists
+     rather than a cleverer matcher: "Whitley Park" is Garmsway, "Cannon
+     Court" is Ripon and "Wolsey Camascope Pilot" is Wolsey House. No string
+     similarity connects those names, so anything claiming to find them
+     automatically would be guessing. */
+  var SEED_OVERRIDES = {
+    'oak view lodge sl':      '225',   // Oakview Lodge — spacing only
+    'lady ediths sl':         '222',   // Lady Edith
+    'lodge park':             '237',   // Lodge Park Offices
+    'gables':                 '090',   // The Gables
+    'cranbourne sl':          '072',   // Cranbourne House
+    'whitley park':           '092',   // Garmsway
+    'cannon court':           '223',   // Ripon
+    'wolsey camascope pilot': '060',   // Wolsey House
+    /* A folder created in Region 1 by mistake: the service is in Region 2.
+       Mapped so the two devices land at the right site meanwhile, and the
+       region cross-check below still reports the misfiling. */
+    'fairways':               '119'
+  };
+
+  /* Fieldbay was the company's name in Wales before the rebrand, so the two
+     words mean one region. SOTI uses "Wales" under the support-worker branch
+     and "Fieldbay" under the office-worker one; the site list says Fieldbay.
+     Region 1 is split into North and Midlands in the site list but not in
+     SOTI, so it compares at the coarser level. */
+  var REGION_SYNONYMS = { 'fieldbay': 'wales' };
+  var REGION_WILDCARDS = { 'various': true, 'group': true, 'ivolve central': true };
+
+  /* Words, not a squashed key: locationKey strips the spaces, so
+     "Region 1 - North" arrives as "region1north" with no boundary left to
+     match "region 1" against, and every Region 1 device reads as a mismatch. */
+  function regionKey(v) {
+    var k = N.clean(v).toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!k) return '';
+    var reg = k.match(/^region \d+/);
+    if (reg) k = reg[0];
+    return REGION_SYNONYMS[k] || k;
+  }
+
+  /* ---------------------------------------------------------------- paths */
+
+  /* \\Support Worker Devices\Region 1\Wolsey House -> the three names.
+     Leading slashes vary between exports, and an empty segment from a double
+     separator is not a folder. */
+  function pathSegments(p) {
+    return String(p == null ? '' : p)
+      .replace(/\//g, '\\')
+      .split('\\')
+      .map(function (s) { return s.trim(); })
+      .filter(Boolean);
+  }
+
+  function folderKey(v) { return N.locationKey(v); }
+
+  /* Both tables above are written the way a person reads them, then keyed the
+     way folders are keyed. Writing the keys by hand is how the first version
+     of this silently did nothing: folderKey strips spaces and punctuation, so
+     "whitley park" never matches the key "whitleypark". */
+  var OVERRIDE_KEYS = {};
+  Object.keys(SEED_OVERRIDES).forEach(function (name) {
+    OVERRIDE_KEYS[folderKey(name)] = SEED_OVERRIDES[name];
+  });
+
+  var TEST_CLASS_KEYS = {};
+  TEST_CLASSES.forEach(function (name) { TEST_CLASS_KEYS[folderKey(name)] = true; });
+
+  /* Strip a trailing " SL" for a second attempt at a site name.
+
+     Only ever a fallback. Six names in the site list exist in both forms as
+     genuinely separate services — Alverthorpe 069 and Alverthorpe SL 062,
+     Leeds 082 and Leeds SL 063, and four more — so stripping the suffix up
+     front would merge pairs of real sites. */
+  function withoutSL(v) {
+    /* Cut the suffix off the readable name, not the key: folderKey strips
+       punctuation and spaces, so by the time it is a key "Oak View Lodge SL"
+       reads "oakviewlodgesl" and there is no word boundary left to anchor to.
+       Stripping a bare trailing "sl" from a key would eat the end of any name
+       that happens to finish with those letters. */
+    var raw = N.clean(v).replace(/\s+SL\s*$/i, '').trim();
+    return raw ? folderKey(raw) : '';
+  }
+
+  function modelInfo(code) {
+    var k = N.clean(code);
+    return MODELS[k] || MODELS[k.toUpperCase()] || null;
+  }
+
+  /* Android versions arrive as a bare major number. */
+  function osMajor(v) {
+    var m = String(v == null ? '' : v).match(/(\d+)/);
+    return m ? parseInt(m[1], 10) : null;
+  }
+
+  function isYes(v) { return /^(true|yes|1|enabled)$/i.test(String(v == null ? '' : v).trim()); }
+  function isNo(v)  { return /^(false|no|0|disabled)$/i.test(String(v == null ? '' : v).trim()); }
+
+  /* Dotted version numbers compare part by part as numbers: "2026.1.5.1204"
+     is behind "2026.2.1.1003" even though it sorts after it as text. */
+  function olderThan(a, b) {
+    var x = String(a).split('.'), y = String(b).split('.');
+    for (var i = 0; i < Math.max(x.length, y.length); i++) {
+      var p = parseInt(x[i], 10) || 0, q = parseInt(y[i], 10) || 0;
+      if (p !== q) return p < q;
+    }
+    return false;
+  }
+
+  /* Their asset numbers are five digits with a leading zero. A name that is
+     not one has had somebody's name or a project written into it. */
+  function isAssetNumber(v) { return /^\d{4,6}$/.test(String(v == null ? '' : v).trim()); }
+
+  /* ---------------------------------------------------------------- rules */
+
+  var RULES = [
+    {
+      code: 'site-unresolved',
+      label: 'Site folder not in the site list',
+      severity: 'high',
+      hint: 'The device is filed under a site folder whose name matches no site, even allowing for a missing ' +
+            '"SL". Either the site is missing from your site codes file or the folder needs an override.',
+      test: function (r) { return r.hasSiteFolder && !r.site; }
+    },
+    {
+      code: 'site-region-differs',
+      label: 'Filed in the wrong region',
+      severity: 'medium',
+      hint: 'The region folder the device sits in is not the region your site list gives for that site. Usually ' +
+            'a folder created in the wrong place rather than a device in the wrong building.',
+      test: function (r) {
+        if (!r.site || !r.regionFolder) return false;
+        // Under Testing the second segment is "Support Worker Test", not a
+        // region, so there is nothing for the site's region to disagree with.
+        if (r.isTest) return false;
+        var a = regionKey(r.regionFolder), b = regionKey(r.site.region);
+        if (!a || !b || REGION_WILDCARDS[a] || REGION_WILDCARDS[b]) return false;
+        return a !== b;
+      },
+      detail: function (r) { return 'SOTI says ' + r.regionFolder + ', the site list says ' + r.site.region; }
+    },
+    {
+      code: 'no-serial',
+      label: 'No serial number',
+      severity: 'high',
+      hint: 'Nothing identifies this device. It cannot be imported and it cannot be matched later.',
+      test: function (r) { return !r.serial; }
+    },
+    {
+      code: 'no-model',
+      label: 'No model reported',
+      severity: 'high',
+      hint: 'Without a model there is no Product, and Freshservice rejects an asset import without one.',
+      test: function (r) { return !r.model; }
+    },
+    {
+      code: 'model-unknown',
+      label: 'Model not in the product list',
+      severity: 'medium',
+      hint: 'SOTI reports a model code this build has never seen, so there is no Freshservice product name for ' +
+            'it. Fill it in on the import dialog — normally a handset bought since the last export.',
+      test: function (r) { return !!r.model && !r.modelKnown; },
+      detail: function (r) { return r.model + ' from ' + (r.manufacturer || 'an unnamed maker'); }
+    },
+    {
+      code: 'never-checked-in',
+      label: 'Never checked in',
+      severity: 'high',
+      hint: 'Enrolled in SOTI but has never reported. Usually a record created for a device that was never ' +
+            'handed out.',
+      test: function (r) { return !r.checkIn; }
+    },
+    {
+      code: 'long-silent',
+      label: 'Silent for months',
+      severity: 'high',
+      hint: 'No check-in for long enough that the device is probably lost, broken or in a drawer.',
+      test: function (r, cfg) { return r.daysSince !== null && r.daysSince > cfg.lostDays; },
+      detail: function (r) { return 'last checked in ' + U.agoLabel(r.checkIn); }
+    },
+    {
+      code: 'stale',
+      label: 'Not checked in recently',
+      severity: 'medium',
+      hint: 'Past the staleness window in Settings but not yet long enough to assume it is gone.',
+      test: function (r, cfg) {
+        return r.daysSince !== null && r.daysSince > cfg.staleDays && r.daysSince <= cfg.lostDays;
+      },
+      detail: function (r) { return 'last checked in ' + U.agoLabel(r.checkIn); }
+    },
+    {
+      code: 'not-encrypted',
+      label: 'Not encrypted',
+      severity: 'high',
+      hint: 'A care worker’s handset holds people’s records. An unencrypted one is a reportable loss ' +
+            'the moment it goes missing.',
+      test: function (r) { return r.encrypted === false; }
+    },
+    {
+      code: 'os-unsupported',
+      label: 'Android version out of support',
+      severity: 'medium',
+      hint: 'Below the minimum in Settings, so it no longer receives Android security updates.',
+      test: function (r, cfg) { return r.osMajor !== null && r.osMajor < cfg.minOs; },
+      detail: function (r) { return 'Android ' + r.osMajor; }
+    },
+    {
+      code: 'agent-behind',
+      label: 'SOTI agent behind the fleet',
+      severity: 'low',
+      /* Off by default. A quarter of the estate is a version or two behind at
+         any time, which is agent rollout doing its job rather than a fault,
+         and letting it flag four hundred devices would drown everything in
+         "Needs attention". Its own view lists them when you want the picture. */
+      defaultOff: true,
+      hint: 'Running an older MobiControl agent than most of the estate. Normal during a rollout; a device that ' +
+            'never upgrades is usually one that never connects.',
+      test: function (r, cfg, ctx) {
+        return !!r.agentVersion && !!ctx.commonAgent && olderThan(r.agentVersion, ctx.commonAgent);
+      },
+      detail: function (r, cfg, ctx) { return r.agentVersion + ' against ' + ctx.commonAgent; }
+    },
+    {
+      code: 'name-not-asset-number',
+      label: 'Named after a person or a project',
+      severity: 'low',
+      hint: 'Your naming convention is the five-digit asset number. This one has a name or a pilot written ' +
+            'into it, so it will import under that name.',
+      test: function (r) { return !!r.name && !isAssetNumber(r.name); }
+    },
+    {
+      code: 'no-imei',
+      label: 'No IMEI',
+      severity: 'low',
+      hint: 'Nothing to give the network operator if the device is lost or needs barring.',
+      test: function (r) { return !!r.serial && !r.imei; }
+    },
+    {
+      code: 'test-stock',
+      label: 'Test or supplier stock',
+      severity: 'low',
+      hint: 'Filed under Testing or at the supplier rather than issued to anyone, so it imports as Reserved.',
+      test: function (r) { return r.isTest; }
+    },
+    {
+      code: 'duplicate-serial',
+      label: 'Serial appears more than once',
+      severity: 'high',
+      hint: 'Two rows in the export carry the same serial. In a paged SOTI export sorted on a live column this ' +
+            'is the export duplicating a record, not two devices — sort the search on Device Name.',
+      test: function (r, cfg, ctx) { return !!r.serial && ctx.serialCount[r.serial] > 1; }
+    },
+    {
+      code: 'duplicate-name',
+      label: 'Device name appears more than once',
+      severity: 'high',
+      hint: 'Two rows share a device name, so an import would create one record and overwrite it with the other.',
+      test: function (r, cfg, ctx) { return !!r.name && ctx.nameCount[N.locationKey(r.name)] > 1; }
+    },
+    {
+      code: 'site-closed',
+      label: 'At a site marked closed',
+      severity: 'medium',
+      hint: 'The site list says this service is closed, so devices still filed there need collecting or moving.',
+      test: function (r) { return !!r.site && /closed/i.test(N.clean(r.site.status)); }
+    },
+    {
+      code: 'no-sites-loaded',
+      label: 'No site list loaded',
+      severity: 'low',
+      hint: 'Load the location lookup and every device gets a site code and a place on the map.',
+      test: function (r, cfg, ctx) { return !ctx.hasSites && r.hasSiteFolder; }
+    }
+  ];
+
+  var RULE_BY_CODE = {};
+  RULES.forEach(function (r) { RULE_BY_CODE[r.code] = r; });
+
+  function isEnabled(rule, enabled) {
+    if (!enabled) return !rule.defaultOff;
+    if (Object.prototype.hasOwnProperty.call(enabled, rule.code)) return !!enabled[rule.code];
+    return !rule.defaultOff;
+  }
+
+  /* ------------------------------------------------------------- resolve */
+
+  /* One row per SOTI device, with its site worked out.
+
+     overrides is folder key -> site code, seeded with SEED_OVERRIDES and
+     extended by the user. sites is the site index by code. */
+  function resolve(records, cfg, sites, overrides) {
+    cfg = settings(cfg);
+    sites = sites || {};
+    /* User overrides come in already keyed, and win over the seeds. */
+    var ov = Object.assign({}, OVERRIDE_KEYS, overrides || {});
+
+    /* Two ways into the site list: by name, and by name with " SL" removed.
+       The second is a fallback and is only trusted where it is unambiguous,
+       because six names exist in both forms as separate services. */
+    var byName = {}, byBase = {};
+    Object.keys(sites).forEach(function (code) {
+      var site = sites[code];
+      var k = folderKey(site.name);
+      if (k && !byName[k]) byName[k] = site;
+      var b = withoutSL(site.name);
+      if (b) (byBase[b] = byBase[b] || []).push(site);
+    });
+
+    var rows = records.map(function (rec, i) {
+      var segs = pathSegments(rec.path);
+      var cls = segs.length ? segs[0] : '';
+      var row = {
+        id: 'm' + (i + 1),
+        soti: rec,
+        name: N.clean(rec.name),
+        serial: N.clean(rec.serial).toUpperCase(),
+        imei: N.clean(rec.imei),
+        model: N.clean(rec.model),
+        manufacturer: N.clean(rec.manufacturer),
+        family: N.clean(rec.family),
+        osVersion: N.clean(rec.osVersion),
+        ip: N.clean(rec.ipAddress),
+        mac: N.clean(rec.mac),
+        agentVersion: N.clean(rec.agentVersion),
+        storage: typeof rec.storage === 'number' ? rec.storage : null,
+        memory: typeof rec.memory === 'number' ? rec.memory : null,
+        path: N.clean(rec.path),
+        pathSegments: segs,
+        deviceClass: cls,
+        // Depth two is a region folder and nothing more; depth three names a site.
+        regionFolder: segs.length >= 2 ? segs[1] : '',
+        folder: segs.length >= 3 ? segs[segs.length - 1] : '',
+        hasSiteFolder: segs.length >= 3,
+        isTest: !!TEST_CLASS_KEYS[folderKey(cls)],
+        // SOTI stamps its timestamps month-first.
+        checkIn: U.parseDate(rec.checkIn, 'mdy'),
+        connected: U.parseDate(rec.connected, 'mdy'),
+        disconnected: U.parseDate(rec.disconnected, 'mdy'),
+        encrypted: isYes(rec.encrypted) ? true : isNo(rec.encrypted) ? false : null,
+        osMajor: osMajor(rec.osVersion)
+      };
+      row.daysSince = row.checkIn ? U.daysSince(row.checkIn) : null;
+      // Connected more recently than it disconnected means it is on now.
+      row.online = !!(row.connected && (!row.disconnected || row.connected > row.disconnected));
+
+      var info = modelInfo(row.model);
+      row.modelKnown = !!info;
+      row.modelName = info ? info.product : '';
+      row.formFactor = info ? info.kind : '';
+
+      resolveSite(row, ov, byName, byBase);
+
+      /* What the Freshservice Location will say. A site name where there is
+         one; the home-worker label where the device is filed by region,
+         because those follow a person and SOTI does not say which.
+
+         A device under a site folder that did not resolve gets nothing. It is
+         emphatically not a home worker — it is at a real building whose name
+         we could not place — and labelling it one would bury the problem
+         under six hundred rows that legitimately say the same thing. */
+      row.location = row.siteName ? row.siteName
+                   : (row.isTest || row.hasSiteFolder) ? ''
+                   : cfg.homeLocation;
+      row.stateShould = row.isTest ? cfg.testState : cfg.inUseState;
+      // The map keys on this, so it has to be the site's own key or nothing.
+      row.locationKey = row.site ? folderKey(row.site.name) : '';
+      return row;
+    });
+
+    return { rows: rows, sites: sites, overrides: ov, cfg: cfg };
+  }
+
+  /* Exact name, then an override, then " SL" treated as optional.
+
+     The override is consulted before the SL fallback so a folder you have
+     answered for is never quietly resolved a different way. */
+  function resolveSite(row, ov, byName, byBase) {
+    row.site = null;
+    row.siteCode = '';
+    row.siteName = '';
+    row.siteMatch = '';
+    if (!row.hasSiteFolder) return;
+
+    var k = folderKey(row.folder);
+    if (byName[k]) { set(row, byName[k], 'exact'); return; }
+
+    var code = ov[k];
+    if (code) {
+      var byCode = null;
+      Object.keys(byName).forEach(function (n) {
+        if (!byCode && byName[n].code === code) byCode = byName[n];
+      });
+      if (byCode) { set(row, byCode, 'override'); return; }
+      // The override names a code the site list does not have, which is worth
+      // saying rather than silently falling through to a fuzzier match.
+      row.overrideMissing = code;
+      return;
+    }
+
+    var cands = byBase[withoutSL(row.folder)] || [];
+    if (cands.length === 1) { set(row, cands[0], 'SL optional'); return; }
+    if (cands.length > 1) row.siteAmbiguous = cands.length;
+  }
+
+  function set(row, site, how) {
+    row.site = site;
+    row.siteCode = site.code;
+    row.siteName = site.name;
+    row.siteMatch = how;
+  }
+
+  /* ---------------------------------------------------------- rule pass */
+
+  function apply(result, cfg, enabled) {
+    cfg = settings(cfg);
+    var rows = result.rows;
+
+    var serialCount = {}, nameCount = {}, agentVotes = {};
+    rows.forEach(function (r) {
+      if (r.serial) serialCount[r.serial] = (serialCount[r.serial] || 0) + 1;
+      var nk = N.locationKey(r.name);
+      if (nk) nameCount[nk] = (nameCount[nk] || 0) + 1;
+      if (r.agentVersion) agentVotes[r.agentVersion] = (agentVotes[r.agentVersion] || 0) + 1;
+    });
+    var commonAgent = '', best = 0;
+    Object.keys(agentVotes).forEach(function (v) {
+      if (agentVotes[v] > best) { best = agentVotes[v]; commonAgent = v; }
+    });
+
+    var ctx = {
+      hasSites: result.sites && Object.keys(result.sites).length > 0,
+      serialCount: serialCount,
+      nameCount: nameCount,
+      commonAgent: commonAgent
+    };
+
+    var active = RULES.filter(function (r) { return isEnabled(r, enabled); });
+    var tally = {};
+    active.forEach(function (r) { tally[r.code] = 0; });
+
+    rows.forEach(function (row) {
+      row.issues = [];
+      row.details = {};
+      var worst = null;
+      active.forEach(function (rule) {
+        var hit = false;
+        try { hit = !!rule.test(row, cfg, ctx); } catch (e) { hit = false; }
+        if (!hit) return;
+        row.issues.push(rule.code);
+        try { row.details[rule.code] = rule.detail ? rule.detail(row, cfg, ctx) : ''; }
+        catch (e) { row.details[rule.code] = ''; }
+        tally[rule.code]++;
+        if (!worst || SEVERITY_ORDER[rule.severity] > SEVERITY_ORDER[worst]) worst = rule.severity;
+      });
+      row.severity = worst;
+      row.issueCount = row.issues.length;
+    });
+
+    result.tally = tally;
+    result.rulesUsed = active.map(function (r) { return r.code; });
+    result.commonAgent = commonAgent;
+    result.counts = {
+      total: rows.length,
+      atSite: rows.filter(function (r) { return !!r.site; }).length,
+      homeWorker: rows.filter(function (r) { return !r.hasSiteFolder && !r.isTest; }).length,
+      test: rows.filter(function (r) { return r.isTest; }).length,
+      unresolved: rows.filter(function (r) { return r.hasSiteFolder && !r.site; }).length,
+      sites: Object.keys(rows.reduce(function (acc, r) {
+        if (r.siteCode) acc[r.siteCode] = true;
+        return acc;
+      }, {})).length,
+      tablets: rows.filter(function (r) { return r.formFactor === 'Tablet'; }).length,
+      phones: rows.filter(function (r) { return r.formFactor === 'Phone'; }).length
+    };
+    return result;
+  }
+
+  /* Every distinct site folder in the export, with how it resolved. This is
+     what the overrides dialog lists, so it includes the ones that worked. */
+  function folders(rows) {
+    var seen = {};
+    (rows || []).forEach(function (r) {
+      if (!r.hasSiteFolder) return;
+      var k = folderKey(r.folder);
+      if (!seen[k]) {
+        seen[k] = {
+          key: k, folder: r.folder, regionFolder: r.regionFolder,
+          count: 0, siteCode: r.siteCode, siteName: r.siteName, match: r.siteMatch,
+          examples: []
+        };
+      }
+      seen[k].count++;
+      if (seen[k].examples.length < 3) seen[k].examples.push(r.name);
+    });
+    return Object.keys(seen).sort().map(function (k) { return seen[k]; });
+  }
+
+  global.Mobiles = {
+    DEFAULTS: DEFAULTS,
+    RULES: RULES,
+    RULE_BY_CODE: RULE_BY_CODE,
+    SEVERITY_ORDER: SEVERITY_ORDER,
+    MODELS: MODELS,
+    SEED_OVERRIDES: SEED_OVERRIDES,
+    TEST_CLASSES: TEST_CLASSES,
+    settings: settings,
+    isEnabled: isEnabled,
+    resolve: resolve,
+    apply: apply,
+    folders: folders,
+    pathSegments: pathSegments,
+    folderKey: folderKey,
+    withoutSL: withoutSL,
+    regionKey: regionKey,
+    modelInfo: modelInfo,
+    isAssetNumber: isAssetNumber,
+    olderThan: olderThan,
+    OVERRIDE_KEYS: OVERRIDE_KEYS
+  };
+})(window);
+
+</script>
+<script>
 /* js/dupes.js */
 /* Finding duplicate entries *within* each source file, keyed on serial number.
 
@@ -7556,13 +8239,15 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
   var RECENCY = {
     freshservice: ['lastAudit', 'createdAt'],
     intune: ['lastCheckIn', 'enrolled'],
-    arcticwolf: ['lastSeen', 'lastScan']
+    arcticwolf: ['lastSeen', 'lastScan'],
+    soti: ['checkIn', 'connected']
   };
 
   var LABEL_FIELDS = {
     freshservice: ['name', 'assetTag', 'state', 'user', 'location'],
     intune: ['name', 'primaryUser', 'compliance', 'ownership'],
-    arcticwolf: ['name', 'riskScore', 'risks', 'criticality']
+    arcticwolf: ['name', 'riskScore', 'risks', 'criticality'],
+    soti: ['name', 'model', 'path', 'imei']
   };
 
   function prefixRegex(prefixes) {
@@ -8069,6 +8754,216 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
   ];
 
   global.PrintViews = Object.assign({ engine: global.Views.engine, BUILT_IN: BUILT_IN }, E);
+})(window);
+
+</script>
+<script>
+/* js/mobviews.js */
+/* Columns and views for mobiles and tablets. Same filter engine as the other
+   three populations.
+
+   The emphasis is different, though: nothing here is in Freshservice yet, so
+   there are no fields to correct. What matters is whether each device can be
+   imported at all, where it is going to land, and which handsets have stopped
+   reporting. */
+(function (global) {
+  'use strict';
+
+  var U = global.U, N = global.Norm;
+
+  function yesNo(v) { return v === null || v === undefined ? '' : (v ? 'yes' : 'no'); }
+
+  var COLUMNS = [
+    { key: 'notes',      label: 'Notes',        width: 64, type: 'notes',
+      get: function (r) { return global.Notes.countFor(r); },
+      sortKey: function (r) { return -global.Notes.countFor(r); } },
+    { key: 'name',       label: 'Device',       width: 130, get: function (r) { return r.name; }, strong: true },
+    { key: 'serial',     label: 'Serial',       width: 150, get: function (r) { return r.serial; } },
+    { key: 'severity',   label: 'Severity',     width: 90,
+      get: function (r) { return r.severity || ''; },
+      sortKey: function (r) { return r.severity ? -global.Mobiles.SEVERITY_ORDER[r.severity] : 9; } },
+    { key: 'issues',     label: 'Issues',       width: 300, type: 'issues', get: function (r) { return r.issues; },
+      sortKey: function (r) { return -r.issueCount; } },
+    { key: 'issueCount', label: 'Issue count',  width: 70, type: 'number', get: function (r) { return r.issueCount; } },
+
+    { key: 'model',      label: 'Model code',   width: 110, get: function (r) { return r.model; } },
+    { key: 'modelName',  label: 'Product',      width: 190, get: function (r) { return r.modelName; } },
+    { key: 'formFactor', label: 'Type',         width: 90,  get: function (r) { return r.formFactor; } },
+    { key: 'manufacturer', label: 'Make',       width: 100, get: function (r) { return r.manufacturer; } },
+    { key: 'imei',       label: 'IMEI',         width: 150, get: function (r) { return r.imei; } },
+    { key: 'osVersion',  label: 'Android',      width: 80,  type: 'number', get: function (r) { return r.osMajor; } },
+    { key: 'encrypted',  label: 'Encrypted',    width: 95,  get: function (r) { return yesNo(r.encrypted); } },
+
+    { key: 'siteCode',   label: 'Site code',    width: 80,  get: function (r) { return r.siteCode; } },
+    { key: 'siteName',   label: 'Site',         width: 190, get: function (r) { return r.siteName; } },
+    { key: 'location',   label: 'Location for FS', width: 190, get: function (r) { return r.location; } },
+    { key: 'folder',     label: 'SOTI folder',  width: 180, get: function (r) { return r.folder; } },
+    { key: 'regionFolder', label: 'SOTI region', width: 120, get: function (r) { return r.regionFolder; } },
+    { key: 'deviceClass', label: 'Device class', width: 170, get: function (r) { return r.deviceClass; } },
+    { key: 'path',       label: 'SOTI path',    width: 300, get: function (r) { return r.path; } },
+    { key: 'siteMatch',  label: 'Site matched by', width: 120,
+      get: function (r) { return r.hasSiteFolder ? (r.siteMatch || 'nothing') : 'no site folder'; } },
+    { key: 'hasSiteFolder', label: 'Filed at a site', width: 110,
+      get: function (r) { return r.hasSiteFolder ? 'yes' : 'no'; } },
+    { key: 'region',     label: 'Region (site list)', width: 150,
+      get: function (r) { return r.site ? N.clean(r.site.region) : ''; } },
+    { key: 'town',       label: 'Town',         width: 130,
+      get: function (r) { return r.site ? N.clean(r.site.town) : ''; } },
+    { key: 'postcode',   label: 'Postcode',     width: 95,
+      get: function (r) { return r.site ? N.clean(r.site.postcode) : ''; } },
+    { key: 'siteStatus', label: 'Site status',  width: 100,
+      get: function (r) { return r.site ? N.clean(r.site.status) : ''; } },
+
+    { key: 'stateShould', label: 'Asset state', width: 100, get: function (r) { return r.stateShould; } },
+    { key: 'checkIn',    label: 'Last check-in', width: 120, type: 'date', get: function (r) { return r.checkIn; },
+      sortKey: function (r) { return r.checkIn ? r.checkIn.getTime() : 0; } },
+    { key: 'daysSince',  label: 'Days silent',  width: 95, type: 'number', get: function (r) { return r.daysSince; } },
+    { key: 'connected',  label: 'Last connected', width: 130, type: 'date', get: function (r) { return r.connected; },
+      sortKey: function (r) { return r.connected ? r.connected.getTime() : 0; } },
+    { key: 'online',     label: 'Connected now', width: 110, get: function (r) { return yesNo(r.online); } },
+    { key: 'agentVersion', label: 'SOTI agent', width: 130, get: function (r) { return r.agentVersion; } },
+    { key: 'ip',         label: 'IP address',   width: 130, get: function (r) { return r.ip; } },
+    { key: 'mac',        label: 'MAC address',  width: 140, get: function (r) { return r.mac; } },
+    { key: 'storage',    label: 'Storage free', width: 110, type: 'number',
+      get: function (r) { return r.storage === null ? null : Math.round(r.storage / 1073741824 * 10) / 10; } },
+    { key: 'family',     label: 'Device family', width: 110, get: function (r) { return r.family; } },
+    { key: 'isTest',     label: 'Test stock',   width: 95, get: function (r) { return r.isTest ? 'yes' : 'no'; } },
+    { key: 'modelKnown', label: 'Product known', width: 110, get: function (r) { return r.modelKnown ? 'yes' : 'no'; } }
+  ];
+
+  var BASE_COLS = ['name', 'serial', 'modelName', 'formFactor', 'siteCode', 'location', 'checkIn', 'issues'];
+
+  var E = global.Views.engine(COLUMNS, BASE_COLS);
+
+  function issueView(id, name, description, codes, columns) {
+    return {
+      id: id, name: name, description: description, columns: columns || BASE_COLS,
+      filter: { match: 'any', conditions: codes.map(function (c) { return { field: '__issue', op: 'is', value: c }; }) },
+      sort: { key: 'severity', dir: 'asc' }
+    };
+  }
+
+  var BUILT_IN = [
+    {
+      id: 'mb-attention',
+      name: 'Needs attention',
+      description: 'Every mobile with at least one open flag, worst first.',
+      columns: ['name', 'serial', 'severity', 'modelName', 'siteCode', 'location', 'checkIn', 'issues'],
+      filter: { match: 'all', conditions: [{ field: '__anyIssue', op: 'is' }] },
+      sort: { key: 'severity', dir: 'asc' }
+    },
+    {
+      id: 'mb-import-blocked',
+      name: 'Cannot be imported',
+      description: 'Freshservice needs a name and a Product on every row. These rows have no serial, no model, ' +
+        'or a model code with no product name against it, so they would be rejected or create a product ' +
+        'nobody recognises.',
+      columns: ['name', 'serial', 'model', 'modelName', 'manufacturer', 'folder', 'checkIn', 'issues'],
+      filter: { match: 'any', conditions: [
+        { field: '__issue', op: 'is', value: 'no-serial' },
+        { field: '__issue', op: 'is', value: 'no-model' },
+        { field: '__issue', op: 'is', value: 'model-unknown' }
+      ] },
+      sort: { key: 'severity', dir: 'asc' }
+    },
+    issueView('mb-site-unresolved', 'Site not recognised',
+      'Filed under a site folder whose name matches no site in your list, even allowing for a missing "SL". ' +
+      'Either add the site or map the folder under Site folders.',
+      ['site-unresolved'],
+      ['name', 'serial', 'folder', 'regionFolder', 'deviceClass', 'checkIn', 'issues']),
+    issueView('mb-wrong-region', 'Filed in the wrong region',
+      'The SOTI region folder disagrees with the region your site list gives for that site — usually a folder ' +
+      'created in the wrong place rather than a device in the wrong building.',
+      ['site-region-differs'],
+      ['name', 'folder', 'regionFolder', 'region', 'siteCode', 'siteName', 'issues']),
+    {
+      id: 'mb-home',
+      name: 'Home and office workers',
+      description: 'Filed by region rather than by site, which is how SOTI holds a device that follows a person. ' +
+        'These import with the location set in Settings rather than a building.',
+      columns: ['name', 'serial', 'modelName', 'formFactor', 'deviceClass', 'regionFolder', 'location', 'checkIn'],
+      filter: { match: 'all', conditions: [
+        { field: 'hasSiteFolder', op: 'is', value: 'no' },
+        { field: 'isTest', op: 'is', value: 'no' }
+      ] },
+      sort: { key: 'regionFolder', dir: 'asc' }
+    },
+    {
+      id: 'mb-at-site',
+      name: 'At a site',
+      description: 'Every device SOTI files against a building, with the site code it resolved to.',
+      columns: ['name', 'serial', 'modelName', 'formFactor', 'siteCode', 'siteName', 'siteMatch', 'checkIn'],
+      filter: { match: 'all', conditions: [{ field: 'siteCode', op: 'notEmpty' }] },
+      sort: { key: 'siteName', dir: 'asc' }
+    },
+    issueView('mb-silent', 'Silent for months',
+      'No check-in for longer than the "lost" window in Settings. Lost, broken, or in a drawer — but not in ' +
+      'somebody’s hand.',
+      ['long-silent', 'never-checked-in'],
+      ['name', 'serial', 'modelName', 'checkIn', 'daysSince', 'siteCode', 'location', 'issues']),
+    issueView('mb-stale', 'Not checked in recently',
+      'Past the staleness window but not yet long enough to assume the device is gone.',
+      ['stale'],
+      ['name', 'serial', 'modelName', 'checkIn', 'daysSince', 'siteCode', 'location', 'online']),
+    issueView('mb-security', 'Security',
+      'Unencrypted, or running an Android version that no longer receives security updates. These handsets hold ' +
+      'people’s care records.',
+      ['not-encrypted', 'os-unsupported'],
+      ['name', 'serial', 'modelName', 'encrypted', 'osVersion', 'siteCode', 'location', 'issues']),
+    {
+      id: 'mb-agents',
+      name: 'SOTI agent versions',
+      description: 'Every device by agent version, oldest first. A device that never upgrades is usually one ' +
+        'that never connects.',
+      columns: ['name', 'serial', 'agentVersion', 'modelName', 'checkIn', 'daysSince', 'siteCode', 'location'],
+      filter: null,
+      sort: { key: 'agentVersion', dir: 'asc' }
+    },
+    issueView('mb-test', 'Test and supplier stock',
+      'Filed under Testing or sitting at the supplier rather than issued to anyone. These import as Reserved.',
+      ['test-stock'],
+      ['name', 'serial', 'modelName', 'deviceClass', 'folder', 'stateShould', 'checkIn', 'issues']),
+    issueView('mb-naming', 'Named after a person',
+      'Your convention is the five-digit asset number. These carry a name or a pilot instead, and would import ' +
+      'under that name.',
+      ['name-not-asset-number'],
+      ['name', 'serial', 'modelName', 'deviceClass', 'folder', 'checkIn']),
+    issueView('mb-duplicates', 'Duplicated in the export',
+      'Two rows carrying the same serial or the same device name. In a paged SOTI export sorted on a live ' +
+      'column this is the export duplicating records rather than two real devices.',
+      ['duplicate-serial', 'duplicate-name'],
+      ['name', 'serial', 'imei', 'model', 'folder', 'checkIn', 'issues']),
+    issueView('mb-closed', 'At a closed site',
+      'The site list marks the service closed, so devices still filed there need collecting or moving.',
+      ['site-closed'],
+      ['name', 'serial', 'modelName', 'siteCode', 'siteName', 'siteStatus', 'checkIn']),
+    {
+      id: 'mb-tablets',
+      name: 'Tablets',
+      description: 'The tablets, which import into Freshservice as their own asset type and so become their own file.',
+      columns: ['name', 'serial', 'modelName', 'model', 'siteCode', 'location', 'checkIn', 'issues'],
+      filter: { match: 'all', conditions: [{ field: 'formFactor', op: 'is', value: 'Tablet' }] },
+      sort: { key: 'siteName', dir: 'asc' }
+    },
+    {
+      id: 'mb-models',
+      name: 'By model',
+      description: 'Every device grouped by what it is — the handset mix, and which models are nearly retired.',
+      columns: ['name', 'serial', 'model', 'modelName', 'formFactor', 'osVersion', 'siteCode', 'location'],
+      filter: null,
+      sort: { key: 'modelName', dir: 'asc' }
+    },
+    {
+      id: 'mb-all',
+      name: 'All mobiles',
+      description: 'Everything SOTI reported, with the site each one resolved to.',
+      columns: ['name', 'serial', 'modelName', 'formFactor', 'siteCode', 'location', 'stateShould', 'checkIn', 'issues'],
+      filter: null,
+      sort: { key: 'name', dir: 'asc' }
+    }
+  ];
+
+  global.MobViews = Object.assign({ engine: global.Views.engine, BUILT_IN: BUILT_IN }, E);
 })(window);
 
 </script>
@@ -9119,6 +10014,342 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
 
 </script>
 <script>
+/* js/mobexport.js */
+/* The Freshservice import for mobiles and tablets.
+
+   This one creates records rather than correcting them — none of these
+   devices is in Freshservice yet — so the mandatory columns matter more than
+   anywhere else in the tool: Workspace, Name, Asset Type and Product are all
+   required, and two of those have to match a list Freshservice keeps its own
+   way. A value invented here either fails the import or quietly creates a
+   product nobody recognises, so both mappings are explicit and the export
+   refuses to run while either is blank.
+
+   Freshservice imports one asset type at a time, so this writes one file per
+   type: the phones and the tablets go up separately. */
+(function (global) {
+  'use strict';
+
+  var U = global.U, N = global.Norm, MB = global.Mobiles;
+
+  var DEFAULT_HEADERS = {
+    workspace:  'Workspace',
+    name:       'Name',
+    assetType:  'Asset Type',
+    product:    'Product',
+    serial:     'Serial Number',
+    location:   'Location',
+    state:      'Asset State',
+    vendor:     'Vendor',
+    imei:       'IMEI',
+    os:         'OS Version',
+    ip:         'IP Address',
+    mac:        'MAC Address',
+    tag:        'Asset Tag',
+    description:'Description'
+  };
+
+  var COLUMNS = [
+    { key: 'workspace',  label: 'Workspace',     required: true, fixed: true },
+    { key: 'name',       label: 'Name',          required: true,
+      help: 'The five-digit asset number SOTI holds as the device name.' },
+    { key: 'assetType',  label: 'Asset Type',    required: true, lookup: 'assetTypes' },
+    { key: 'product',    label: 'Product',       required: true, lookup: 'products' },
+    { key: 'serial',     label: 'Serial Number',
+      help: 'The hardware serial. Unique across the estate, and what a later reconciliation will match on.' },
+    { key: 'location',   label: 'Location',
+      help: 'The site the SOTI folder resolved to, or your home-worker label where SOTI files by region.' },
+    { key: 'state',      label: 'Asset State',
+      help: 'In Use, except test and supplier stock, which is Reserved. Both words are set in Settings.' },
+    { key: 'vendor',     label: 'Vendor',        fixed: false,
+      help: 'As SOTI reports it, capitalised — it arrives as "samsung".' },
+    { key: 'imei',       label: 'IMEI',
+      help: 'What the network operator needs to bar a lost handset.' },
+    { key: 'os',         label: 'OS Version' },
+    { key: 'ip',         label: 'IP Address',
+      help: 'Off by default: a mobile’s address is whatever network it was last on, so it dates immediately.' },
+    { key: 'mac',        label: 'MAC Address' },
+    { key: 'tag',        label: 'Asset Tag',
+      help: 'The same asset number as the name. Off by default — switch it on if you key on Asset Tag.' },
+    { key: 'description',label: 'Description' }
+  ];
+
+  var COL_BY_KEY = {};
+  COLUMNS.forEach(function (c) { COL_BY_KEY[c.key] = c; });
+
+  /* Two lookups, deliberately keyed differently.
+
+     Product is per model code, because that is the granularity Freshservice
+     records: nineteen codes across the estate. Asset Type is per form factor,
+     because there are only two answers and asking nineteen times for the same
+     two would be a way of introducing typos. */
+  var LOOKUPS = [
+    { id: 'assetTypes', label: 'Phone or tablet → Asset Type',
+      keyOf: function (r) { return r.formFactor; },
+      keyLabel: 'What it is', valueLabel: 'Freshservice Asset Type' },
+    { id: 'products',   label: 'Model code → Product',
+      keyOf: function (r) { return r.model; },
+      keyLabel: 'SOTI model code', valueLabel: 'Freshservice Product',
+      hint: function (r) { return r.modelName; } }
+  ];
+
+  var LOOKUP_BY_ID = {};
+  LOOKUPS.forEach(function (l) { LOOKUP_BY_ID[l.id] = l; });
+
+  /* Seeded from the model table so the common case needs no typing, and every
+     value stays editable: these are Freshservice's words, not ours. */
+  function seedLookups(config) {
+    var products = Object.assign({}, (config && config.products) || {});
+    Object.keys(MB.MODELS).forEach(function (code) {
+      if (!products[code]) products[code] = MB.MODELS[code].product;
+    });
+    var types = Object.assign({ Phone: 'Mobile', Tablet: 'Tablet' },
+                              (config && config.assetTypes) || {});
+    return { products: products, assetTypes: types };
+  }
+
+  function defaultConfig() {
+    var seeded = seedLookups(null);
+    return {
+      headers: Object.assign({}, DEFAULT_HEADERS),
+      include: {
+        workspace: true, name: true, assetType: true, product: true, serial: true,
+        location: true, state: true, vendor: true, imei: true, os: true,
+        ip: false, mac: false, tag: false, description: true
+      },
+      fixed: { workspace: 'IT' },
+      vendorText: 'Samsung',
+      products: seeded.products,
+      assetTypes: seeded.assetTypes,
+      describeSoti: true
+    };
+  }
+
+  /* --------------------------------------------------------------- values */
+
+  function cellValue(row, key, config) {
+    var col = COL_BY_KEY[key];
+    if (!col) return '';
+    if (col.fixed) return N.clean(config.fixed[key]);
+    if (col.lookup) {
+      var l = LOOKUP_BY_ID[col.lookup];
+      var k = l.keyOf(row);
+      return k ? N.clean((config[col.lookup] || {})[k]) : '';
+    }
+    switch (key) {
+      case 'name':     return N.clean(row.name);
+      case 'serial':   return N.clean(row.serial);
+      case 'location': return N.clean(row.location);
+      case 'state':    return N.clean(row.stateShould);
+      case 'vendor':   return vendorOf(row, config);
+      case 'imei':     return N.clean(row.imei);
+      case 'os':       return row.osMajor === null ? '' : 'Android ' + row.osMajor;
+      case 'ip':       return N.clean(row.ip);
+      case 'mac':      return N.clean(row.mac);
+      // Only where the name really is the asset number; a device called
+      // "03564 Adam Stallwood - A165F" has no clean tag to write.
+      case 'tag':      return MB.isAssetNumber(row.name) ? N.clean(row.name) : '';
+      case 'description': return description(row, config);
+      default: return '';
+    }
+  }
+
+  /* SOTI reports "samsung" in lower case, which is not how a manufacturer is
+     written in an asset register. One configured spelling covers the fleet;
+     anything else is passed through with its first letter raised rather than
+     replaced, because guessing at a second maker's house style is worse than
+     leaving it as reported. */
+  function vendorOf(row, config) {
+    var m = N.clean(row.manufacturer);
+    if (!m) return '';
+    if (/^samsung$/i.test(m)) return N.clean(config.vendorText) || 'Samsung';
+    return m.charAt(0).toUpperCase() + m.slice(1);
+  }
+
+  /* Where SOTI has it filed, and when it last reported. Both are the sort of
+     thing somebody looking at the Freshservice record will want and would
+     otherwise have to open SOTI for. */
+  function description(row, config) {
+    if (!config.describeSoti) return '';
+    var bits = [];
+    if (row.deviceClass) bits.push(row.deviceClass);
+    if (row.folder && row.folder !== row.siteName) bits.push('SOTI folder: ' + row.folder);
+    if (row.siteCode) bits.push('Site ' + row.siteCode);
+    if (row.checkIn) bits.push('SOTI check-in ' + U.fmtDate(row.checkIn));
+    else bits.push('never checked in to SOTI');
+    return bits.join('; ');
+  }
+
+  function header(col, config) {
+    return N.clean((config.headers || {})[col.key]) || col.label;
+  }
+
+  function activeColumns(config) {
+    return COLUMNS.filter(function (c) { return config.include[c.key]; });
+  }
+
+  /* ------------------------------------------------------------- lookups */
+
+  /* Every distinct key these rows need, with what we know about it. */
+  function lookupKeys(rows, config, lookupId) {
+    var l = LOOKUP_BY_ID[lookupId];
+    if (!l) return [];
+    var seen = {};
+    (rows || []).forEach(function (r) {
+      var k = l.keyOf(r);
+      if (!k) return;
+      if (!seen[k]) seen[k] = { key: k, count: 0, hint: '', examples: [] };
+      seen[k].count++;
+      if (!seen[k].hint && l.hint) seen[k].hint = N.clean(l.hint(r));
+      if (seen[k].examples.length < 3) seen[k].examples.push(r.name);
+    });
+    var map = (config && config[lookupId]) || {};
+    return Object.keys(seen).sort().map(function (k) {
+      return Object.assign(seen[k], { value: N.clean(map[k]) });
+    });
+  }
+
+  function unmapped(rows, config) {
+    var out = [];
+    LOOKUPS.forEach(function (l) {
+      var col = COLUMNS.filter(function (c) { return c.lookup === l.id; })[0];
+      if (col && config.include && !config.include[col.key]) return;
+      lookupKeys(rows, config, l.id).forEach(function (k) {
+        if (k.value) return;
+        out.push({ lookup: l.id, lookupLabel: l.label, key: k.key, hint: k.hint,
+                   count: k.count, required: !!(col && col.required) });
+      });
+    });
+    return out;
+  }
+
+  /* Rows with no model code at all cannot reach a Product however the lookups
+     are filled in, so they are reported separately rather than blocking the
+     rest of the estate for ever. */
+  function unimportable(rows) {
+    return (rows || []).filter(function (r) { return !r.model || !r.serial; });
+  }
+
+  function importable(rows) {
+    return (rows || []).filter(function (r) { return !!r.model && !!r.serial; });
+  }
+
+  function missingRequired(config) {
+    return COLUMNS.filter(function (c) { return c.required && !config.include[c.key]; })
+                  .map(function (c) { return header(c, config); });
+  }
+
+  function blankRequired(rows, config) {
+    var out = [];
+    activeColumns(config).forEach(function (c) {
+      if (!c.required) return;
+      var n = 0;
+      rows.forEach(function (r) { if (!cellValue(r, c.key, config)) n++; });
+      if (n) out.push({ key: c.key, label: header(c, config), rows: n });
+    });
+    return out;
+  }
+
+  /* A blank Location is not a rejected import, but it is a device that lands
+     nowhere, so it is worth saying out loud before anyone uploads the file. */
+  function blankLocation(rows, config) {
+    if (!config.include.location) return 0;
+    return rows.filter(function (r) { return !cellValue(r, 'location', config); }).length;
+  }
+
+  /* ---------------------------------------------------------------- output */
+
+  function toImportCsv(rows, config) {
+    var seen = {}, keep = [];
+    activeColumns(config).forEach(function (c) {
+      var h = header(c, config);
+      if (seen[h]) return;               // two columns sharing a header is ambiguous
+      seen[h] = true;
+      keep.push({ col: c, header: h });
+    });
+    var headers = keep.map(function (k) { return k.header; });
+    var out = rows.map(function (r) {
+      var o = {};
+      keep.forEach(function (k) { o[k.header] = cellValue(r, k.col.key, config); });
+      return o;
+    });
+    return global.CSV.stringify(out, headers);
+  }
+
+  /* Split by the Freshservice Asset Type the rows will carry — the mapped
+     value, not our internal form factor, because that is what the import is
+     keyed on — and sort within each file by site so it reads in order. */
+  function splitByAssetType(rows, config) {
+    var groups = {};
+    (rows || []).forEach(function (r) {
+      var type = cellValue(r, 'assetType', config) || '(no asset type)';
+      (groups[type] = groups[type] || []).push(r);
+    });
+    return Object.keys(groups).sort().map(function (type) {
+      return {
+        type: type,
+        rows: groups[type].slice().sort(function (a, b) {
+          var sa = (a.siteCode || 'zzz') + (a.location || ''), sb = (b.siteCode || 'zzz') + (b.location || '');
+          if (sa !== sb) return sa < sb ? -1 : 1;
+          return String(a.name || '') < String(b.name || '') ? -1 : 1;
+        })
+      };
+    });
+  }
+
+  function typeSlug(type) {
+    return String(type || 'asset').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'asset';
+  }
+
+  /* What the import claimed, for the record — and for checking a site's
+     devices against what actually turned up there. */
+  function toManifestCsv(rows, config) {
+    var headers = ['Device name', 'Serial', 'IMEI', 'Model code', 'Product', 'Asset Type',
+                   'SOTI class', 'SOTI folder', 'Site code', 'Site', 'Matched by',
+                   'Location', 'Asset State', 'Last check-in'];
+    var out = rows.map(function (r) {
+      return {
+        'Device name': r.name, 'Serial': r.serial, 'IMEI': r.imei,
+        'Model code': r.model, 'Product': cellValue(r, 'product', config),
+        'Asset Type': cellValue(r, 'assetType', config),
+        'SOTI class': r.deviceClass, 'SOTI folder': r.folder,
+        'Site code': r.siteCode, 'Site': r.siteName,
+        'Matched by': r.hasSiteFolder ? (r.siteMatch || 'nothing') : 'no site folder',
+        'Location': cellValue(r, 'location', config),
+        'Asset State': cellValue(r, 'state', config),
+        'Last check-in': r.checkIn ? U.fmtDate(r.checkIn) : 'never'
+      };
+    });
+    return global.CSV.stringify(out, headers);
+  }
+
+  global.MobExport = {
+    COLUMNS: COLUMNS,
+    LOOKUPS: LOOKUPS,
+    LOOKUP_BY_ID: LOOKUP_BY_ID,
+    DEFAULT_HEADERS: DEFAULT_HEADERS,
+    defaultConfig: defaultConfig,
+    seedLookups: seedLookups,
+    lookupKeys: lookupKeys,
+    unmapped: unmapped,
+    unimportable: unimportable,
+    importable: importable,
+    cellValue: cellValue,
+    activeColumns: activeColumns,
+    header: header,
+    missingRequired: missingRequired,
+    blankRequired: blankRequired,
+    blankLocation: blankLocation,
+    toImportCsv: toImportCsv,
+    splitByAssetType: splitByAssetType,
+    typeSlug: typeSlug,
+    toManifestCsv: toManifestCsv
+  };
+})(window);
+
+</script>
+<script>
 /* js/sampledata.js */
 /* Sample data for the "Load sample data" button.
 
@@ -9145,15 +10376,21 @@ window.SampleData = {
   var U = global.U, V = global.Views, R = global.Rules, N = global.Norm,
       S = global.Schema, C = global.Charts, T = global.Table, FX = global.FSExport,
       NV = global.NetViews, NM = global.NetMatch, NX = global.NetExport, FT = global.Fortinet,
-      PV = global.PrintViews, PM = global.Printers, PX2 = global.PrintExport;
+      PV = global.PrintViews, PM = global.Printers, PX2 = global.PrintExport,
+      MBV = global.MobViews, MB = global.Mobiles, MBX = global.MobExport;
 
-  /* Two populations, reconciled separately. PC_SOURCES feed the device
-     reconciliation; NET_SOURCES feed the network one. The location lookup is
-     shared, because a site is a site. */
+  /* Four populations, worked out separately. Each list names the exports
+     that feed one of them; the location lookup is shared, because a site is a
+     site whatever is standing in it.
+
+     Mobiles are the odd one out: there is no second system to reconcile
+     against, because none of them is in Freshservice yet. That population is
+     a site-mapping and creation job until the first import lands. */
   var PC_SOURCES = ['freshservice', 'intune', 'arcticwolf', 'locations', 'verification'];
   var NET_SOURCES = ['fortimanager', 'fsnetwork'];
   var PRINT_SOURCES = ['onestop', 'fsprinter'];
-  var SOURCE_IDS = PC_SOURCES.concat(NET_SOURCES, PRINT_SOURCES);
+  var MOB_SOURCES = ['soti'];
+  var SOURCE_IDS = PC_SOURCES.concat(NET_SOURCES, PRINT_SOURCES, MOB_SOURCES);
 
   /* Sources that arrive as several exports and are appended on load.
 
@@ -9251,6 +10488,16 @@ window.SampleData = {
     return out;
   }
 
+  function mergeMobConfig(saved) {
+    var base = MBX.defaultConfig();
+    if (!saved || typeof saved !== 'object') return base;
+    var out = Object.assign({}, base, saved);
+    ['headers', 'include', 'fixed', 'products', 'assetTypes'].forEach(function (k) {
+      out[k] = Object.assign({}, base[k], saved[k] || {});
+    });
+    return out;
+  }
+
   var state = {
     sources: {},                 // id -> { fileName, headers, raw, mapping, records }
     result: null,
@@ -9306,7 +10553,23 @@ window.SampleData = {
     printSelectedIds: [],
     printSiteFilter: null,
     printCustomViews: global.Store.get('printCustomViews', []),
-    printConfig: mergePrintConfig(global.Store.get('printConfig', {}))
+    printConfig: mergePrintConfig(global.Store.get('printConfig', {})),
+
+    /* --- mobiles and tablets, from SOTI --- */
+    mobResult: null,
+    mobCfg: MB.settings(global.Store.get('mobCfg', null) || {}),
+    mobEnabledRules: global.Store.get('mobEnabledRules', {}),
+    mobViewId: 'mb-attention',
+    mobSearch: '',
+    mobColumns: null,
+    mobColumnsById: global.Store.get('mobColumns', {}),
+    mobSelectedIds: [],
+    mobSiteFilter: null,
+    mobCustomViews: global.Store.get('mobCustomViews', []),
+    mobConfig: mergeMobConfig(global.Store.get('mobConfig', {})),
+    // SOTI folder key -> site code, on top of the seeds in Mobiles.
+    mobOverrides: global.Store.get('mobOverrides', {}),
+    mobExportScope: 'view'
   };
 
   var grid = null;
@@ -9328,6 +10591,7 @@ window.SampleData = {
     var hadPc = !!(state.sources.freshservice && state.sources.intune);
     var hadNet = !!(state.sources.fortimanager && state.sources.fsnetwork);
     var hadPrint = !!(state.sources.onestop && state.sources.fsprinter);
+    var hadMob = !!state.sources.soti;
 
     var jobs = list.map(function (file) {
       return global.CSV.readFile(file).then(function (parsed) {
@@ -9434,9 +10698,13 @@ window.SampleData = {
         var hasPc = !!(state.sources.freshservice && state.sources.intune);
         var hasNet = !!(state.sources.fortimanager && state.sources.fsnetwork);
         var hasPrint = !!(state.sources.onestop && state.sources.fsprinter);
+        // Mobiles need only the one export, since there is nothing to
+        // reconcile them against yet.
+        var hasMob = !!state.sources.soti;
         if (hasPc && !hadPc) setTab('dashboard');
         else if (hasNet && !hadNet) setTab('network');
         else if (hasPrint && !hadPrint) setTab('printers');
+        else if (hasMob && !hadMob) setTab('mobiles');
       }
     }).catch(function (err) {
       U.toast(err.message || String(err), 'err', 8000);
@@ -9493,6 +10761,7 @@ window.SampleData = {
     }
     recomputeNet(data);
     recomputePrinters(data);
+    recomputeMobiles(data);
     saveWorkingSet();
   }
 
@@ -9508,6 +10777,7 @@ window.SampleData = {
       out[code] = {
         code: code, name: N.clean(r.location), town: N.clean(r.town),
         postcode: N.clean(r.postcode), region: N.clean(r.region),
+        siteType: N.clean(r.siteType), status: N.clean(r.status),
         lat: r.lat, lon: r.lon, subnet: r.subnet
       };
     });
@@ -9573,6 +10843,11 @@ window.SampleData = {
       printEnabledRules: state.printEnabledRules,
       printConfig: state.printConfig,
       printCustomViews: state.printCustomViews,
+      mobCfg: state.mobCfg,
+      mobEnabledRules: state.mobEnabledRules,
+      mobConfig: state.mobConfig,
+      mobCustomViews: state.mobCustomViews,
+      mobOverrides: state.mobOverrides,
       favourites: state.favourites,
       siteOverrides: state.siteOverrides,
       envLabels: state.envLabels,
@@ -9641,6 +10916,11 @@ window.SampleData = {
       if (payload.printCfg) state.printCfg = PM.settings(payload.printCfg);
       if (payload.printEnabledRules) state.printEnabledRules = payload.printEnabledRules;
       if (payload.printConfig) state.printConfig = mergePrintConfig(payload.printConfig);
+      if (payload.mobCfg) state.mobCfg = MB.settings(payload.mobCfg);
+      if (payload.mobEnabledRules) state.mobEnabledRules = payload.mobEnabledRules;
+      if (payload.mobConfig) state.mobConfig = mergeMobConfig(payload.mobConfig);
+      if (payload.mobCustomViews) state.mobCustomViews = payload.mobCustomViews;
+      if (payload.mobOverrides) state.mobOverrides = payload.mobOverrides;
       if (payload.printCustomViews) state.printCustomViews = payload.printCustomViews;
       if (payload.favourites) state.favourites = payload.favourites;
       if (payload.siteOverrides) state.siteOverrides = payload.siteOverrides;
@@ -9719,6 +10999,18 @@ window.SampleData = {
     state.printResult = PM.apply(
       PM.reconcile(os, fsp, state.printCfg, siteIndex()),
       state.printCfg, state.printEnabledRules);
+  }
+
+  function recomputeMobiles(data) {
+    data = data || {};
+    var soti = data.soti || [];
+    if (!soti.length) {
+      state.mobResult = null;
+      return;
+    }
+    state.mobResult = MB.apply(
+      MB.resolve(soti, state.mobCfg, siteIndex(), state.mobOverrides),
+      state.mobCfg, state.mobEnabledRules);
   }
 
   /* ---------------------------------------------------- network views */
@@ -9818,6 +11110,54 @@ window.SampleData = {
     setPrintView('pr-all');
   }
 
+  /* ---------------------------------------------------- mobile views */
+
+  function mobViews() {
+    return MBV.BUILT_IN.concat(state.mobCustomViews.map(function (v) {
+      return Object.assign({}, v, { isCustom: true });
+    }));
+  }
+
+  function mobViewById(id) {
+    return mobViews().filter(function (v) { return v.id === id; })[0] || MBV.BUILT_IN[0];
+  }
+
+  function mobRowsForView(view, withSearch) {
+    if (!state.mobResult) return [];
+    var rows = MBV.applyView(view, state.mobResult.rows);
+    if (state.mobSiteFilter) {
+      rows = rows.filter(function (r) { return r.locationKey === state.mobSiteFilter.key; });
+    }
+    if (withSearch && state.mobSearch) rows = MBV.searchRows(rows, state.mobSearch);
+    return rows;
+  }
+
+  function mobViewCount(view) {
+    if (!state.mobResult) return 0;
+    try { return MBV.applyView(view, state.mobResult.rows).length; } catch (e) { return 0; }
+  }
+
+  function mobSelectedRows() {
+    if (!state.mobResult || !state.mobSelectedIds.length) return [];
+    var wanted = {};
+    state.mobSelectedIds.forEach(function (id) { wanted[id] = true; });
+    return state.mobResult.rows.filter(function (r) { return wanted[r.id]; });
+  }
+
+  function setMobView(id) {
+    if (id !== state.mobViewId) {
+      state.mobSearch = '';
+      state.mobSelectedIds = [];
+    }
+    state.mobViewId = id;
+    setTab('mobiles');
+  }
+
+  function setMobSite(site) {
+    state.mobSiteFilter = { key: site.key, name: site.name };
+    setMobView('mb-all');
+  }
+
   function selectedRows() {
     if (!state.result || !state.selectedIds.length) return [];
     var wanted = {};
@@ -9863,6 +11203,7 @@ window.SampleData = {
       ['devices', 'Devices'],
       ['network', 'Network'],
       ['printers', 'Printers'],
+      ['mobiles', 'Mobiles'],
       ['map', 'Map'],
       ['export', 'Freshservice import'],
       ['settings', 'Settings']
@@ -9871,8 +11212,8 @@ window.SampleData = {
       // The two populations load independently: network exports alone should
       // open the Network tab without the PC reconciliation being present.
       var needs = { network: !!state.netResult, printers: !!state.printResult,
-                    data: true, settings: true,
-                    map: !!(state.result || state.netResult || state.printResult) };
+                    mobiles: !!state.mobResult, data: true, settings: true,
+                    map: !!(state.result || state.netResult || state.printResult || state.mobResult) };
       var disabled = !(Object.prototype.hasOwnProperty.call(needs, t[0]) ? needs[t[0]] : !!state.result);
       host.appendChild(U.el('button', {
         class: 'tab' + (state.tab === t[0] ? ' active' : ''),
@@ -9884,7 +11225,12 @@ window.SampleData = {
 
     host.appendChild(U.el('div', { class: 'spacer' }));
 
-    if (state.tab === 'printers' && state.printResult) {
+    if (state.tab === 'mobiles' && state.mobResult) {
+      host.appendChild(U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } },
+        U.num(state.mobResult.rows.length) + ' mobiles \u00b7 ' +
+        U.num(state.mobResult.counts.atSite) + ' at a site \u00b7 ' +
+        U.num(state.mobResult.rows.filter(function (r) { return r.issueCount; }).length) + ' flagged'));
+    } else if (state.tab === 'printers' && state.printResult) {
       host.appendChild(U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } },
         U.num(state.printResult.rows.length) + ' printers \u00b7 ' +
         U.num(state.printResult.rows.filter(function (r) { return r.issueCount; }).length) + ' flagged'));
@@ -10061,6 +11407,7 @@ window.SampleData = {
     if (state.result) contexts.push(pcCtx());
     if (state.netResult) contexts.push(netCtx());
     if (state.printResult) contexts.push(printCtx());
+    if (state.mobResult) contexts.push(mobCtx());
     if (!contexts.length) return;
 
     /* Favourites first: the whole point is that the views someone uses every
@@ -10109,6 +11456,10 @@ window.SampleData = {
       filters.push(['Network site: ' + U.truncate(state.netSiteFilter.name, 14),
                     function () { state.netSiteFilter = null; render(); }]);
     }
+    if (state.mobSiteFilter) {
+      filters.push(['Mobile site: ' + U.truncate(state.mobSiteFilter.name, 15),
+                    function () { state.mobSiteFilter = null; render(); }]);
+    }
     if (state.printSiteFilter) {
       filters.push(['Printer site: ' + U.truncate(state.printSiteFilter.name, 14),
                     function () { state.printSiteFilter = null; render(); }]);
@@ -10155,6 +11506,7 @@ window.SampleData = {
         devices: renderDevices,
         network: renderNetwork,
         printers: renderPrinters,
+        mobiles: renderMobiles,
         map: renderMap,
         export: renderExport,
         settings: renderSettings
@@ -10163,7 +11515,8 @@ window.SampleData = {
         ? true
         : state.tab === 'network' ? !!state.netResult
         : state.tab === 'printers' ? !!state.printResult
-        : state.tab === 'map' ? !!(state.result || state.netResult || state.printResult)
+        : state.tab === 'mobiles' ? !!state.mobResult
+        : state.tab === 'map' ? !!(state.result || state.netResult || state.printResult || state.mobResult)
         : !!state.result;
       (ready ? page : renderData)(main);
     } finally {
@@ -10922,7 +12275,7 @@ window.SampleData = {
   /*  tab: duplicates within each source file                             */
   /* ==================================================================== */
 
-  var DUPE_SOURCES = ['freshservice', 'intune', 'arcticwolf'];
+  var DUPE_SOURCES = ['freshservice', 'intune', 'arcticwolf', 'soti'];
 
   function dupeGroupsFor(sourceId) {
     var src = state.sources[sourceId];
@@ -11348,10 +12701,19 @@ window.SampleData = {
   }
 
   /* Redraw whichever device list is currently on screen. */
+  /* Redraw whichever list is on screen. Naming the tabs one by one rather
+     than falling through to the PC grid: a note added on Printers or Mobiles
+     used to redraw the device list instead of the one being looked at. */
   function refreshLists() {
     if (state.tab === 'network') {
       if (netGrid) netGrid.render();
       renderNetNoteBar();
+    } else if (state.tab === 'printers') {
+      if (printGrid) printGrid.render();
+      renderPrintNoteBar();
+    } else if (state.tab === 'mobiles') {
+      if (mobGrid) mobGrid.render();
+      renderMobNoteBar();
     } else {
       if (grid) grid.render();
       renderNoteBar();
@@ -12421,6 +13783,569 @@ window.SampleData = {
 
   function P_stripCompany(v) { return PM.stripCompany(v); }
 
+
+  /* ==================================================================== */
+  /*  tab: mobiles                                                        */
+  /* ==================================================================== */
+
+  var mobGrid = null;
+  var renderMobNoteBar = function () {};
+
+  function renderMobiles(main) {
+    var view = mobViewById(state.mobViewId);
+    var rows = mobRowsForView(view);
+    var counts = state.mobResult.counts;
+
+    main.appendChild(U.el('div', { class: 'page-head' }, [
+      U.el('h1', {}, view.name),
+      U.el('div', { class: 'sub' }, view.description || ''),
+      state.mobSiteFilter ? U.el('div', { class: 'row tight', style: { marginTop: '6px' } }, [
+        U.el('span', { class: 'pill' }, 'Site: ' + state.mobSiteFilter.name),
+        U.el('button', {
+          class: 'btn sm ghost',
+          onclick: function () { state.mobSiteFilter = null; render(); }
+        }, 'Clear filter')
+      ]) : null
+    ]));
+
+    function inView(id) { return mobViewCount(mobViewById(id)); }
+    main.appendChild(U.el('div', { class: 'tiles', style: { marginBottom: '14px' } }, [
+      C.tile('At a site', counts.atSite,
+        'across ' + U.num(counts.sites) + ' sites', function () { setMobView('mb-at-site'); }),
+      C.tile('Home and office', counts.homeWorker,
+        'filed by region, not by site', function () { setMobView('mb-home'); }),
+      C.tile('Site not recognised', counts.unresolved,
+        counts.unresolved ? 'map the folder to a site' : 'every folder resolved',
+        function () { setMobView('mb-site-unresolved'); }),
+      C.tile('Cannot be imported', inView('mb-import-blocked'),
+        'no serial, model or product', function () { setMobView('mb-import-blocked'); }),
+      C.tile('Silent for months', inView('mb-silent'),
+        'lost, broken or in a drawer', function () { setMobView('mb-silent'); }),
+      C.tile('Tablets', counts.tablets,
+        'their own asset type and file', function () { setMobView('mb-tablets'); })
+    ]));
+
+    var controls = U.el('div', { class: 'row no-print', style: { marginBottom: '12px' } });
+    controls.appendChild(U.el('input', {
+      type: 'search', placeholder: 'Search these mobiles…', style: { minWidth: '220px' },
+      value: state.mobSearch,
+      oninput: U.debounce(function (e) {
+        state.mobSearch = e.target.value;
+        mobGrid.setSearch(state.mobSearch);
+        mobGrid.render();
+        renderMobNoteBar();
+      }, 180)
+    }));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      onclick: function () { openColumnPicker(mobCtx(), view, function () { return mobGrid; }); }
+    }, 'Columns'));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      title: view.isCustom ? 'Change this view’s conditions' : 'See how this view is defined, and copy it',
+      onclick: function () { openViewBuilder(mobCtx(), view, view.isCustom ? 'edit' : 'inspect'); }
+    }, view.isCustom ? 'Edit view' : 'View settings'));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      title: 'Map a SOTI folder to a site code, for folders whose name matches no site',
+      onclick: function () { openMobOverrides(); }
+    }, 'Site folders'));
+    controls.appendChild(U.el('label', { class: 'check' }, [
+      U.el('input', {
+        type: 'checkbox', checked: false,
+        onchange: function (e) { mobGrid.setGroup(e.target.checked ? 'siteName' : null); mobGrid.render(); }
+      }),
+      'Group by site'
+    ]));
+    controls.appendChild(U.el('div', { class: 'spacer' }));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      onclick: function () {
+        var visible = mobGrid.visibleRows();
+        U.download('mobiles-' + view.id + '-' + U.todayStamp() + '.csv',
+          popViewCsv(MBV, MB, visible, mobGrid.state.columns));
+        U.toast('Exported ' + U.num(visible.length) + ' rows.', 'ok');
+      }
+    }, 'Export this view'));
+    controls.appendChild(U.el('button', {
+      class: 'btn sm primary',
+      title: 'Build the Freshservice creation files from the mobiles you are looking at',
+      onclick: function () { openMobImport(); }
+    }, 'Build import file'));
+    main.appendChild(controls);
+
+    var noteBar = U.el('div', { class: 'row no-print', style: { marginBottom: '10px' } });
+    main.appendChild(noteBar);
+    var gridHost = U.el('div');
+    main.appendChild(gridHost);
+
+    renderMobNoteBar = function () {
+      U.clear(noteBar);
+      var chosen = mobGrid ? mobGrid.selected() : [];
+      var visible = mobGrid ? mobGrid.visibleRows() : [];
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm' + (chosen.length ? ' primary' : ''),
+        disabled: !chosen.length,
+        onclick: function () { openNotes(chosen); }
+      }, chosen.length ? 'Add note to ' + U.num(chosen.length) + ' selected' : 'Add note to selected'));
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm',
+        onclick: function () {
+          if (!visible.length) return;
+          if (visible.length > 50 &&
+              !confirm('Add the same note to all ' + visible.length + ' mobiles in this view?')) return;
+          openNotes(visible);
+        }
+      }, 'Add note to all ' + U.num(visible.length) + ' in view'));
+      noteBar.appendChild(U.el('button', {
+        class: 'btn sm ghost',
+        onclick: function () {
+          visible.forEach(function (r) { mobGrid.state.selection.add(r.id); });
+          mobGrid.render(); renderMobNoteBar();
+        }
+      }, 'Select all in view'));
+      noteBar.appendChild(U.el('div', { class: 'spacer' }));
+      noteBar.appendChild(U.el('span', { class: 'hint' },
+        U.num(visible.length) + ' of ' + U.num(rows.length) + ' shown'));
+    };
+
+    mobGrid = T.create(gridHost, {
+      views: MBV,
+      rules: MB,
+      selectable: true,
+      pageSize: 150,
+      onRowClick: function (r) {
+        T.openDrawer(r, null, {
+          views: MBV,
+          rules: MB,
+          fieldRows: mobFieldRows,
+          /* Not two systems being compared: the left column is what SOTI
+             reports, the right is what the import would write. */
+          sideLabels: ['SOTI', 'Into Freshservice'],
+          cleanText: 'Nothing outstanding on this device.',
+          onAddNote: function (row) { openNotes([row]); }
+        });
+      },
+      onChipClick: function (code) {
+        var rule = MB.RULE_BY_CODE[code];
+        if (rule) U.toast(rule.label + (rule.hint ? ' — ' + rule.hint : ''), 'ok', 9000);
+      },
+      onNotesClick: function (r) { openNotes([r]); },
+      onSelectionChange: function (sel) {
+        state.mobSelectedIds = Array.from(sel);
+        renderMobNoteBar();
+      },
+      emptyText: 'Nothing in this view.'
+    });
+    mobGrid.setRows(rows);
+    var cols = (state.mobColumnsById[view.id] || view.columns || MBV.BASE_COLS).slice();
+    if (cols.indexOf('notes') < 0) cols.unshift('notes');
+    mobGrid.setColumns(cols);
+    state.mobColumns = cols;
+    mobGrid.setSearch(state.mobSearch);
+    state.mobSelectedIds.forEach(function (id) { mobGrid.state.selection.add(id); });
+    if (view.sort) mobGrid.setSort(view.sort);
+    mobGrid.render();
+    renderMobNoteBar();
+  }
+
+  /* The drawer's two columns: what SOTI says on the left, what the import
+     would write on the right. */
+  function mobFieldRows(row) {
+    var cfg = state.mobConfig;
+    function out(key) { return MBX.cellValue(row, key, cfg); }
+    return [
+      ['Device name', row.name, out('name')],
+      ['Serial number', row.serial, out('serial')],
+      ['IMEI', row.imei, out('imei')],
+      ['Model', row.model, out('product')],
+      ['Type', row.formFactor, out('assetType')],
+      ['Make', row.manufacturer, out('vendor')],
+      ['Android', row.osMajor === null ? '' : String(row.osMajor), out('os')],
+      ['Encrypted', row.encrypted === null ? '' : (row.encrypted ? 'yes' : 'no'), '—'],
+      ['SOTI path', row.path, '—'],
+      ['Site folder', row.folder || '(filed by region only)', '—'],
+      ['Site resolved', row.siteCode ? row.siteCode + ' ' + row.siteName : 'none', out('location')],
+      ['Matched by', row.hasSiteFolder ? (row.siteMatch || 'nothing') : 'no site folder', '—'],
+      ['Region folder', row.regionFolder, row.site ? N.clean(row.site.region) : '—'],
+      ['Asset state', row.isTest ? 'test or supplier stock' : 'issued', out('state')],
+      ['Last check-in', row.checkIn ? U.fmtDate(row.checkIn) : 'never', '—'],
+      ['Days silent', row.daysSince === null ? 'never reported' : U.num(row.daysSince), '—'],
+      ['Connected now', row.online ? 'yes' : 'no', '—'],
+      ['SOTI agent', row.agentVersion, '—'],
+      ['IP address', row.ip, out('ip') || '(not written)'],
+      ['MAC address', row.mac, out('mac') || '(not written)'],
+      ['Description', '—', out('description')]
+    ];
+  }
+
+  /* ------------------------------------------- SOTI folder -> site code */
+
+  /* Some SOTI folders will never match a site name, and no amount of clever
+     matching would find them: Whitley Park is Garmsway, Cannon Court is
+     Ripon, Wolsey Camascope Pilot is at Wolsey House. Those are answers only
+     somebody who knows the estate can give, so they are typed here and kept.
+     The seeded ones are shown too, so the list is the whole story rather than
+     just the exceptions to the exceptions. */
+  function openMobOverrides() {
+    if (!state.mobResult) return;
+    var body = U.el('div', { class: 'body' });
+    var sites = siteIndex();
+    var codes = Object.keys(sites).sort();
+
+    body.appendChild(U.el('p', { class: 'hint' },
+      'Every site folder SOTI uses, and the site it resolved to. Folders matched on the name need nothing ' +
+      'from you; the ones that could not be matched need a site code. Leave a box empty to go back to ' +
+      'matching on the name.'));
+
+    // Above the list, not below it: with a hundred and seventy folders the
+    // count is off the bottom of the dialog by the time you have scrolled to it.
+    var summary = U.el('div', { style: { marginBottom: '10px' } });
+    body.appendChild(summary);
+    var list = U.el('div');
+    body.appendChild(list);
+
+    function draw() {
+      U.clear(list);
+      var folders = MB.folders(state.mobResult.rows);
+      var unresolved = folders.filter(function (f) { return !f.siteCode; });
+
+      U.clear(summary);
+      summary.appendChild(U.el('div', { class: 'hint' },
+        U.num(folders.length) + ' site folders · ' +
+        U.num(folders.length - unresolved.length) + ' resolved · ' +
+        U.num(unresolved.length) + ' still to map'));
+
+      var kv = U.el('div', { class: 'kv two' });
+      kv.appendChild(U.el('div', { class: 'hdr' }, 'SOTI folder'));
+      kv.appendChild(U.el('div', { class: 'hdr' }, 'Site code'));
+      // Unresolved first: they are the work.
+      folders.slice().sort(function (a, b) {
+        if (!a.siteCode !== !b.siteCode) return a.siteCode ? 1 : -1;
+        return a.folder < b.folder ? -1 : 1;
+      }).forEach(function (f) {
+        kv.appendChild(U.el('div', { class: 'k' }, [
+          U.el('div', {}, f.folder),
+          U.el('div', { class: 'hint' },
+            U.num(f.count) + ' device' + (f.count === 1 ? '' : 's') +
+            (f.regionFolder ? ' · ' + f.regionFolder : '') +
+            (f.siteCode ? ' · matched by ' + f.match : ' · no match'))
+        ]));
+        var input = U.el('input', {
+          type: 'text', value: state.mobOverrides[f.key] || '',
+          placeholder: f.siteCode ? f.siteCode + ' ' + f.siteName : 'site code…',
+          list: 'mob-site-codes',
+          style: f.siteCode ? null : { borderColor: 'var(--critical)' },
+          onchange: function (e) {
+            var v = normCode(e.target.value.trim());
+            if (v) state.mobOverrides[f.key] = v;
+            else delete state.mobOverrides[f.key];
+            global.Store.set('mobOverrides', state.mobOverrides);
+            recompute();
+            draw();
+          }
+        });
+        kv.appendChild(U.el('div', {}, [
+          input,
+          f.siteCode ? U.el('div', { class: 'hint' }, f.siteCode + ' ' + f.siteName) : null
+        ]));
+      });
+      list.appendChild(kv);
+    }
+
+    // A datalist so the site codes can be picked rather than remembered.
+    var dl = U.el('datalist', { id: 'mob-site-codes' }, codes.map(function (c) {
+      return U.el('option', { value: c }, c + ' — ' + sites[c].name);
+    }));
+    body.appendChild(dl);
+
+    draw();
+
+    modal('SOTI site folders', body, [
+      { label: 'Done', primary: true },
+      { label: 'Reset my overrides', ghost: true, keepOpen: true, action: function () {
+        if (!Object.keys(state.mobOverrides).length) {
+          U.toast('You have not added any.', 'ok');
+          return;
+        }
+        if (!confirm('Remove the folder mappings you have typed? The ones built into the tool stay.')) return;
+        state.mobOverrides = {};
+        global.Store.set('mobOverrides', state.mobOverrides);
+        recompute();
+        draw();
+        U.toast('Your overrides cleared. The built-in ones are still applied.', 'ok');
+      } }
+    ]);
+  }
+
+  /* -------------------------------------------------- mobile FS import */
+
+  function openMobImport() {
+    var view = mobViewById(state.mobViewId);
+    var scope = state.mobExportScope;
+    var pool = scope === 'selection' ? mobSelectedRows() : mobRowsForView(view, true);
+    var blocked = MBX.unimportable(pool);
+    var rows = MBX.importable(pool);
+
+    var body = U.el('div', { class: 'body' });
+    var cfg = state.mobConfig;
+    var dlg = null;
+
+    var head = U.el('div', { style: { marginBottom: '12px' } });
+    body.appendChild(head);
+
+    var scopeRow = U.el('div', { class: 'row', style: { marginBottom: '10px' } });
+    [['view', 'Everything in "' + view.name + '"' + (state.mobSearch ? ' matching your search' : '')],
+     ['selection', U.num(state.mobSelectedIds.length) + ' selected']].forEach(function (o) {
+      scopeRow.appendChild(U.el('label', { class: 'check' }, [
+        U.el('input', {
+          type: 'radio', name: 'mobscope', checked: scope === o[0],
+          disabled: o[0] === 'selection' && !state.mobSelectedIds.length,
+          onchange: function () { state.mobExportScope = o[0]; if (dlg) dlg.close(); openMobImport(); }
+        }),
+        o[1]
+      ]));
+    });
+    body.appendChild(scopeRow);
+
+    var lookupHost = U.el('div');
+    body.appendChild(lookupHost);
+
+    function drawLookups() {
+      U.clear(lookupHost);
+      MBX.LOOKUPS.forEach(function (l) {
+        var keys = MBX.lookupKeys(rows, cfg, l.id);
+        if (!keys.length) return;
+        var blank = keys.filter(function (k) { return !k.value; }).length;
+        var card = U.el('details', { class: 'card', open: blank > 0, style: { marginBottom: '10px' } });
+        card.appendChild(U.el('summary', {}, [
+          U.el('strong', {}, l.label),
+          U.el('span', { class: 'hint', style: { marginLeft: '8px' } },
+            blank ? blank + ' of ' + keys.length + ' still to answer'
+                  : 'all ' + keys.length + ' mapped')
+        ]));
+        var kv = U.el('div', { class: 'kv two', style: { marginTop: '8px' } });
+        kv.appendChild(U.el('div', { class: 'hdr' }, l.keyLabel));
+        kv.appendChild(U.el('div', { class: 'hdr' }, l.valueLabel));
+        keys.forEach(function (k) {
+          kv.appendChild(U.el('div', { class: 'k' }, [
+            U.el('div', {}, k.key + (k.hint ? '  —  ' + k.hint : '')),
+            U.el('div', { class: 'hint' }, U.num(k.count) + ' device' + (k.count === 1 ? '' : 's') +
+              ' · e.g. ' + k.examples.slice(0, 2).join(', '))
+          ]));
+          kv.appendChild(U.el('input', {
+            type: 'text', value: k.value, placeholder: 'Freshservice value…',
+            style: k.value ? null : { borderColor: 'var(--critical)' },
+            oninput: function (e) {
+              cfg[l.id][k.key] = e.target.value;
+              drawStatus();
+            },
+            onchange: function () { persistMobConfig(); }
+          }));
+        });
+        card.appendChild(kv);
+        lookupHost.appendChild(card);
+      });
+    }
+
+    var colCard = U.el('details', { class: 'card', style: { marginBottom: '10px' } });
+    colCard.appendChild(U.el('summary', {}, [
+      U.el('strong', {}, 'Columns and fixed values'),
+      U.el('span', { class: 'hint', style: { marginLeft: '8px' } }, 'headers must match your instance')
+    ]));
+    var colKv = U.el('div', { class: 'kv two', style: { marginTop: '8px' } });
+    colKv.appendChild(U.el('div', { class: 'hdr' }, 'Include'));
+    colKv.appendChild(U.el('div', { class: 'hdr' }, 'Header in Freshservice'));
+    MBX.COLUMNS.forEach(function (col) {
+      colKv.appendChild(U.el('div', { class: 'k' }, [
+        U.el('label', { class: 'check' }, [
+          U.el('input', {
+            type: 'checkbox', checked: !!cfg.include[col.key], disabled: col.required,
+            title: col.required ? 'Freshservice rejects an asset import without this column' : null,
+            onchange: function (e) {
+              cfg.include[col.key] = e.target.checked;
+              persistMobConfig();
+              drawLookups(); drawStatus();
+            }
+          }),
+          col.label + (col.required ? ' (required)' : '')
+        ]),
+        col.fixed ? U.el('div', { class: 'row tight', style: { marginTop: '4px' } }, [
+          U.el('span', { class: 'hint' }, 'same on every row:'),
+          U.el('input', {
+            type: 'text', value: cfg.fixed[col.key] || '', style: { maxWidth: '140px' },
+            oninput: function (e) { cfg.fixed[col.key] = e.target.value; drawStatus(); },
+            onchange: function () { persistMobConfig(); }
+          })
+        ]) : null,
+        col.help ? U.el('div', { class: 'hint', style: { marginTop: '2px' } }, col.help) : null
+      ]));
+      colKv.appendChild(U.el('input', {
+        type: 'text', value: MBX.header(col, cfg),
+        oninput: function (e) { cfg.headers[col.key] = e.target.value; },
+        onchange: function () { persistMobConfig(); drawStatus(); }
+      }));
+    });
+    colCard.appendChild(colKv);
+    colCard.appendChild(U.el('label', { class: 'field', style: { marginTop: '8px', maxWidth: '260px' } }, [
+      U.el('span', {}, 'How to spell Samsung'),
+      U.el('input', {
+        type: 'text', value: cfg.vendorText || '',
+        oninput: function (e) { cfg.vendorText = e.target.value; drawStatus(); },
+        onchange: function () { persistMobConfig(); }
+      })
+    ]));
+    colCard.appendChild(U.el('label', { class: 'check', style: { marginTop: '8px' } }, [
+      U.el('input', {
+        type: 'checkbox', checked: !!cfg.describeSoti,
+        onchange: function (e) {
+          cfg.describeSoti = e.target.checked;
+          persistMobConfig();
+          drawStatus();
+        }
+      }),
+      'Record the SOTI folder, site code and last check-in in Description'
+    ]));
+    body.appendChild(colCard);
+
+    var status = U.el('div');
+    body.appendChild(status);
+    var preview = U.el('div', { style: { marginTop: '10px' } });
+    body.appendChild(preview);
+
+    var canExport = false;
+
+    function drawStatus() {
+      U.clear(status);
+      U.clear(preview);
+      var un = MBX.unmapped(rows, cfg);
+      var blanks = MBX.blankRequired(rows, cfg);
+      var missingCols = MBX.missingRequired(cfg);
+      var noLoc = MBX.blankLocation(rows, cfg);
+      canExport = rows.length > 0 && !un.length && !blanks.length && !missingCols.length;
+
+      U.clear(head);
+      head.appendChild(U.el('div', { class: 'row tight' }, [
+        U.el('strong', {}, U.num(rows.length) + ' mobile' + (rows.length === 1 ? '' : 's')),
+        U.el('span', { class: 'hint' }, 'will be created in Freshservice')
+      ]));
+
+      if (!pool.length) {
+        status.appendChild(note('err', 'Nothing to export', 'This view has no devices in it.'));
+      }
+      if (blocked.length) {
+        status.appendChild(note('warn',
+          U.num(blocked.length) + ' row' + (blocked.length === 1 ? '' : 's') + ' left out',
+          'No serial or no model reported, so there is no Product to write and Freshservice would reject the ' +
+          'row: ' + blocked.slice(0, 6).map(function (r) { return r.name; }).join(', ') +
+          (blocked.length > 6 ? ' and ' + (blocked.length - 6) + ' more' : '') +
+          '. They are listed under "Cannot be imported".'));
+      }
+      if (missingCols.length) {
+        status.appendChild(note('err', 'A required column is switched off',
+          missingCols.join(', ') + ' — Freshservice rejects an asset import without it.'));
+      }
+      if (un.length) {
+        status.appendChild(note('err',
+          U.num(un.length) + ' value' + (un.length === 1 ? '' : 's') + ' still to map',
+          un.slice(0, 8).map(function (u) {
+            return u.key + (u.hint ? ' (' + u.hint + ')' : '') + ' → ' + u.lookupLabel;
+          }).join('; ') + (un.length > 8 ? '; and ' + (un.length - 8) + ' more' : '')));
+      }
+      if (blanks.length) {
+        status.appendChild(note('err', 'A required column would be blank',
+          blanks.map(function (b) { return b.label + ' on ' + U.num(b.rows) + ' rows'; }).join('; ')));
+      }
+      if (noLoc) {
+        status.appendChild(note('warn', U.num(noLoc) + ' rows with no Location',
+          'Test and supplier stock is imported without a location rather than being given one it does not ' +
+          'have. Everything else lands at a site or at your home-worker label.'));
+      }
+      if (canExport) {
+        var parts = MBX.splitByAssetType(rows, cfg);
+        status.appendChild(note('ok',
+          'Ready — ' + parts.length + ' file' + (parts.length === 1 ? '' : 's'),
+          'Freshservice imports one asset type at a time, so this is written as ' +
+          (parts.length === 1 ? 'a single file' : 'one file per type') + ': ' +
+          parts.map(function (g) { return g.type + ' (' + U.num(g.rows.length) + ')'; }).join(', ') +
+          '. Upload the file as it is — opening it in Excel first strips the leading zero off every ' +
+          'device name.'));
+
+        if (parts.length > 1) {
+          var each = U.el('div', { class: 'row tight', style: { margin: '0 0 10px' } });
+          each.appendChild(U.el('span', { class: 'hint' }, 'Or one at a time:'));
+          parts.forEach(function (g) {
+            each.appendChild(U.el('button', {
+              class: 'btn sm',
+              onclick: function () { downloadPart(g); }
+            }, g.type + ' (' + U.num(g.rows.length) + ')'));
+          });
+          status.appendChild(each);
+        }
+      }
+
+      if (rows.length) {
+        var firstPart = MBX.splitByAssetType(rows, cfg)[0];
+        var csv = MBX.toImportCsv(firstPart.rows.slice(0, 4), cfg);
+        preview.appendChild(U.el('div', { class: 'side-head' },
+          'First rows of the ' + firstPart.type + ' file, as they will be written'));
+        preview.appendChild(U.el('pre', {
+          style: {
+            overflowX: 'auto', fontSize: '11px', background: 'var(--surface-2)',
+            padding: '8px', border: '1px solid var(--grid)', maxHeight: '150px'
+          }
+        }, csv));
+      }
+    }
+
+    function downloadPart(g, quiet) {
+      U.download('freshservice-mobile-import-' + MBX.typeSlug(g.type) + '-' + U.todayStamp() + '.csv',
+        MBX.toImportCsv(g.rows, cfg));
+      if (!quiet) {
+        U.toast(U.num(g.rows.length) + ' ' + g.type + ' row' + (g.rows.length === 1 ? '' : 's') + ' written.', 'ok');
+      }
+    }
+
+    function note(kind, title, text) {
+      var colour = kind === 'err' ? 'var(--critical)' : kind === 'warn' ? 'var(--warning)' : 'var(--good)';
+      return U.el('div', {
+        class: 'card',
+        style: { borderLeft: '3px solid ' + colour, marginBottom: '8px', padding: '8px 10px' }
+      }, [
+        U.el('strong', {}, title),
+        U.el('div', { class: 'hint' }, text)
+      ]);
+    }
+
+    drawLookups();
+    drawStatus();
+
+    dlg = modal('Build Freshservice import — mobiles and tablets', body, [
+      { label: 'Cancel', ghost: true },
+      { label: 'Download manifest', ghost: true, action: function () {
+        if (!rows.length) { U.toast('Nothing to export.', 'err'); return; }
+        U.download('mobile-import-manifest-' + U.todayStamp() + '.csv', MBX.toManifestCsv(rows, cfg));
+      } },
+      { label: 'Download import files', primary: true, keepOpen: true, action: function () {
+        if (!canExport) {
+          U.toast('Fill in the highlighted mappings first — an import missing Product or Asset Type ' +
+                  'is rejected by Freshservice.', 'err', 9000);
+          return;
+        }
+        persistMobConfig();
+        var parts = MBX.splitByAssetType(rows, cfg);
+        parts.forEach(function (g, i) { setTimeout(function () { downloadPart(g, true); }, i * 400); });
+        U.toast(parts.length + ' import file' + (parts.length === 1 ? '' : 's') + ' written for ' +
+          U.num(rows.length) + ' devices — one per asset type.', 'ok', 8000);
+      } }
+    ]);
+  }
+
+  function persistMobConfig() {
+    global.Store.set('mobConfig', state.mobConfig);
+    saveWorkingSet();
+  }
+
   /* One view-to-CSV for any population: the column registry and the rule
      registry come in, so the issue chips export as their labels. */
   function popViewCsv(VE, RE, rows, columns) {
@@ -12445,16 +14370,20 @@ window.SampleData = {
 
     // Only offer a population there is data for, and never leave the selector
     // pointing at an empty one.
-    var have = { pc: !!state.result, net: !!state.netResult, print: !!state.printResult };
-    have.both = [have.pc, have.net, have.print].filter(Boolean).length > 1;
+    var have = { pc: !!state.result, net: !!state.netResult,
+                 print: !!state.printResult, mob: !!state.mobResult };
+    have.both = [have.pc, have.net, have.print, have.mob].filter(Boolean).length > 1;
     var population = state.mapPopulation;
-    if (!have[population]) population = have.pc ? 'pc' : have.net ? 'net' : 'print';
+    if (!have[population]) {
+      population = have.pc ? 'pc' : have.net ? 'net' : have.print ? 'print' : 'mob';
+    }
     state.mapPopulation = population;
 
     var agg = M.aggregate({
       pc: state.result ? state.result.rows : [],
       net: state.netResult ? state.netResult.rows : [],
-      print: state.printResult ? state.printResult.rows : []
+      print: state.printResult ? state.printResult.rows : [],
+      mob: state.mobResult ? state.mobResult.rows : []
     }, { includeOther: state.includeOtherOnMap, population: population });
 
     var modes = M.modesFor(population);
@@ -12500,7 +14429,7 @@ window.SampleData = {
           return U.el('option', { value: k, selected: state.mapMode === k }, M.COLOUR_MODES[k].label);
         }))
       ]),
-      (population === 'net' || population === 'print') ? null : U.el('label', { class: 'check' }, [
+      (population === 'pc' || population === 'both') === false ? null : U.el('label', { class: 'check' }, [
         U.el('input', {
           type: 'checkbox', checked: state.includeOtherOnMap,
           onchange: function (e) { state.includeOtherOnMap = e.target.checked; render(); }
@@ -12557,9 +14486,11 @@ window.SampleData = {
       C.tile('Locations not in the lookup', agg.unmatched.length,
         agg.unmatched.length ? 'add them to the lookup file' : 'all recognised'),
       C.tile(population === 'net' ? 'Network kit with no site'
-        : population === 'print' ? 'Printers with no site' : 'Devices with no location',
+        : population === 'print' ? 'Printers with no site'
+        : population === 'mob' ? 'Mobiles with no site' : 'Devices with no location',
         agg.unlocated.length,
-        population === 'net' && agg.unlocated.length ? 'add a site override' : ''),
+        population === 'net' && agg.unlocated.length ? 'add a site override'
+          : population === 'mob' && agg.unlocated.length ? 'home workers and test stock' : ''),
       (population === 'net' || population === 'both') && state.netResult
         ? C.tile('Network kit not in Freshservice',
             agg.mappable.reduce(function (n, s) { return n + s.netMissing; }, 0),
@@ -12569,6 +14500,11 @@ window.SampleData = {
         ? C.tile('Printers not reporting',
             agg.mappable.reduce(function (n, s) { return n + s.printSilent; }, 0),
             'across the sites on the map', function () { setPrintView('pr-silent'); })
+        : null,
+      (population === 'mob' || population === 'both') && state.mobResult
+        ? C.tile('Mobiles not checking in',
+            agg.mappable.reduce(function (n, s) { return n + s.mobSilent; }, 0),
+            'across the sites on the map', function () { setMobView('mb-silent'); })
         : null
     ]);
     main.appendChild(stats);
@@ -12616,6 +14552,7 @@ window.SampleData = {
       onSelect: function (site, which) {
         if (which === 'net') { setNetSite(site); return; }
         if (which === 'print') { setPrintSite(site); return; }
+        if (which === 'mob') { setMobSite(site); return; }
         state.siteFilter = { key: site.key, name: site.name };
         setView('all');
       }
@@ -13364,6 +15301,84 @@ window.SampleData = {
       main.appendChild(prCard);
     }
 
+    if (state.mobResult) {
+      var mbCard = U.el('div', { class: 'card' });
+      mbCard.appendChild(U.el('h2', {}, 'Mobile checks'));
+      mbCard.appendChild(U.el('p', { class: 'hint' },
+        'These apply to the SOTI export. The two words below are written straight into the Freshservice ' +
+        'import, so they have to be values your instance already accepts.'));
+
+      [['staleDays', 'Days without a SOTI check-in before a handset looks neglected', 1, 365],
+       ['lostDays', 'Days without a check-in before it looks lost', 1, 730],
+       ['minOs', 'Lowest Android version still receiving security updates', 5, 30]]
+        .forEach(function (f) {
+          mbCard.appendChild(U.el('label', { class: 'field' }, [
+            U.el('span', {}, f[1]),
+            U.el('input', {
+              type: 'number', min: String(f[2]), max: String(f[3]), value: String(state.mobCfg[f[0]]),
+              onchange: function (e) {
+                var v = parseInt(e.target.value, 10);
+                if (isNaN(v)) return;
+                state.mobCfg[f[0]] = Math.min(f[3], Math.max(f[2], v));
+                global.Store.set('mobCfg', state.mobCfg);
+                recompute(); render();
+              }
+            })
+          ]));
+        });
+
+      [['homeLocation', 'Location for a device SOTI files by region rather than by site',
+        'SOTI does not say who holds an office-worker device, so it cannot say which building it is in.'],
+       ['inUseState', 'Asset state for a device that is issued', ''],
+       ['testState', 'Asset state for test and supplier stock', '']]
+        .forEach(function (f) {
+          mbCard.appendChild(U.el('label', { class: 'field' }, [
+            U.el('span', {}, f[1]),
+            U.el('input', {
+              type: 'text', value: state.mobCfg[f[0]] || '',
+              onchange: function (e) {
+                state.mobCfg[f[0]] = e.target.value.trim();
+                global.Store.set('mobCfg', state.mobCfg);
+                recompute(); render();
+              }
+            }),
+            f[2] ? U.el('span', { class: 'hint' }, f[2]) : null
+          ]));
+        });
+
+      mbCard.appendChild(U.el('div', { class: 'row tight', style: { marginTop: '10px' } }, [
+        U.el('button', {
+          class: 'btn sm',
+          title: 'Map a SOTI folder whose name matches no site to a site code',
+          onclick: function () { openMobOverrides(); }
+        }, 'SOTI site folders'),
+        U.el('span', { class: 'hint' },
+          U.num(Object.keys(state.mobOverrides).length) + ' of your own, on top of ' +
+          U.num(Object.keys(MB.SEED_OVERRIDES).length) + ' built in')
+      ]));
+
+      mbCard.appendChild(U.el('div', { class: 'side-head', style: { marginTop: '14px' } }, 'Checks'));
+      MB.RULES.forEach(function (rule) {
+        mbCard.appendChild(U.el('div', { style: { padding: '7px 0', borderBottom: '1px solid var(--grid)' } }, [
+          U.el('label', { class: 'check' }, [
+            U.el('input', {
+              type: 'checkbox', checked: MB.isEnabled(rule, state.mobEnabledRules),
+              onchange: function (e) {
+                state.mobEnabledRules[rule.code] = e.target.checked;
+                global.Store.set('mobEnabledRules', state.mobEnabledRules);
+                recompute(); render();
+              }
+            }),
+            U.el('span', { class: 'badge ' + rule.severity }, [U.el('span', { class: 'sev sev-' + rule.severity }), rule.label]),
+            U.el('span', { class: 'hint' }, U.num(state.mobResult.tally[rule.code] || 0) + ' mobiles' +
+              (rule.defaultOff ? ' \u00b7 off by default' : ''))
+          ]),
+          rule.hint ? U.el('div', { class: 'hint', style: { marginLeft: '24px' } }, rule.hint) : null
+        ]));
+      });
+      main.appendChild(mbCard);
+    }
+
     var notesCard = U.el('div', { class: 'card' });
     var ns = global.Notes.stats();
     notesCard.appendChild(U.el('h2', {}, 'Device notes'));
@@ -13591,8 +15606,38 @@ window.SampleData = {
     };
   }
 
+  function mobCtx() {
+    return {
+      key: 'mob',
+      label: 'Mobile views',
+      noun: 'mobile',
+      listName: 'mobile list',
+      tab: 'mobiles',
+      views: MBV,
+      rules: MB,
+      result: state.mobResult,
+      builtIn: MBV.BUILT_IN,
+      custom: state.mobCustomViews,
+      saveCustom: function (list) {
+        state.mobCustomViews = list;
+        global.Store.set('mobCustomViews', list);
+      },
+      columnsById: state.mobColumnsById,
+      saveColumns: function () { global.Store.set('mobColumns', state.mobColumnsById); },
+      all: mobViews,
+      count: mobViewCount,
+      currentId: function () { return state.mobViewId; },
+      isActive: function () { return state.tab === 'mobiles'; },
+      open: setMobView,
+      fallbackId: 'mb-attention'
+    };
+  }
+
   function ctxFor(key) {
-    return key === 'net' ? netCtx() : key === 'print' ? printCtx() : pcCtx();
+    return key === 'net' ? netCtx()
+         : key === 'print' ? printCtx()
+         : key === 'mob' ? mobCtx()
+         : pcCtx();
   }
 
   function openViewBuilder(ctx, existing, mode) {
@@ -14061,7 +16106,8 @@ window.SampleData = {
          reads that result unconditionally. */
       setTab(state.result ? 'dashboard'
         : state.netResult ? 'network'
-        : state.printResult ? 'printers' : 'data');
+        : state.printResult ? 'printers'
+        : state.mobResult ? 'mobiles' : 'data');
       U.toast('Picked up where you left off — ' +
         Object.keys(state.sources).map(function (id) {
           return S.SOURCES[id].short + ' ' + U.num(state.sources[id].records.length);

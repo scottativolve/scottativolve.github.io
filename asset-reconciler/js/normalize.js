@@ -194,15 +194,26 @@
 
   var SEPARATORS = /\s*(?:>|»|\/|\\|\||::)\s*/;
 
+  /* A slash between two digits is a house-number range, not a hierarchy.
+
+     Three sites are named that way — "Hill End Lane (31/33) SL",
+     "Hill End Lane (35/37) SL", "Woodhurst Avenue (86/88) SL" — and splitting
+     them as a path left the leaf as "33) SL", so those sites keyed on "33sl"
+     and matched nothing that was worded any other way. Protect the range
+     before splitting and put it back afterwards. */
+  var RANGE_SLASH = /(\d)\s*\/\s*(\d)/g;
+  var RANGE_BACK  = /(\d)\s*\\\s*(\d)/g;
+
   /* strategy: 'leaf' (default), 'full', 'root' */
   function location(v, strategy) {
     var s = clean(v);
     if (!s) return '';
     if (strategy === 'full') return s.replace(/\s+/g, ' ').trim();
-    var parts = s.split(SEPARATORS).filter(function (p) { return p.trim(); });
+    var guarded = s.replace(RANGE_SLASH, '$1\u0001$2').replace(RANGE_BACK, '$1\u0002$2');
+    var parts = guarded.split(SEPARATORS).filter(function (p) { return p.trim(); });
     if (!parts.length) return '';
     var pick = strategy === 'root' ? parts[0] : parts[parts.length - 1];
-    return pick.replace(/\s+/g, ' ').trim();
+    return pick.replace(/\u0001/g, '/').replace(/\u0002/g, '\\').replace(/\s+/g, ' ').trim();
   }
 
   function locationKey(v, strategy) {

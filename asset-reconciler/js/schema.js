@@ -230,6 +230,42 @@
       ]
     },
 
+    soti: {
+      id: 'soti',
+      label: 'SOTI mobiles',
+      short: 'SOTI',
+      hint: 'Mobile devices export from SOTI MobiControl (phones and tablets)',
+      signature: ['path', 'device family', 'agent version', 'agent check-in time', 'agent connect time',
+                  'agent disconnect time', 'hardware serial number', 'imei / meid / esn', 'agent compatible',
+                  'available storage', 'agent upgrade enabled'],
+      /* No asset state, no location column and no owner: SOTI describes the
+         device, not the record. Ruling those out keeps a Freshservice export
+         from scoring here on its shared serial and model columns. */
+      anti: ['asset state', 'asset tag', 'used by', 'location', 'printer type', 'firmware version'],
+      /* SOTI writes month-first timestamps, which the shared parser would
+         otherwise read day-first for any day of the month under 13. */
+      dateOrder: 'mdy',
+      fields: [
+        { key: 'name',         label: 'Device name',      required: true, aliases: ['device name', 'devicename', 'name'] },
+        { key: 'serial',       label: 'Serial number',    aliases: ['hardware serial number', 'serial number', 'manufacturer serial number', 'serial'] },
+        { key: 'imei',         label: 'IMEI / MEID',      aliases: ['imei / meid / esn', 'imei/meid/esn', 'imei', 'meid', 'esn'] },
+        { key: 'model',        label: 'Model',            aliases: ['model', 'device model', 'model name', 'model number'] },
+        { key: 'manufacturer', label: 'Manufacturer',     aliases: ['manufacturer', 'make', 'vendor', 'oem'] },
+        { key: 'family',       label: 'Device family',    aliases: ['device family', 'family', 'platform'] },
+        { key: 'path',         label: 'SOTI path',        required: true, aliases: ['path', 'device group path', 'group path', 'folder', 'device group'] },
+        { key: 'osVersion',    label: 'OS version',       aliases: ['os version', 'operating system version', 'os'] },
+        { key: 'ipAddress',    label: 'IP address',       aliases: ['ip address', 'ip', 'ipv4 address', 'last known ip'] },
+        { key: 'mac',          label: 'MAC address',      aliases: ['mac address', 'mac', 'wi-fi mac', 'physical address'] },
+        { key: 'checkIn',      label: 'Last check-in',    type: 'date', aliases: ['agent check-in time', 'agent check in time', 'check-in time', 'last check-in', 'last checkin'] },
+        { key: 'connected',    label: 'Last connected',   type: 'date', aliases: ['agent connect time', 'connect time', 'last connected'] },
+        { key: 'disconnected', label: 'Last disconnected',type: 'date', aliases: ['agent disconnect time', 'disconnect time', 'last disconnected'] },
+        { key: 'agentVersion', label: 'Agent version',    aliases: ['agent version', 'mobicontrol agent version'] },
+        { key: 'encrypted',    label: 'Encrypted',        aliases: ['encrypted', 'encryption', 'is encrypted'] },
+        { key: 'storage',      label: 'Available storage',type: 'number', aliases: ['available storage', 'free storage', 'storage free'] },
+        { key: 'memory',       label: 'Available memory', type: 'number', aliases: ['available memory', 'free memory', 'memory free'] }
+      ]
+    },
+
     locations: {
       id: 'locations',
       label: 'Location lookup',
@@ -248,6 +284,7 @@
         { key: 'expected',  label: 'Expected devices',type: 'number', aliases: ['expected devices', 'expected', 'expected pcs', 'device allowance', 'allowance', 'budget', 'establishment'] },
         { key: 'region',    label: 'Region / area',   aliases: ['region', 'area', 'division', 'service area', 'operational region', 'patch', 'cluster'] },
         { key: 'siteType',  label: 'Site type',       aliases: ['site type', 'service type', 'type', 'category'] },
+        { key: 'status',    label: 'Status',          aliases: ['status', 'site status', 'service status', 'open status'] },
         { key: 'contact',   label: 'Site contact',    aliases: ['contact', 'site contact', 'manager', 'service manager', 'contact name', 'contact email'] }
       ]
     },

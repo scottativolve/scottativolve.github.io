@@ -61,20 +61,36 @@
                   populations: ['net', 'both'] },
     printSilent: { label: 'Printers not reporting',
                    legend: 'Darker = more of the site\u2019s printers are silent',
-                   populations: ['print', 'both'] }
+                   populations: ['print', 'both'] },
+    mobSilent:  { label: 'Mobiles not checking in',
+                  legend: 'Darker = more of the site\u2019s handsets have gone quiet',
+                  populations: ['mob', 'both'] }
   };
 
   /* Which populations a dot can count. members lists the row sets that
      contribute; a single-population choice is just a set of one. */
+  var KINDS = ['pc', 'net', 'print', 'mob'];
+
   var POPULATIONS = {
     pc:    { label: 'PCs',             noun: 'device',         members: ['pc'] },
     net:   { label: 'Network assets',  noun: 'network device', members: ['net'] },
     print: { label: 'Printers',        noun: 'printer',        members: ['print'] },
-    both:  { label: 'Everything',      noun: 'device',         members: ['pc', 'net', 'print'] }
+    mob:   { label: 'Mobiles',         noun: 'mobile',         members: ['mob'] },
+    both:  { label: 'Everything',      noun: 'device',         members: KINDS }
   };
 
   function members(population) {
     return (POPULATIONS[population] || POPULATIONS.pc).members;
+  }
+
+  /* Does the population on screen include this kind of row?
+
+     The popup used to ask with chains like "population !== 'pc' && population
+     !== 'net'", which meant every new population had to be added to five of
+     them and read correctly by luck. One membership test cannot be half
+     updated. */
+  function counts(population, kind) {
+    return members(population).indexOf(kind) >= 0;
   }
 
   /* Which colour modes make sense for the population on screen. */
@@ -98,7 +114,7 @@
     if (Array.isArray(sets)) sets = { pc: sets };
     var population = opts.population || 'pc';
     var counting = members(population);
-    var lists = ['pc', 'net', 'print'].map(function (k) {
+    var lists = KINDS.map(function (k) {
       return { kind: k, rows: sets[k] || [] };
     });
 
@@ -127,7 +143,7 @@
             key: key,
             name: N.clean(r.site.location) || N.clean(r.site.name) || r.location,
             site: r.site,
-            rows: [], pcRows: [], netRows: [], printRows: [],
+            rows: [], pcRows: [], netRows: [], printRows: [], mobRows: [],
             region: N.clean(r.site.region),
             expected: typeof r.site.expected === 'number' ? r.site.expected : null
           });
@@ -158,6 +174,17 @@
       var printSilent = printOn.filter(function (r) { return !r.reporting; }).length;
       var pages = g.printRows.reduce(function (n, r) { return n + (r.pages || 0); }, 0);
 
+      /* Handsets past the staleness window, which the mobile rules have
+         already flagged; the map only has to count them. The stale window
+         and not just the "lost" one, because every device silent for months
+         turns out to be an office handset with no site at all — a map mode
+         reading zero everywhere tells you nothing. */
+      var mobSilent = g.mobRows.filter(function (r) {
+        var i = r.issues || [];
+        return i.indexOf('stale') >= 0 || i.indexOf('long-silent') >= 0 ||
+               i.indexOf('never-checked-in') >= 0;
+      }).length;
+
       var s = {
         key: g.key,
         name: g.name,
@@ -165,8 +192,11 @@
         region: g.region,
         rows: g.rows,
         count: g.rows.length,
-        pcRows: g.pcRows, netRows: g.netRows, printRows: g.printRows,
+        pcRows: g.pcRows, netRows: g.netRows, printRows: g.printRows, mobRows: g.mobRows,
         pcCount: g.pcRows.length, netCount: g.netRows.length, printCount: g.printRows.length,
+        mobCount: g.mobRows.length,
+        mobSilent: mobSilent,
+        mobSilentRate: g.mobRows.length ? mobSilent / g.mobRows.length : 0,
         kinds: kinds,
         netMissing: netMissing,
         netMissingRate: netForti.length ? netMissing / netForti.length : 0,
@@ -221,6 +251,10 @@
     if (mode === 'printSilent') {
       if (!site.printCount) return 'var(--text-muted)';
       return ramp(site.printSilentRate);
+    }
+    if (mode === 'mobSilent') {
+      if (!site.mobCount) return 'var(--text-muted)';
+      return ramp(site.mobSilentRate);
     }
     return 'var(--series-1)';
   }
@@ -316,6 +350,7 @@
 
     var mode = opts.mode || 'count';
     var population = opts.population || 'pc';
+    var noun = (POPULATIONS[population] || POPULATIONS.pc).noun;
     if (modesFor(population).indexOf(mode) < 0) mode = 'count';
     var pts = agg.mappable;
     if (!pts.length) {
@@ -366,31 +401,36 @@
         s.address ? '<div style="color:var(--text-secondary)">' + U.escapeHtml(s.address) + '</div>' : '',
         s.region ? '<div style="color:var(--text-muted)">' + U.escapeHtml(s.region) + '</div>' : '',
         '<div style="margin-top:8px"><strong>' + U.num(s.count) + '</strong> ' +
-          (population === 'net' ? 'network device' : 'device') + (s.count === 1 ? '' : 's'),
-        s.expected !== null && population !== 'net'
+          U.escapeHtml(noun) + (s.count === 1 ? '' : 's'),
+        s.expected !== null && counts(population, 'pc')
           ? ' \u00b7 expected <strong>' + U.num(s.expected) + '</strong>' : '',
         '</div>',
         // Always show the split, whichever population is being sized: the
-        // point of one map is seeing both without switching.
+        // point of one map is seeing all of them without switching.
         population === 'both'
           ? '<div style="color:var(--text-secondary)">' + U.num(s.pcCount) + ' PC' + (s.pcCount === 1 ? '' : 's') +
             ' \u00b7 ' + U.num(s.netCount) + ' network \u00b7 ' + U.num(s.printCount) + ' printer' +
-            (s.printCount === 1 ? '' : 's') + '</div>'
+            (s.printCount === 1 ? '' : 's') + ' \u00b7 ' + U.num(s.mobCount) + ' mobile' +
+            (s.mobCount === 1 ? '' : 's') + '</div>'
           : '',
-        s.printCount && population !== 'pc' && population !== 'net'
+        s.printCount && counts(population, 'print')
           ? '<div style="color:var(--text-secondary)">' + U.num(s.pages) + ' pages printed in their lifetimes</div>'
           : '',
-        s.printSilent && population !== 'pc' && population !== 'net'
+        s.printSilent && counts(population, 'print')
           ? '<div style="font-weight:600"><strong>' + U.num(s.printSilent) + '</strong> printer' +
             (s.printSilent === 1 ? '' : 's') + ' not reporting</div>'
           : '',
-        kindBits.length && population !== 'pc'
+        s.mobSilent && counts(population, 'mob')
+          ? '<div style="font-weight:600"><strong>' + U.num(s.mobSilent) + '</strong> mobile' +
+            (s.mobSilent === 1 ? '' : 's') + ' not checking in</div>'
+          : '',
+        kindBits.length && !counts(population, 'pc')
           ? '<div style="color:var(--text-secondary)">' + U.escapeHtml(kindBits.join(' \u00b7 ')) + '</div>' : '',
-        s.variance !== null && s.variance !== 0 && population !== 'net'
+        s.variance !== null && s.variance !== 0 && counts(population, 'pc')
           ? '<div style="color:' + (s.variance > 0 ? 'var(--div-pos-strong)' : 'var(--div-neg-strong)') + ';font-weight:600">' +
             (s.variance > 0 ? '+' : '') + s.variance + ' PCs vs expected</div>'
           : '',
-        s.netMissing && population !== 'pc'
+        s.netMissing && counts(population, 'net')
           ? '<div style="font-weight:600"><strong>' + U.num(s.netMissing) + '</strong> network device' +
             (s.netMissing === 1 ? '' : 's') + ' not in Freshservice</div>'
           : '',
@@ -403,29 +443,22 @@
       // With both populations on one dot, "view these devices" is two
       // different lists, so offer whichever ones exist rather than guessing.
       var actions = U.el('div', { class: 'row tight', style: { marginTop: '10px' } });
-      if (s.pcCount && population !== 'net') {
+      [['pc', s.pcCount, 'PCs', 'devices'],
+       ['net', s.netCount, 'network', 'devices'],
+       ['print', s.printCount, 'printers', 'printers'],
+       ['mob', s.mobCount, 'mobiles', 'mobiles']].forEach(function (a) {
+        var kind = a[0], n = a[1];
+        if (!n || !counts(population, kind)) return;
         actions.appendChild(U.el('button', {
-          class: 'btn sm primary',
-          onclick: function () { if (opts.onSelect) opts.onSelect(s, 'pc'); }
-        }, population === 'both' ? 'View ' + s.pcCount + ' PCs' : 'View these ' + s.count + ' devices'));
-      }
-      if (s.netCount && population !== 'pc' && population !== 'print') {
-        actions.appendChild(U.el('button', {
-          class: 'btn sm' + (population === 'net' ? ' primary' : ''),
-          onclick: function () { if (opts.onSelect) opts.onSelect(s, 'net'); }
-        }, population === 'both' ? 'View ' + s.netCount + ' network' : 'View these ' + s.count + ' devices'));
-      }
-      if (s.printCount && population !== 'pc' && population !== 'net') {
-        actions.appendChild(U.el('button', {
-          class: 'btn sm' + (population === 'print' ? ' primary' : ''),
-          onclick: function () { if (opts.onSelect) opts.onSelect(s, 'print'); }
-        }, population === 'both' ? 'View ' + s.printCount + ' printers' : 'View these ' + s.count + ' printers'));
-      }
+          class: 'btn sm' + (population === kind || (population === 'both' && kind === 'pc') ? ' primary' : ''),
+          onclick: function () { if (opts.onSelect) opts.onSelect(s, kind); }
+        }, population === 'both' ? 'View ' + n + ' ' + a[2] : 'View these ' + s.count + ' ' + a[3]));
+      });
       content.appendChild(actions);
 
       marker.bindPopup(content, { maxWidth: 300 });
-      marker.bindTooltip(s.name + ' \u00b7 ' + s.count + ' ' +
-        (population === 'net' ? 'network device' : 'device') + (s.count === 1 ? '' : 's'), { direction: 'top' });
+      marker.bindTooltip(s.name + ' \u00b7 ' + s.count + ' ' + noun + (s.count === 1 ? '' : 's'),
+        { direction: 'top' });
       marker.addTo(layer);
     });
 
@@ -456,7 +489,8 @@
       if (mode !== 'count') {
         var titles = { variance: 'Variance', issues: 'Issue rate',
                        netMissing: 'Network kit not in Freshservice',
-                       printSilent: 'Printers not reporting' };
+                       printSilent: 'Printers not reporting',
+                       mobSilent: 'Mobiles not checking in' };
         div.appendChild(U.el('div', { class: 'lg-title' }, titles[mode] || 'Colour'));
         var bands = [['var(--seq-100)', 'None'], ['var(--seq-250)', 'Under 20%'], ['var(--seq-400)', '20\u201340%'],
                      ['var(--seq-550)', '40\u201360%'], ['var(--seq-700)', 'Over 60%']];
@@ -529,6 +563,7 @@
     fitHome: function () { if (map) fitHome(map); },
     COLOUR_MODES: COLOUR_MODES,
     POPULATIONS: POPULATIONS,
+    counts: counts,
     modesFor: modesFor,
     members: members,
     radiusFor: radiusFor

@@ -53,7 +53,11 @@
   /* Parse the date formats that turn up in Freshservice / Intune exports.
      Returns a Date or null. Ambiguous all-numeric dates are read as
      day-first (UK), which is what both portals emit for a UK tenant. */
-  function parseDate(v) {
+  /* order is 'mdy' for a source that emits month-first, which SOTI does. The
+     guess below only rescues a date whose first field cannot be a day, so
+     3/4/2026 from a month-first export would otherwise be read as 3 April
+     without a word about it. Left unset, behaviour is exactly as before. */
+  function parseDate(v, order) {
     if (!v) return null;
     if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
     var s = String(v).trim();
@@ -70,8 +74,13 @@
     if (dmy) {
       var d = +dmy[1], mo = +dmy[2], y = +dmy[3];
       if (y < 100) y += 2000;
+      if (order === 'mdy') {
+        // Stated by the caller, so no guessing: swap unless the first field
+        // is impossible as a month, which means the export lied.
+        if (d <= 12) { var sw = d; d = mo; mo = sw; }
+      }
       // If the first field can't be a day but the second can, it was m/d/Y.
-      if (d > 12 && mo <= 12) { /* day-first, as read */ }
+      else if (d > 12 && mo <= 12) { /* day-first, as read */ }
       else if (mo > 12 && d <= 12) { var t = d; d = mo; mo = t; }
       var hh = +(dmy[4] || 0);
       if (dmy[7]) {

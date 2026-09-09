@@ -1,4 +1,4 @@
-# Asset Reconciler — Freshservice ↔ Intune ↔ FortiManager
+# Asset Reconciler — Freshservice ↔ Intune ↔ FortiManager ↔ SOTI
 
 A browser tool for reconciling the Freshservice asset register against the
 systems that actually know what is on the network. Drop in the exports (plus a
@@ -6,13 +6,14 @@ location lookup), and it matches the records, flags everything the systems
 disagree about, drives the views you send out to services, builds the
 Freshservice import that corrects the data, and plots the estate on a map.
 
-It handles **two separate populations**, reconciled independently:
+It handles **four separate populations**, worked out independently:
 
 | Population | Compared against | Answers |
 |---|---|---|
 | **PCs** | Freshservice ↔ Intune ↔ Arctic Wolf | who has it, where is it, is it stale, is it at risk |
 | **Network assets** | FortiManager ↔ Freshservice | what has been added since, what has been replaced, what firmware is recorded |
 | **Printers** | OneStop ↔ Freshservice | which fields are wrong, which are silent, which are worth questioning |
+| **Mobiles** | SOTI, on its own | where each handset is, which can be imported, which have gone quiet |
 
 They share the site list, the map, the notes and the duplicate finder, but they
 have their own tabs, views, checks and import builder — a firewall and a laptop
@@ -45,6 +46,7 @@ not a server, and it can be switched off or wiped from Settings. See
 - [The map](#the-map)
 - [Network assets](#network-assets)
 - [Printers](#printers)
+- [Mobiles and tablets](#mobiles-and-tablets)
 - [Other asset types](#other-asset-types)
 - [Settings and what is stored](#settings-and-what-is-stored)
 - [Where to host it](#where-to-host-it)
@@ -230,6 +232,33 @@ The device list from the managed print service, with meter reads. See
 The printer assets export. It shares almost every column with the network one,
 so `Printer Type` is what tells them apart — without it the tool cannot place
 the file and will ask you to.
+
+### 9. SOTI mobiles (optional)
+
+The MobiControl device export, which feeds the Mobiles tab on its own — there
+is no second system to reconcile it against yet.
+
+Useful columns: `Device Name`, `Hardware Serial Number`, `IMEI / MEID / ESN`,
+`Model`, `Manufacturer`, `Path`, `OS Version`, `Agent Check-in Time`,
+`Encrypted`. **`Path` and `Device Name` are the two that matter** — the path is
+where the site comes from and the name is what the Freshservice record will be
+called.
+
+Three things about this export are worth knowing before you take one.
+
+**Add the `Model` column.** Without it there is no Freshservice Product, and an
+asset import is rejected without one. `Manufacturer` alone says only "samsung"
+for the whole fleet.
+
+**Sort the search on `Device Name` or `Hardware Serial Number`.** SOTI pages the
+result set at a thousand rows, so if the search is sorted on a live column —
+check-in time, connect time — records shuffle across the page boundary while it
+fetches and the file comes out with some devices duplicated and others missing
+entirely. It is silent, and the row count looks about right. The tool checks for
+duplicates and says so, but it cannot invent the devices the export left out.
+
+**Do not open the file in Excel.** Device names are five digits with a leading
+zero (`00030`), and Excel turns them into `30`.
 
 ### Locating devices by IP address
 
@@ -666,18 +695,22 @@ devices recorded there.
 
 ### Which population
 
-Both populations share the map. **Show** picks what the dots count:
+All four populations share the map. **Show** picks what the dots count:
 
 - **PCs** — the Freshservice/Intune reconciliation.
 - **Network assets** — firewalls, switches and access points, placed by the
   site their FortiManager name resolves to.
 - **Printers** — placed by their location name, with a colour mode for how
   many of a site's printers have gone silent.
+- **Mobiles** — placed by the site their SOTI folder resolved to, with a colour
+  mode for how many of a site's handsets have gone quiet. Home-worker devices
+  have no site, so they are counted off the map rather than pinned somewhere
+  arbitrary.
 - **Everything** — one dot per site sized by the combined total, with the popup
-  splitting it three ways.
+  splitting it four ways.
 
 The selector only offers the populations you have loaded, and switching
-re-fits the view, because the two cover different sets of sites.
+re-fits the view, because they cover different sets of sites.
 
 The map opens on **England and Wales**, fitted corner to corner rather than set
 to a fixed zoom, so it is framed correctly whatever size the window is. It will
@@ -939,6 +972,114 @@ to correct is left out of the file entirely. A change log is available alongside
 it, one row per field changed, with what it was, what it becomes, and why.
 
 ---
+
+## Mobiles and tablets
+
+Around 1,600 Samsung handsets and rugged tablets, held in SOTI MobiControl and
+**not in Freshservice at all**. So this population is the odd one out: the other
+three reconcile two systems against each other, and this one has nothing to
+reconcile against. Until the first import lands it is a site-mapping and
+creation job, and the site mapping is the whole of it.
+
+### Where the site comes from
+
+SOTI files a device by its folder in a UNC-style hierarchy, and the depth is
+what decides whether there is a site in it:
+
+```
+\\Support Worker Devices\Region 1\Wolsey House     depth 3 - the last part is a site
+\\Office Worker Devices\Region 1                   depth 2 - the last part is a region
+```
+
+That is not a gap in the data, it is how the hierarchy is built: care-site
+devices are filed by place, and office-worker devices are filed by region
+because they follow a person rather than a building. Every support-worker device
+has a site folder; not one office-worker device does. Reading "the last part of
+the path" unconditionally would file six hundred devices at a site called
+*Region 1*.
+
+Devices with no site folder get the location set in **Settings → Mobile checks**
+— *Remote/Home Worker* by default. Devices under a site folder that did not
+resolve get **nothing**, deliberately: they are at a real building whose name
+could not be placed, and calling them home workers would bury the problem under
+six hundred rows that legitimately say the same thing.
+
+### Matching the folder to a site
+
+Three passes, in order:
+
+1. **The folder name against your site names.** Most of them, straight off.
+2. **An override you have typed**, or one built in — see below.
+3. **The name with a trailing " SL" treated as optional**, and only where that
+   leaves exactly one candidate.
+
+The SL pass is last for a reason. Six names in your site list exist in *both*
+forms as genuinely separate services — Alverthorpe 069 and Alverthorpe SL 062,
+Leeds 082 and Leeds SL 063, Humberston, Rotherham, Oadby, Larkrise — so
+stripping the suffix up front would merge pairs of real sites.
+
+**Site folders**, on the Mobiles tab and in Settings, lists every folder SOTI
+uses with the site it resolved to, unresolved ones first, and takes a site code
+for any that need one. Nine are built in, because no matcher would ever find
+them: `Whitley Park` is **Garmsway**, `Cannon Court` is **Ripon**, and
+`Wolsey Camascope Pilot` is at **Wolsey House**. There is no string similarity
+between those names and anything in the site list. A tool that claimed to work
+them out would be guessing.
+
+### The region cross-check
+
+The site list gives each site a region, and SOTI's second path segment is a
+region folder, so the two can be compared. *Fieldbay* and *Wales* are the same
+region — Fieldbay was the company's name there before the rebrand — and SOTI
+uses one word under the support-worker branch and the other under the
+office-worker one. Region 1 is split into North and Midlands in the site list
+but not in SOTI, so it compares at the coarser level.
+
+Agreement runs at 978 of 980 matched devices, which makes a disagreement worth
+looking at. It earned its keep immediately: a `Fairways` folder had been created
+under Region 1 when the service is in Region 2, and an SL-tolerant match with no
+region check would have quietly filed those handsets at the wrong end of the
+country.
+
+### What it checks
+
+Not field corrections — there is nothing to correct yet — but whether each row
+can be imported, and which handsets have stopped reporting:
+
+- **Cannot be imported** — no serial, no model, or a model code with no product
+  name against it. The last of those is what appears when a handset bought since
+  the last export turns up.
+- **Site not recognised**, and **filed in the wrong region**.
+- **Silent for months** and **not checked in recently**, against the two windows
+  in Settings. Worth knowing: every device silent for months turns out to be an
+  office handset rather than one at a care site — site devices are used daily.
+- **Security** — unencrypted, or an Android version past its security support.
+  These handsets hold people's care records.
+- **Duplicated in the export** — the paging problem described under the input
+  files. Two rows with one serial is the export duplicating a record, not two
+  devices.
+- **Named after a person** — the convention is the five-digit asset number, and
+  a handful carry somebody's name or a pilot instead.
+
+### The creation import
+
+**Build import file** writes the rows Freshservice needs to create the records,
+one file per asset type because Freshservice imports one type at a time:
+phones as *Mobile*, tablets as *Tablet*.
+
+Two lookups feed it, both editable and both seeded:
+
+- **Model code → Product.** SOTI reports `SM-A165F`; Freshservice wants
+  *Galaxy A16 4G*. Nineteen codes cover the estate.
+- **Phone or tablet → Asset Type.** Two keys, because asking nineteen times for
+  the same two answers is a way of introducing typos.
+
+Asset state is *In Use*, except test and supplier stock, which is *Reserved*.
+Rows with no model or no serial are left out rather than written as a row that
+gets the whole import rejected, and the dialog names them.
+
+Upload the file as it comes. Opening it in Excel first strips the leading zero
+off every device name.
 
 ## Other asset types
 
