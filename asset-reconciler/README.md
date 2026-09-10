@@ -48,6 +48,7 @@ not a server, and it can be switched off or wiped from Settings. See
 - [Printers](#printers)
 - [Mobiles and tablets](#mobiles-and-tablets)
 - [Other asset types](#other-asset-types)
+- [Publishing a data set](#publishing-a-data-set)
 - [Settings and what is stored](#settings-and-what-is-stored)
 - [Where to host it](#where-to-host-it)
 - [Working on the code](#working-on-the-code)
@@ -1171,6 +1172,74 @@ they already flow through the location lookup and appear on the map with the
 **Include non-computer assets** toggle.
 
 ---
+
+## Publishing a data set
+
+One person loads the exports; everybody else opens the tool and sees what they
+published. Two files in a folder — a synced SharePoint library, a share, a USB
+stick — and no server.
+
+### How to publish
+
+Load your exports as usual, then press **Publish** in the top bar. That writes
+`published-data.js`. Put it in the same folder as `asset-reconciler.html`,
+replacing the copy already there, and anyone opening the tool starts from it.
+
+It carries everything: the raw rows of every export, the column mappings, every
+threshold and rule setting, your custom views and favourites, the SOTI
+site-folder overrides, the Product and Asset Type lookups, and the notes. About
+1.5 MB with the mobile estate in it, and it parses in a few milliseconds.
+
+### Why it is a .js file and not a .json one
+
+Because Chrome will not let a page opened from `file://` read a file in its own
+folder. It treats such a page as having no origin, so `fetch()` and
+`XMLHttpRequest` both fail on CORS grounds — tested, not assumed. There is a
+browser flag that turns the restriction off, but it weakens every local page the
+machine ever opens and would have to be pushed to everybody's shortcut.
+
+A `<script src>` is not subject to CORS. So the published file is JavaScript
+that assigns one global, and it loads from a folder with no server, no flags and
+no prompts. Served over HTTP it behaves identically.
+
+One consequence: when there is **no** published file, the browser logs a single
+`ERR_FILE_NOT_FOUND` to the console. That is expected and nothing is broken by
+it — a script tag that misses always says so, and there is no way to ask
+quietly.
+
+### What happens when somebody opens it
+
+| What the browser already holds | What happens |
+|---|---|
+| Nothing | The published set loads, and the bar says when and by whom |
+| The same published set | Nothing to do. The bar says where the data came from |
+| Their own exports, published set is newer | **Offered, not taken** — *"Newer data published … Load it / Not now"* |
+| Their own exports, published set is older | Nothing at all |
+
+Replacing what somebody was part-way through would be wrong, so a newer set is
+never taken silently — and if they accept, their **notes merge** rather than
+being replaced, because their notes are their work.
+
+### What this is not
+
+The published file is the **starting** state, not a live database. Anybody can
+load their own exports afterwards and diverge, and nothing they do writes back
+to the share. That is fine for "here is the current picture, go and look at your
+sites", and it is not fine as a system of record several people update — that
+needs a server behind it.
+
+Giving everyone else **read-only** access to the folder is worth doing: it stops
+a colleague overwriting the published file, which is the one way this can lose
+work. It does not stop them loading their own CSVs to look at something else,
+because that happens entirely in their own browser.
+
+### Getting the two files onto a machine
+
+They have to end up **in the same folder**. Syncing the SharePoint library
+(*Add shortcut to OneDrive*, or *Sync*) does that. Clicking the HTML in the
+SharePoint web UI generally downloads it on its own, and it lands in Downloads
+with no `published-data.js` beside it — at which point the tool opens empty and
+correct, just not published. Worth telling people once.
 
 ## Settings and what is stored
 

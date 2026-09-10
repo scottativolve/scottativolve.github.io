@@ -576,6 +576,22 @@ table.grid td.chips .badge { margin: 1px 2px 1px 0; }
 .drop .dz-when.lagging { color: var(--text-primary); }
 .drop .dz-when.lagging .ago { color: inherit; font-weight: 600; }
 
+/* ------------------------------------------------- the published data bar */
+
+/* Above every page, not just the Data tab: somebody opening the tool to look
+   at one list should not have to go hunting for how old the data is. */
+.published-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 14px; padding: 8px 12px;
+  font-size: 12.5px;
+  background: var(--surface-2);
+  border: 1px solid var(--grid);
+  border-left: 3px solid var(--good);
+  border-radius: var(--radius);
+}
+.published-bar.newer { border-left-color: var(--warning); }
+.published-bar .spacer { flex: 1; }
+
 /* ------------------------------------------------------------ map + viz */
 
 /* The map fills what the window gives it rather than sitting in a fixed

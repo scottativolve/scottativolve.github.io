@@ -199,7 +199,16 @@
     mobConfig: mergeMobConfig(global.Store.get('mobConfig', {})),
     // SOTI folder key -> site code, on top of the seeds in Mobiles.
     mobOverrides: global.Store.get('mobOverrides', {}),
-    mobExportScope: 'view'
+    mobExportScope: 'view',
+
+    /* --- the published set sitting next to the HTML --- */
+    // Where the data on screen came from, when it is a published set.
+    publishedFrom: null,
+    // The savedAt of the published set this browser has taken on, so a
+    // republish is recognised as newer rather than offered on every visit.
+    publishedSeen: null,
+    // A newer published set found on boot and not yet accepted.
+    publishedOffer: null
   };
 
   var grid = null;
@@ -456,6 +465,14 @@
 
   /* ------------------------------------------------------ working set */
 
+  /* Everything worth carrying from one session to the next, in one place.
+
+     The working set in IndexedDB, a saved project file and a published data
+     set are the same thing written to three destinations, so they are built
+     by one function. They were not: saveProject predated the network, printer
+     and mobile populations and quietly omitted their settings, so a project
+     file reopened elsewhere came back with the nine SOTI site-folder
+     overrides gone and the Product lookups blank. */
   function workingSet() {
     var payload = {
       version: 1,
@@ -482,6 +499,7 @@
       siteOverrides: state.siteOverrides,
       envLabels: state.envLabels,
       envOrder: state.envOrder,
+      publishedSeen: state.publishedSeen || null,
       sources: {}
     };
     SOURCE_IDS.forEach(function (id) {
@@ -495,6 +513,70 @@
       };
     });
     return payload;
+  }
+
+  /* The same payload, plus the notes and the stamp a file needs. */
+  function filePayload() {
+    var payload = workingSet();
+    payload.format = 'asset-reconciler-project';
+    payload.notes = global.Notes.snapshot();
+    /* Which published set a browser has taken on is that browser's business,
+       not part of the data. Left in, a published file would carry the
+       maintainer's own bookkeeping to everybody who opened it. */
+    delete payload.publishedSeen;
+    return payload;
+  }
+
+  /* Put a payload's sources into state. Shared by the working-set restore, by
+     Open project and by the published set, so all three fill mappings the same
+     way and none of them can drift. */
+  function applySources(payload) {
+    var fills = [];
+    Object.keys(payload.sources || {}).forEach(function (id) {
+      var src = payload.sources[id];
+      if (!src || !src.raw) return;
+      if (!S.SOURCES[id]) return;              // a source this build does not have
+      /* The mapping is whatever the build that saved it produced, so fields
+         added to the tool since are missing from it. Fill only the gaps. */
+      var res = S.fillMapping(id, src.headers, src.mapping, src.knownFields);
+      state.sources[id] = {
+        id: id, fileName: src.fileName, files: src.files || [src.fileName],
+        headers: src.headers,
+        mapping: res.mapping, raw: src.raw,
+        knownFields: S.fieldKeys(id),
+        filled: res.filled,
+        fileTimes: src.fileTimes || null
+      };
+      if (res.filled.length) fills.push({ source: id, filled: res.filled });
+      project(id);
+    });
+    return fills;
+  }
+
+  /* And its settings. Every one guarded, because a payload written by an
+     older build simply will not have some of these. */
+  function applySettings(payload) {
+    if (payload.cfg) state.cfg = global.Match.settings(payload.cfg);
+    if (payload.enabledRules) state.enabledRules = payload.enabledRules;
+    if (payload.customViews) state.customViews = payload.customViews;
+    if (payload.fsConfig) state.fsConfig = mergeFsConfig(payload.fsConfig);
+    if (payload.netCfg) state.netCfg = NM.settings(payload.netCfg);
+    if (payload.netEnabledRules) state.netEnabledRules = payload.netEnabledRules;
+    if (payload.netConfig) state.netConfig = mergeNetConfig(payload.netConfig);
+    if (payload.netCustomViews) state.netCustomViews = payload.netCustomViews;
+    if (payload.printCfg) state.printCfg = PM.settings(payload.printCfg);
+    if (payload.printEnabledRules) state.printEnabledRules = payload.printEnabledRules;
+    if (payload.printConfig) state.printConfig = mergePrintConfig(payload.printConfig);
+    if (payload.printCustomViews) state.printCustomViews = payload.printCustomViews;
+    if (payload.mobCfg) state.mobCfg = MB.settings(payload.mobCfg);
+    if (payload.mobEnabledRules) state.mobEnabledRules = payload.mobEnabledRules;
+    if (payload.mobConfig) state.mobConfig = mergeMobConfig(payload.mobConfig);
+    if (payload.mobCustomViews) state.mobCustomViews = payload.mobCustomViews;
+    if (payload.mobOverrides) state.mobOverrides = payload.mobOverrides;
+    if (payload.favourites) state.favourites = payload.favourites;
+    if (payload.siteOverrides) state.siteOverrides = payload.siteOverrides;
+    if (payload.envLabels) state.envLabels = payload.envLabels;
+    if (payload.envOrder) state.envOrder = payload.envOrder;
   }
 
   var persistFailed = false;
@@ -514,51 +596,16 @@
 
   function restoreWorkingSet() {
     if (!state.persist || !global.DB.available) return Promise.resolve(false);
-    var restoredFills = [];
     return global.DB.load().then(function (payload) {
       if (!payload || !payload.sources || !Object.keys(payload.sources).length) return false;
-      Object.keys(payload.sources).forEach(function (id) {
-        var src = payload.sources[id];
-        if (!src || !src.raw) return;
-        // A stored working set carries the mapping the build that saved it
-        // produced, so fields added since are missing from it. Fill those in
-        // rather than leaving their columns quietly blank.
-        var res = S.fillMapping(id, src.headers, src.mapping, src.knownFields);
-        state.sources[id] = {
-          id: id, fileName: src.fileName, files: src.files || [src.fileName],
-          headers: src.headers,
-          mapping: res.mapping, raw: src.raw,
-          knownFields: S.fieldKeys(id),
-          filled: res.filled,
-          fileTimes: src.fileTimes || null
-        };
-        if (res.filled.length) restoredFills.push({ source: id, filled: res.filled });
-        project(id);
-      });
-      if (payload.cfg) state.cfg = global.Match.settings(payload.cfg);
-      if (payload.enabledRules) state.enabledRules = payload.enabledRules;
-      if (payload.customViews) state.customViews = payload.customViews;
-      if (payload.fsConfig) state.fsConfig = mergeFsConfig(payload.fsConfig);
-      if (payload.netCfg) state.netCfg = NM.settings(payload.netCfg);
-      if (payload.netEnabledRules) state.netEnabledRules = payload.netEnabledRules;
-      if (payload.netConfig) state.netConfig = mergeNetConfig(payload.netConfig);
-      if (payload.netCustomViews) state.netCustomViews = payload.netCustomViews;
-      if (payload.printCfg) state.printCfg = PM.settings(payload.printCfg);
-      if (payload.printEnabledRules) state.printEnabledRules = payload.printEnabledRules;
-      if (payload.printConfig) state.printConfig = mergePrintConfig(payload.printConfig);
-      if (payload.mobCfg) state.mobCfg = MB.settings(payload.mobCfg);
-      if (payload.mobEnabledRules) state.mobEnabledRules = payload.mobEnabledRules;
-      if (payload.mobConfig) state.mobConfig = mergeMobConfig(payload.mobConfig);
-      if (payload.mobCustomViews) state.mobCustomViews = payload.mobCustomViews;
-      if (payload.mobOverrides) state.mobOverrides = payload.mobOverrides;
-      if (payload.printCustomViews) state.printCustomViews = payload.printCustomViews;
-      if (payload.favourites) state.favourites = payload.favourites;
-      if (payload.siteOverrides) state.siteOverrides = payload.siteOverrides;
-      if (payload.envLabels) state.envLabels = payload.envLabels;
-      if (payload.envOrder) state.envOrder = payload.envOrder;
+      var fills = applySources(payload);
+      applySettings(payload);
       state.restoredAt = payload.savedAt ? new Date(payload.savedAt) : null;
       state.savedAt = state.restoredAt;
-      state.restoredFills = restoredFills;
+      state.restoredFills = fills;
+      // Which published set this browser is holding, so a republish can be
+      // recognised as newer rather than offered again on every visit.
+      state.publishedSeen = payload.publishedSeen || null;
       recompute();
       return true;
     }).catch(function () { return false; });
@@ -883,6 +930,12 @@
       onclick: saveProject
     }, 'Save project'));
     host.appendChild(U.el('button', {
+      class: 'btn sm ghost',
+      title: 'Write ' + global.Published.FILE + ' \u2014 the file that sits next to the HTML so everybody ' +
+             'opening the tool starts from this data',
+      onclick: publishData
+    }, 'Publish'));
+    host.appendChild(U.el('button', {
       class: 'btn sm ghost', title: 'Reopen a saved project file', onclick: openProject
     }, 'Open'));
 
@@ -1145,6 +1198,7 @@
         export: renderExport,
         settings: renderSettings
       }[state.tab] || renderData;
+      publishedBanner(main);
       var ready = state.tab === 'data' || state.tab === 'settings'
         ? true
         : state.tab === 'network' ? !!state.netResult
@@ -1157,6 +1211,64 @@
       rendering = false;
     }
     if (renderQueued) { renderQueued = false; render(); }
+  }
+
+  /* Where this data came from, and whether there is something newer.
+
+     Shown above every page rather than only on the Data tab: somebody who
+     opens the tool to look at the Mobiles list should not have to go hunting
+     for whether they are looking at last month's export. */
+  function publishedBanner(main) {
+    var offer = state.publishedOffer;
+    var from = state.publishedFrom;
+    if (!offer && !from) return;
+
+    if (offer) {
+      var at = global.Published.publishedAt(offer);
+      main.appendChild(U.el('div', { class: 'published-bar newer' }, [
+        U.el('span', { class: 'badge medium' }, [U.el('span', { class: 'sev sev-medium' }), 'Newer data published']),
+        /* Each piece its own child of the bar, so the flex gap separates
+           them. Nested in one span they ran together as "Scott PSites 222". */
+        U.el('strong', {}, at ? U.fmtDateTime(at) : 'A newer set'),
+        offer.savedBy ? U.el('span', {}, 'published by ' + N.clean(offer.savedBy)) : null,
+        U.el('span', { class: 'hint' }, global.Published.summarise(offer)),
+        U.el('div', { class: 'spacer' }),
+        U.el('button', {
+          class: 'btn sm primary',
+          title: 'Replace the data loaded in this browser with the published set. Your notes are kept.',
+          onclick: function () {
+            if (Object.keys(state.sources).length &&
+                !confirm('Replace the data loaded here with the published set from ' +
+                         (at ? U.fmtDateTime(at) : 'the share') + '?\n\n' +
+                         'Your notes are merged, not replaced.')) return;
+            var p = state.publishedOffer;
+            state.publishedOffer = null;
+            adoptPublished(p);
+          }
+        }, 'Load it'),
+        U.el('button', {
+          class: 'btn sm ghost',
+          title: 'Carry on with what is loaded here. You will be asked again next time.',
+          onclick: function () { state.publishedOffer = null; render(); }
+        }, 'Not now')
+      ]));
+      return;
+    }
+
+    var pa = from.at;
+    main.appendChild(U.el('div', { class: 'published-bar' }, [
+      U.el('span', { class: 'badge ok' }, [U.el('span', { class: 'sev sev-ok' }), 'Published data']),
+      U.el('strong', {}, pa ? U.fmtDateTime(pa) : 'unknown date'),
+      from.by ? U.el('span', {}, 'published by ' + from.by) : null,
+      pa ? U.el('span', { class: 'hint' }, '(' + U.sinceLabel(pa) + ')') : null,
+      from.summary ? U.el('span', { class: 'hint' }, from.summary) : null,
+      U.el('div', { class: 'spacer' }),
+      U.el('button', {
+        class: 'btn sm ghost',
+        title: 'Load your own exports instead of the published set',
+        onclick: function () { setTab('data'); }
+      }, 'Load my own files')
+    ]));
   }
 
   /* ==================================================================== */
@@ -5580,26 +5692,7 @@
 
   function saveProject() {
     if (!Object.keys(state.sources).length) { U.toast('Nothing loaded to save.', 'err'); return; }
-    var payload = {
-      format: 'asset-reconciler-project',
-      version: 1,
-      savedAt: new Date().toISOString(),
-      savedBy: state.author || '',
-      cfg: state.cfg,
-      enabledRules: state.enabledRules,
-      customViews: state.customViews,
-      fsConfig: state.fsConfig,
-      notes: global.Notes.snapshot(),
-      sources: {}
-    };
-    SOURCE_IDS.forEach(function (id) {
-      var s = state.sources[id];
-      if (!s) return;
-      payload.sources[id] = {
-        fileName: s.fileName, files: s.files || null, headers: s.headers,
-        mapping: s.mapping, raw: s.raw, fileTimes: s.fileTimes || null
-      };
-    });
+    var payload = filePayload();
     U.download('asset-reconciler-' + U.todayStamp() + '.json', JSON.stringify(payload, null, 1),
       'application/json', { bom: false });
     U.toast('Project saved. It contains your device data, so keep it somewhere appropriate.', 'ok', 7000);
@@ -5619,19 +5712,8 @@
             var p = JSON.parse(String(fr.result).replace(/^\uFEFF/, ''));
             if (p.format !== 'asset-reconciler-project') throw new Error('not a project file');
             state.sources = {};
-            Object.keys(p.sources || {}).forEach(function (id) {
-              var s = p.sources[id];
-              state.sources[id] = {
-                id: id, fileName: s.fileName, files: s.files || [s.fileName],
-                headers: s.headers, mapping: s.mapping, raw: s.raw,
-                fileTimes: s.fileTimes || null
-              };
-              project(id);
-            });
-            if (p.cfg) state.cfg = global.Match.settings(p.cfg);
-            if (p.enabledRules) state.enabledRules = p.enabledRules;
-            if (p.customViews) state.customViews = p.customViews;
-            if (p.fsConfig) state.fsConfig = mergeFsConfig(p.fsConfig);
+            applySources(p);
+            applySettings(p);
             // Merge rather than replace: notes already written in this browser
             // are somebody's work and must not be dropped by opening a file.
             var mergeReport = p.notes ? global.Notes.merge(p.notes) : null;
@@ -5656,6 +5738,61 @@
     document.body.appendChild(input);
     input.click();
     setTimeout(function () { if (input.parentNode) input.parentNode.removeChild(input); }, 1000);
+  }
+
+  /* ------------------------------------------------ the published data set */
+
+  /* Take on the published set. Notes merge rather than replace, because a
+     colleague's own notes are their work and a republish must not wipe them. */
+  function adoptPublished(payload, quiet) {
+    state.sources = {};
+    state.result = null;
+    state.netResult = null;
+    state.printResult = null;
+    state.mobResult = null;
+    var fills = applySources(payload);
+    applySettings(payload);
+    var mergeReport = payload.notes ? global.Notes.merge(payload.notes) : null;
+    /* Remembered so a republish reads as newer, and the same set is not
+        offered again every time the tool is opened. */
+    state.publishedSeen = payload.savedAt || null;
+    state.publishedFrom = {
+      at: global.Published.publishedAt(payload),
+      by: N.clean(payload.savedBy),
+      summary: global.Published.summarise(payload)
+    };
+    state.restoredFills = fills;
+    global.EstateMap.reset();
+    recompute();
+    setTab(state.result ? 'dashboard'
+      : state.netResult ? 'network'
+      : state.printResult ? 'printers'
+      : state.mobResult ? 'mobiles' : 'data');
+    if (!quiet) {
+      var when = state.publishedFrom.at ? U.fmtDateTime(state.publishedFrom.at) : 'an unknown date';
+      U.toast('Loaded the published set from ' + when +
+        (state.publishedFrom.by ? ', published by ' + state.publishedFrom.by : '') + '.', 'ok', 8000);
+    }
+    if (mergeReport && mergeReport.added) {
+      U.toast('Notes merged: ' + U.num(mergeReport.added) + ' added, ' +
+        U.num(mergeReport.skipped) + ' already here. Nothing of yours was replaced.', 'ok', 9000);
+    }
+  }
+
+  /* Write the file the share holds. Deliberately not automatic: publishing is
+     an act, and the maintainer should know they have done it. */
+  function publishData() {
+    if (!Object.keys(state.sources).length) {
+      U.toast('Nothing loaded to publish.', 'err');
+      return;
+    }
+    var payload = filePayload();
+    U.download(global.Published.FILE, global.Published.wrap(payload), 'application/javascript',
+      { bom: false });
+    state.publishedSeen = payload.savedAt;
+    saveWorkingSet();
+    U.toast('Wrote ' + global.Published.FILE + '. Put it next to asset-reconciler.html, replacing the ' +
+      'copy already there, and everyone opening the tool sees this set.', 'ok', 12000);
   }
 
   function loadSample() {
@@ -5767,8 +5904,42 @@
     // working set - IndexedDB is asynchronous, so waiting on it would leave
     // the page blank.
     render();
-    restoreWorkingSet().then(function (restored) {
-      if (!restored) return;
+    /* Two sources of a starting state, and the order between them matters.
+
+       Whatever this browser was last doing wins over the published set. A
+       colleague part-way through their own exports must not have them replaced
+       from under them, so a newer published set is offered rather than taken.
+       With nothing stored, the published set is simply the starting point,
+       which is the whole purpose of it. */
+    Promise.all([restoreWorkingSet(), global.Published.load()]).then(function (r) {
+      var restored = r[0], published = r[1];
+
+      if (published && !restored) {
+        adoptPublished(published, true);
+        var at = global.Published.publishedAt(published);
+        U.toast('Showing the published data set' +
+          (at ? ' from ' + U.fmtDateTime(at) : '') +
+          (published.savedBy ? ', published by ' + N.clean(published.savedBy) : '') +
+          '. Load your own exports on the Data tab to work from something else.', 'ok', 11000);
+        reportFills();
+        return;
+      }
+
+      if (published && restored) {
+        if (global.Published.isNewerThan(published, state.publishedSeen || state.restoredAt)) {
+          state.publishedOffer = published;
+        } else if (state.publishedSeen && published.savedAt === state.publishedSeen) {
+          // Already taken on: say where it came from without offering it again.
+          state.publishedFrom = {
+            at: global.Published.publishedAt(published),
+            by: N.clean(published.savedBy),
+            summary: global.Published.summarise(published)
+          };
+        }
+      }
+
+      if (!restored) { render(); return; }
+
       /* Land on a tab the restored data can actually fill. A session with only
          the network exports in it has no PC reconciliation, and the Dashboard
          reads that result unconditionally. */
@@ -5776,20 +5947,24 @@
         : state.netResult ? 'network'
         : state.printResult ? 'printers'
         : state.mobResult ? 'mobiles' : 'data');
-      U.toast('Picked up where you left off — ' +
+      U.toast('Picked up where you left off \u2014 ' +
         Object.keys(state.sources).map(function (id) {
           return S.SOURCES[id].short + ' ' + U.num(state.sources[id].records.length);
         }).join(', ') +
         (state.restoredAt ? ', saved ' + U.fmtDate(state.restoredAt) : ''), 'ok', 7000);
+      reportFills();
+    });
 
-      // The tool has gained fields since this working set was stored; say which
-      // ones are now populated rather than leaving them to be noticed.
+    /* The tool has gained fields since this payload was written; say which
+       ones are now populated rather than leaving them to be noticed. */
+    function reportFills() {
       (state.restoredFills || []).forEach(function (r) {
+        if (!S.SOURCES[r.source]) return;
         U.toast(S.SOURCES[r.source].label + ': ' + r.filled.length + ' column' +
-          (r.filled.length === 1 ? '' : 's') + ' added since you loaded this file are now matched — ' +
+          (r.filled.length === 1 ? '' : 's') + ' added since this data was saved are now matched \u2014 ' +
           r.filled.map(function (x) { return x.label; }).join(', ') + '.', 'ok', 12000);
       });
-    });
+    }
   }
 
   global.App = { init: init, state: state, render: render, loadSample: loadSample, recompute: recompute };
