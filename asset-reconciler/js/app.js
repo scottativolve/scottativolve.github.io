@@ -163,7 +163,8 @@
     netColumnsById: global.Store.get('netColumns', {}),
     netSelectedIds: [],
     netExportScope: 'view',
-    netSiteFilter: null,        // a site picked off the map
+    netSiteFilter: null,
+    netIssueFilter: null,        // a site picked off the map
     netCustomViews: global.Store.get('netCustomViews', []),
     favourites: global.Store.get('favourites', {}),          // 'pc:all' -> true
     sideOpen: global.Store.get('sideOpen', {}),             // sidebar section -> false when closed
@@ -182,6 +183,7 @@
     printColumnsById: global.Store.get('printColumns', {}),
     printSelectedIds: [],
     printSiteFilter: null,
+    printIssueFilter: null,
     printCustomViews: global.Store.get('printCustomViews', []),
     printConfig: mergePrintConfig(global.Store.get('printConfig', {})),
 
@@ -195,6 +197,7 @@
     mobColumnsById: global.Store.get('mobColumns', {}),
     mobSelectedIds: [],
     mobSiteFilter: null,
+    mobIssueFilter: null,
     mobCustomViews: global.Store.get('mobCustomViews', []),
     mobConfig: mergeMobConfig(global.Store.get('mobConfig', {})),
     // SOTI folder key -> site code, on top of the seeds in Mobiles.
@@ -633,6 +636,41 @@
     render();
   }
 
+  /* What is narrowing a view beyond the view itself, in words, for an import
+     dialog to say what its file actually covers. Getting that wrong is the
+     difference between correcting fifty assets and correcting a thousand. */
+  function narrowedBy(searchKey, siteKey, issueKey, rules) {
+    var byCode = (rules && (rules.BY_CODE || rules.RULE_BY_CODE)) || {};
+    var bits = [];
+    if (state[searchKey]) bits.push('search "' + state[searchKey] + '"');
+    if (state[siteKey]) bits.push('site ' + state[siteKey].name);
+    if (state[issueKey]) {
+      bits.push('issue ' + ((byCode[state[issueKey]] || {}).label || state[issueKey]));
+    }
+    return bits.length ? ', narrowed by ' + bits.join(' and ') : '';
+  }
+
+  /* The "you are looking at a subset" row under a view's title.
+
+     All four populations narrow the same two ways — by site from a map dot,
+     and by issue from a chip in the list — so this is one function rather
+     than four copies of it. It was three copies that only knew about the site
+     filter and one that knew about both, which is why clicking an issue chip
+     filtered the list on the Devices tab and did nothing anywhere else. */
+  function filterRow(siteKey, issueKey, rules) {
+    var site = state[siteKey], issue = state[issueKey];
+    if (!site && !issue) return null;
+    var byCode = (rules && (rules.BY_CODE || rules.RULE_BY_CODE)) || {};
+    return U.el('div', { class: 'row tight', style: { marginTop: '6px' } }, [
+      site ? U.el('span', { class: 'pill' }, 'Site: ' + site.name) : null,
+      issue ? U.el('span', { class: 'pill' }, 'Issue: ' + ((byCode[issue] || {}).label || issue)) : null,
+      U.el('button', {
+        class: 'btn sm ghost',
+        onclick: function () { state[siteKey] = null; state[issueKey] = null; render(); }
+      }, 'Clear filter' + (site && issue ? 's' : ''))
+    ]);
+  }
+
   /* ==================================================================== */
   /*  views + filtering                                                   */
   /* ==================================================================== */
@@ -719,6 +757,9 @@
     if (state.netSiteFilter) {
       rows = rows.filter(function (r) { return r.locationKey === state.netSiteFilter.key; });
     }
+    if (state.netIssueFilter) {
+      rows = rows.filter(function (r) { return r.issues.indexOf(state.netIssueFilter) >= 0; });
+    }
     if (withSearch && state.netSearch) rows = NV.searchRows(rows, state.netSearch);
     return rows;
   }
@@ -746,6 +787,7 @@
       state.netSearch = '';
       state.netSelectedIds = [];
     }
+    state.netIssueFilter = null;
     state.netViewId = id;
     setTab('network');
   }
@@ -768,6 +810,9 @@
     if (state.printSiteFilter) {
       rows = rows.filter(function (r) { return r.locationKey === state.printSiteFilter.key; });
     }
+    if (state.printIssueFilter) {
+      rows = rows.filter(function (r) { return r.issues.indexOf(state.printIssueFilter) >= 0; });
+    }
     if (withSearch && state.printSearch) rows = PV.searchRows(rows, state.printSearch);
     return rows;
   }
@@ -789,6 +834,7 @@
       state.printSearch = '';
       state.printSelectedIds = [];
     }
+    state.printIssueFilter = null;
     state.printViewId = id;
     setTab('printers');
   }
@@ -816,6 +862,9 @@
     if (state.mobSiteFilter) {
       rows = rows.filter(function (r) { return r.locationKey === state.mobSiteFilter.key; });
     }
+    if (state.mobIssueFilter) {
+      rows = rows.filter(function (r) { return r.issues.indexOf(state.mobIssueFilter) >= 0; });
+    }
     if (withSearch && state.mobSearch) rows = MBV.searchRows(rows, state.mobSearch);
     return rows;
   }
@@ -837,6 +886,7 @@
       state.mobSearch = '';
       state.mobSelectedIds = [];
     }
+    state.mobIssueFilter = null;
     state.mobViewId = id;
     setTab('mobiles');
   }
@@ -1165,27 +1215,26 @@
     });
 
     /* active filters */
+    /* Every narrowing in force, whichever population it belongs to, with the
+       population named so a filter left on the Printers tab is recognisable
+       while you are looking at the Mobiles one. */
     var filters = [];
-    if (state.siteFilter) {
-      filters.push(['Site: ' + U.truncate(state.siteFilter.name, 18),
-                    function () { state.siteFilter = null; render(); }]);
-    }
-    if (state.issueFilter) {
-      filters.push([(R.BY_CODE[state.issueFilter] || {}).label || state.issueFilter,
-                    function () { state.issueFilter = null; render(); }]);
-    }
-    if (state.netSiteFilter) {
-      filters.push(['Network site: ' + U.truncate(state.netSiteFilter.name, 14),
-                    function () { state.netSiteFilter = null; render(); }]);
-    }
-    if (state.mobSiteFilter) {
-      filters.push(['Mobile site: ' + U.truncate(state.mobSiteFilter.name, 15),
-                    function () { state.mobSiteFilter = null; render(); }]);
-    }
-    if (state.printSiteFilter) {
-      filters.push(['Printer site: ' + U.truncate(state.printSiteFilter.name, 14),
-                    function () { state.printSiteFilter = null; render(); }]);
-    }
+    [['pc',    'siteFilter',      'issueFilter',      R,  ''],
+     ['net',   'netSiteFilter',   'netIssueFilter',   NM, 'Network '],
+     ['print', 'printSiteFilter', 'printIssueFilter', PM, 'Printer '],
+     ['mob',   'mobSiteFilter',   'mobIssueFilter',   MB, 'Mobile ']].forEach(function (f) {
+      var siteKey = f[1], issueKey = f[2], rules = f[3], prefix = f[4];
+      var byCode = (rules && (rules.BY_CODE || rules.RULE_BY_CODE)) || {};
+      if (state[siteKey]) {
+        filters.push([prefix + (prefix ? 'site: ' : 'Site: ') + U.truncate(state[siteKey].name, prefix ? 14 : 18),
+                      function () { state[siteKey] = null; render(); }]);
+      }
+      if (state[issueKey]) {
+        var label = (byCode[state[issueKey]] || {}).label || state[issueKey];
+        filters.push([prefix + (prefix ? U.truncate(label, 18) : label),
+                      function () { state[issueKey] = null; render(); }]);
+      }
+    });
     if (filters.length) {
       var fsec = sideSection('filters', 'Active filter');
       if (fsec.body) {
@@ -2211,14 +2260,7 @@
     main.appendChild(U.el('div', { class: 'page-head' }, [
       U.el('h1', {}, view.name),
       U.el('div', { class: 'sub' }, view.description || ''),
-      state.siteFilter || state.issueFilter ? U.el('div', { class: 'row tight', style: { marginTop: '6px' } }, [
-        state.siteFilter ? U.el('span', { class: 'pill' }, 'Site: ' + state.siteFilter.name) : null,
-        state.issueFilter ? U.el('span', { class: 'pill' }, 'Issue: ' + ((R.BY_CODE[state.issueFilter] || {}).label || '')) : null,
-        U.el('button', {
-          class: 'btn sm ghost',
-          onclick: function () { state.siteFilter = null; state.issueFilter = null; render(); }
-        }, 'Clear filters')
-      ]) : null
+      filterRow('siteFilter', 'issueFilter', R)
     ]));
 
     /* one control row above everything it scopes */
@@ -2333,7 +2375,7 @@
           onAddNote: function (row) { openNotes([row]); }
         });
       },
-      onChipClick: function (code) { state.issueFilter = code; render(); },
+      onChipClick: function (code) { narrowToIssue('issueFilter', code, R); },
       onNotesClick: function (r) { openNotes([r]); },
       onSelectionChange: function (sel) {
         state.selectedIds = Array.from(sel);
@@ -2526,7 +2568,8 @@
     body.appendChild(head);
 
     var scopeRow = U.el('div', { class: 'row', style: { marginBottom: '10px' } });
-    [['view', 'Everything in "' + view.name + '"' + (state.printSearch ? ' matching your search' : '')],
+    [['view', 'Everything in "' + view.name + '"' +
+        narrowedBy('printSearch', 'printSiteFilter', 'printIssueFilter', PM)],
      ['selection', U.num(state.printSelectedIds.length) + ' selected']].forEach(function (o) {
       scopeRow.appendChild(U.el('label', { class: 'check' }, [
         U.el('input', {
@@ -2896,7 +2939,8 @@
     body.appendChild(head);
 
     var scopeRow = U.el('div', { class: 'row', style: { marginBottom: '10px' } });
-    [['view', 'Everything in "' + view.name + '"' + (state.netSearch ? ' matching your search' : '')],
+    [['view', 'Everything in "' + view.name + '"' +
+        narrowedBy('netSearch', 'netSiteFilter', 'netIssueFilter', NM)],
      ['selection', U.num(state.netSelectedIds.length) + ' selected']].forEach(function (o) {
       scopeRow.appendChild(U.el('label', { class: 'check' }, [
         U.el('input', {
@@ -3181,13 +3225,7 @@
     main.appendChild(U.el('div', { class: 'page-head' }, [
       U.el('h1', {}, view.name),
       U.el('div', { class: 'sub' }, view.description || ''),
-      state.netSiteFilter ? U.el('div', { class: 'row tight', style: { marginTop: '6px' } }, [
-        U.el('span', { class: 'pill' }, 'Site: ' + state.netSiteFilter.name),
-        U.el('button', {
-          class: 'btn sm ghost',
-          onclick: function () { state.netSiteFilter = null; render(); }
-        }, 'Clear filter')
-      ]) : null
+      filterRow('netSiteFilter', 'netIssueFilter', NM)
     ]));
 
     if (state.netWarnings.length) {
@@ -3326,7 +3364,7 @@
           onAddNote: function (row) { openNotes([row]); }
         });
       },
-      onChipClick: function (code) { state.netSearch = ''; openNetIssue(code); },
+      onChipClick: function (code) { state.netSearch = ''; narrowToIssue('netIssueFilter', code, NM); },
       onNotesClick: function (r) { openNotes([r]); },
       onSelectionChange: function (sel) {
         state.netSelectedIds = Array.from(sel);
@@ -3373,10 +3411,17 @@
     ];
   }
 
-  function openNetIssue(code) {
-    var rule = NM.RULE_BY_CODE[code];
-    if (!rule) return;
-    U.toast(rule.label + (rule.hint ? ' — ' + rule.hint : ''), 'ok', 9000);
+  /* Clicking an issue chip narrows the list to that issue, and says what the
+     issue means on the way past. Three of the four only did the saying. */
+  function narrowToIssue(key, code, rules) {
+    var byCode = (rules && (rules.BY_CODE || rules.RULE_BY_CODE)) || {};
+    var rule = byCode[code];
+    // Clicking the same chip again is the way back out.
+    state[key] = state[key] === code ? null : code;
+    if (state[key] && rule && rule.hint) {
+      U.toast(rule.label + ' \u2014 ' + rule.hint, 'ok', 9000);
+    }
+    render();
   }
 
   function netViewCsv(rows, columns) {
@@ -3399,13 +3444,7 @@
     main.appendChild(U.el('div', { class: 'page-head' }, [
       U.el('h1', {}, view.name),
       U.el('div', { class: 'sub' }, view.description || ''),
-      state.printSiteFilter ? U.el('div', { class: 'row tight', style: { marginTop: '6px' } }, [
-        U.el('span', { class: 'pill' }, 'Site: ' + state.printSiteFilter.name),
-        U.el('button', {
-          class: 'btn sm ghost',
-          onclick: function () { state.printSiteFilter = null; render(); }
-        }, 'Clear filter')
-      ]) : null
+      filterRow('printSiteFilter', 'printIssueFilter', PM)
     ]));
 
     function inView(id) { return printViewCount(printViewById(id)); }
@@ -3524,10 +3563,7 @@
           onAddNote: function (row) { openNotes([row]); }
         });
       },
-      onChipClick: function (code) {
-        var rule = PM.RULE_BY_CODE[code];
-        if (rule) U.toast(rule.label + (rule.hint ? ' — ' + rule.hint : ''), 'ok', 9000);
-      },
+      onChipClick: function (code) { narrowToIssue('printIssueFilter', code, PM); },
       onNotesClick: function (r) { openNotes([r]); },
       onSelectionChange: function (sel) {
         state.printSelectedIds = Array.from(sel);
@@ -3591,13 +3627,7 @@
     main.appendChild(U.el('div', { class: 'page-head' }, [
       U.el('h1', {}, view.name),
       U.el('div', { class: 'sub' }, view.description || ''),
-      state.mobSiteFilter ? U.el('div', { class: 'row tight', style: { marginTop: '6px' } }, [
-        U.el('span', { class: 'pill' }, 'Site: ' + state.mobSiteFilter.name),
-        U.el('button', {
-          class: 'btn sm ghost',
-          onclick: function () { state.mobSiteFilter = null; render(); }
-        }, 'Clear filter')
-      ]) : null
+      filterRow('mobSiteFilter', 'mobIssueFilter', MB)
     ]));
 
     function inView(id) { return mobViewCount(mobViewById(id)); }
@@ -3733,10 +3763,7 @@
           onAddNote: function (row) { openNotes([row]); }
         });
       },
-      onChipClick: function (code) {
-        var rule = MB.RULE_BY_CODE[code];
-        if (rule) U.toast(rule.label + (rule.hint ? ' — ' + rule.hint : ''), 'ok', 9000);
-      },
+      onChipClick: function (code) { narrowToIssue('mobIssueFilter', code, MB); },
       onNotesClick: function (r) { openNotes([r]); },
       onSelectionChange: function (sel) {
         state.mobSelectedIds = Array.from(sel);
@@ -3909,7 +3936,8 @@
     body.appendChild(head);
 
     var scopeRow = U.el('div', { class: 'row', style: { marginBottom: '10px' } });
-    [['view', 'Everything in "' + view.name + '"' + (state.mobSearch ? ' matching your search' : '')],
+    [['view', 'Everything in "' + view.name + '"' +
+        narrowedBy('mobSearch', 'mobSiteFilter', 'mobIssueFilter', MB)],
      ['selection', U.num(state.mobSelectedIds.length) + ' selected']].forEach(function (o) {
       scopeRow.appendChild(U.el('label', { class: 'check' }, [
         U.el('input', {

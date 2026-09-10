@@ -507,6 +507,25 @@ Settings — so it can be read but not copied, and the dialog says so.
 Columns are separate from conditions: set them with the **Columns** button on
 the list, and they are remembered per view.
 
+### Narrowing a view further
+
+Two things narrow a list beyond the view's own conditions, in all four
+populations:
+
+- **Click an issue chip** in the Issues column and the list narrows to the
+  devices carrying that issue, with a pill under the title saying which. Click
+  the same chip again, press *Clear filter*, or change view, and it lifts.
+  A chip you click also says what the issue means, once.
+- **Click a dot on the map** and choose a population, and the list narrows to
+  that site.
+
+Both show as a pill under the view's title and as a chip under **Active
+filter** in the sidebar, tagged with the population so a filter left on the
+Printers tab is recognisable while you are looking at the Mobiles one. The
+import dialog names them too — *Everything in "Needs attention", narrowed by
+issue Not reporting* — because what the file covers is the one thing worth
+being sure of before uploading it.
+
 To share a set of views with colleagues, use **Settings → Export configuration**
 and have them import the file. That carries your views (both populations),
 favourites, thresholds, site overrides and import settings, and nothing else.
