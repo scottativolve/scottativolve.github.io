@@ -444,16 +444,30 @@ name hardware.
 
 ## The working views
 
-Views are filtered lists down the left-hand side. The built-in ones cover the
-routine work — *Fix: assigned user*, *Fix: location*, *Missing from Intune*,
-*Stale devices*, *Status conflicts*, and so on.
+Views are filtered lists down the left-hand side, one section per population,
+and all four sections are laid out the same way:
 
-**Both populations work the same way.** *Device views* and *Network views* are
-separate sections with separate lists, but the same builder, the same read-only
-inspection of built-ins, the same *Save as a copy*, and the same **+** for a new
-one. A network view filters on network columns and network checks — *Not in
-Freshservice*, *HA member out of sync*, *Site looks wrong* — rather than the PC
-ones.
+| | |
+|---|---|
+| **Everything** | *All PCs*, *All network devices*, *All printers*, *All mobiles* |
+| **Breakdowns** | ways of slicing the population by what the assets are — *Firewalls*, *Switches*, *Tablets*, *By model*, *By volume*, *By risk score* |
+| **Issues** | *Needs attention* first, then **location**, then what the two systems **disagree** about, then everything else |
+
+That order is the same in every section, so the third thing down the Issues run
+is a location problem whichever kind of asset you are looking at. Where two
+populations have the same kind of problem they use the same words for it:
+*Location to fix* exists in all four, *Asset state to fix* in three, *Not in
+Freshservice* in two.
+
+The order and the names live in one short table per population at the bottom of
+each views file, rather than being whatever order the view objects happened to
+be declared in — which is how the four drifted apart in the first place, with
+PCs leading on *All devices* while network kit ended on it, and the same view
+called *Fix: location* in one place and *Location to check* in another.
+
+**All four sections work the same way otherwise too** — the same builder, the
+same read-only inspection of built-ins, the same *Save as a copy*, the same
+**+** for a new one. Each filters on its own columns and its own checks.
 
 Press **+** next to either section to build your own from any field, any issue,
 and any combination of conditions ("region is North West **and** no user in
@@ -462,14 +476,18 @@ browser.
 
 ### Keeping the sidebar usable
 
-With thirty-odd views across the two populations the list gets long, so:
+With sixty-odd views across the four populations the list gets long, so:
 
+- **Everything, Breakdowns, Issues** head each run, so the order is visible
+  rather than implied.
 - **Every section collapses.** Click its heading to fold it away; the tool
   remembers which are closed.
-- **Star a view to make it a favourite.** Starred views from both populations
-  gather in a **Favourites** section at the top, tagged *PC* or *Net* so it is
-  clear which list each one belongs to. The section only appears once you have
-  starred something.
+- **Star a view to make it a favourite.** Starred views from all four
+  populations gather in a **Favourites** section at the top, tagged *PC*,
+  *Net*, *Print* or *Mob* so it is clear which list each one belongs to. The
+  section only appears once you have starred something.
+- **Your own views** sit under a *Your views* heading at the end of their
+  section.
 
 **Every view can be opened and read.** The gear beside a view in the sidebar,
 or the button above the list, shows how it is defined, with a live count of how
@@ -478,7 +496,7 @@ many devices match as you change it:
 - **Your own views** open for editing — change the conditions, the name or the
   description and save over it.
 - **Built-in views** open read-only, so you can see exactly what
-  *Status conflicts* or *Stale devices* actually tests. **Save as a copy** turns
+  *Asset state to fix* or *Not checked in recently* actually tests. **Save as a copy** turns
   one into an ordinary custom view you can then edit freely, which is usually
   the quickest way to build something close to a built-in but not quite.
 

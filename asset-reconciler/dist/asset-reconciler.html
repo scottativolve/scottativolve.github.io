@@ -980,6 +980,15 @@ a  { color: var(--accent); }
 
 /* A star has to be readable without hovering, or you cannot see which views
    are favourites — which is the whole point of the section. */
+/* The head of a run of views: Everything, Breakdowns, Issues. Quiet enough
+   to be scenery until you look for it. */
+.side-group {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 10px 12px 3px;
+}
+.side-group:first-child { padding-top: 4px; }
+
 .side-item .star { opacity: 0.35; }
 .side-item .star.on { opacity: 1; color: var(--warning); }
 .side-item:hover .star { opacity: 0.7; }
@@ -4930,6 +4939,38 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     { op: 'newerThan',   label: 'is newer than (days)', needsValue: true, numeric: true }
   ];
 
+  /* Put a population's views in the order the sidebar shows them, and give
+     them their names, from one table.
+
+     The order used to be whatever order the objects happened to be declared
+     in, which is how the four populations drifted apart: PCs led with "All
+     devices", network kit ended with it, and the same kind of view was called
+     "Fix: location" in one place and "Location to check" in another. A table
+     per population puts the four side by side in four short lists instead of
+     four long ones.
+
+     group is 'all', 'breakdown' or 'issue'; the sidebar heads each run with a
+     label. A view the table forgets is appended rather than dropped, because
+     losing a view silently is worse than showing it in the wrong place. */
+  function order(builtIn, table) {
+    var byId = {};
+    builtIn.forEach(function (v) { byId[v.id] = v; });
+    var out = [];
+    table.forEach(function (row) {
+      var v = byId[row[0]];
+      if (!v) return;                       // names a view this build does not have
+      v.group = row[1];
+      if (row[2]) v.name = row[2];
+      out.push(v);
+      delete byId[row[0]];
+    });
+    Object.keys(byId).forEach(function (id) {
+      byId[id].group = byId[id].group || 'issue';
+      out.push(byId[id]);
+    });
+    return out;
+  }
+
   /* ------------------------------------------------------ filter engine */
 
   /* The engine is the same whatever the rows are: it only ever reaches a row
@@ -5201,7 +5242,37 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
      without adding the column) and impossible to get out of step. */
   var PC = engine(COLUMNS, BASE_COLS);
 
-  global.Views = Object.assign({ engine: engine, BUILT_IN: BUILT_IN }, PC);
+  /* ------------------------------------------------- order and names */
+
+  /* Everything, then the views that slice the estate by what the assets are,
+     then the issues: location first, then what the two systems disagree
+     about, then the rest. */
+  var ORDER = [
+    ['all',             'all',       'All PCs'],
+
+    ['other-assets',    'breakdown', 'Other asset types'],
+    ['risk-score',      'breakdown', 'By risk score'],
+    ['most-risks',      'breakdown', 'By open risks'],
+
+    ['attention',       'issue',     'Needs attention'],
+    ['fix-location',    'issue',     'Location to fix'],
+    ['moved-by-ip',     'issue',     'Location: IP elsewhere'],
+    ['off-network',     'issue',     'Location: off network'],
+    ['not-in-fs',       'issue',     'Not in Freshservice'],
+    ['not-in-intune',   'issue',     'Not in Intune'],
+    ['state-conflicts', 'issue',     'Asset state to fix'],
+    ['fix-user',        'issue',     'Assigned user to fix'],
+    ['stale',           'issue',     'Not checked in recently'],
+    ['not-scanned',     'issue',     'No vulnerability scan'],
+    ['duplicates',      'issue',     'Duplicate device names'],
+    ['site-check',      'issue',     'Site verification pack'],
+    ['clean',           'issue',     'Clean records']
+  ];
+
+  global.Views = Object.assign({
+    engine: engine, order: order, ORDER: ORDER,
+    BUILT_IN: order(BUILT_IN, ORDER)
+  }, PC);
 })(window);
 
 </script>
@@ -9032,7 +9103,8 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
       sort: { key: 'severity', dir: 'asc' }
     },
     issueView('net-new', 'New since last import',
-      'Managed by FortiManager with no Freshservice record at all. These are the rows to build an import from.',
+      'Managed by FortiManager with no Freshservice record at all \u2014 in practice, everything added to the ' +
+      'network since the last manual import. These are the rows to build an import from.',
       ['missing-from-fs'],
       ['name', 'kind', 'serial', 'platform', 'siteCode', 'siteName', 'env', 'firmware', 'parent']),
     issueView('net-replaced', 'Possibly replaced',
@@ -9112,9 +9184,32 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     }
   ];
 
+  /* ------------------------------------------------- order and names */
+
+  var ORDER = [
+    ['net-all',             'all',       'All network devices'],
+
+    ['net-firewalls',       'breakdown', 'Firewalls'],
+    ['net-switches',        'breakdown', 'Switches'],
+    ['net-aps',             'breakdown', 'Access points'],
+    ['net-other-vendor',    'breakdown', 'Other vendors'],
+    ['net-ha',              'breakdown', 'HA clusters'],
+
+    ['net-attention',       'issue',     'Needs attention'],
+    ['net-location',        'issue',     'Location to fix'],
+    ['net-new',             'issue',     'Not in Freshservice'],
+    ['net-replaced',        'issue',     'Not in FortiManager'],
+    ['net-retired-managed', 'issue',     'Asset state to fix'],
+    ['net-firmware',        'issue',     'Firmware to update'],
+    ['net-never-reported',  'issue',     'Never reported in'],
+    ['net-unnamed',         'issue',     'Named after serial'],
+    ['net-dupes',           'issue',     'Duplicate serials']
+  ];
+
   global.NetViews = Object.assign({
     engine: global.Views.engine,
-    BUILT_IN: BUILT_IN,
+    ORDER: ORDER,
+    BUILT_IN: global.Views.order(BUILT_IN, ORDER),
     setEnvLabeller: function (fn) { labelEnv = fn || function (k) { return k; }; }
   }, E);
 })(window);
@@ -9244,7 +9339,8 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
       ['barely-used', 'closed-site', 'legacy-subnet', 'not-a-printer'],
       ['name', 'serial', 'model', 'siteName', 'pages', 'lastSeen', 'ipOnestop', 'issues']),
     issueView('pr-contract', 'Contract mismatches',
-      'In one system and not the other.',
+      'On the OneStop contract with no Freshservice record, or a Freshservice printer OneStop has never seen. ' +
+      'Both directions, because either one means the two registers disagree about what you have.',
       ['onestop-only', 'fs-only'],
       ['name', 'serial', 'status', 'model', 'fsState', 'siteResolved', 'issues']),
     issueView('pr-tags', 'Asset tag oddities',
@@ -9269,7 +9365,31 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     }
   ];
 
-  global.PrintViews = Object.assign({ engine: global.Views.engine, BUILT_IN: BUILT_IN }, E);
+  /* ------------------------------------------------- order and names */
+
+  var ORDER = [
+    ['pr-all',          'all',       'All printers'],
+
+    ['pr-volume',       'breakdown', 'By volume'],
+
+    ['pr-attention',    'issue',     'Needs attention'],
+    ['pr-location',     'issue',     'Location to fix'],
+    ['pr-contract',     'issue',     'In one system only'],
+    ['pr-state',        'issue',     'Asset state to fix'],
+    ['pr-serial',       'issue',     'Serial number to fix'],
+    ['pr-ip',           'issue',     'IP address to fix'],
+    ['pr-product',      'issue',     'Product to fix'],
+    ['pr-vendor',       'issue',     'Vendor to fix'],
+    ['pr-tags',         'issue',     'Asset tag to fix'],
+    ['pr-silent',       'issue',     'Not reporting'],
+    ['pr-unwatched',    'issue',     'Monitoring and toner'],
+    ['pr-questionable', 'issue',     'Worth questioning']
+  ];
+
+  global.PrintViews = Object.assign({
+    engine: global.Views.engine, ORDER: ORDER,
+    BUILT_IN: global.Views.order(BUILT_IN, ORDER)
+  }, E);
 })(window);
 
 </script>
@@ -9533,7 +9653,39 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     }
   ];
 
-  global.MobViews = Object.assign({ engine: global.Views.engine, BUILT_IN: BUILT_IN }, E);
+  /* ------------------------------------------------- order and names */
+
+  var ORDER = [
+    ['mb-all',              'all',       'All mobiles'],
+
+    ['mb-models',           'breakdown', 'By model'],
+    ['mb-tablets',          'breakdown', 'Tablets'],
+    ['mb-agents',           'breakdown', 'By agent version'],
+    ['mb-at-site',          'breakdown', 'At a site'],
+    ['mb-home',             'breakdown', 'Home and office'],
+    ['mb-owners',           'breakdown', 'Who holds what'],
+
+    ['mb-attention',        'issue',     'Needs attention'],
+    ['mb-site-unresolved',  'issue',     'Location to fix'],
+    ['mb-wrong-region',     'issue',     'Location: wrong region'],
+    ['mb-closed',           'issue',     'Location: site closed'],
+    ['mb-owner-gaps',       'issue',     'Owner to establish'],
+    ['mb-owner-left',       'issue',     'Owner has left'],
+    ['mb-site-phone-owned', 'issue',     'Owner: site phone'],
+    ['mb-import-blocked',   'issue',     'Cannot be imported'],
+    ['mb-silent',           'issue',     'Silent for months'],
+    ['mb-stale',            'issue',     'Not checked in recently'],
+    ['mb-security',         'issue',     'Security'],
+    ['mb-dup-number',       'issue',     'Duplicate phone numbers'],
+    ['mb-duplicates',       'issue',     'Duplicate records'],
+    ['mb-test',             'issue',     'Test and stock'],
+    ['mb-naming',           'issue',     'Named after a person']
+  ];
+
+  global.MobViews = Object.assign({
+    engine: global.Views.engine, ORDER: ORDER,
+    BUILT_IN: global.Views.order(BUILT_IN, ORDER)
+  }, E);
 })(window);
 
 </script>
@@ -11630,6 +11782,12 @@ window.SampleData = {
   /*  views + filtering                                                   */
   /* ==================================================================== */
 
+  /* The named view, or the first one there is. Used for the fallback when a
+     stored view id names a view this build no longer has. */
+  function viewByIdOr(list, id) {
+    return list.filter(function (v) { return v.id === id; })[0] || list[0];
+  }
+
   function allViews() {
     return V.BUILT_IN.concat(state.customViews.map(function (v) {
       return Object.assign({}, v, { isCustom: true });
@@ -11637,7 +11795,10 @@ window.SampleData = {
   }
 
   function viewById(id) {
-    return allViews().filter(function (v) { return v.id === id; })[0] || V.BUILT_IN[1];
+    /* Named, not positional. This used to be BUILT_IN[1] because the second
+       view happened to be Needs attention; reordering the list would have
+       silently made the fallback something else. */
+    return allViews().filter(function (v) { return v.id === id; })[0] || viewByIdOr(allViews(), 'attention');
   }
 
   /* withSearch reproduces the quick-search box as well as the view's own
@@ -11694,7 +11855,7 @@ window.SampleData = {
   }
 
   function netViewById(id) {
-    return netViews().filter(function (v) { return v.id === id; })[0] || NV.BUILT_IN[0];
+    return netViews().filter(function (v) { return v.id === id; })[0] || viewByIdOr(netViews(), 'net-attention');
   }
 
   function netRowsForView(view, withSearch) {
@@ -11743,7 +11904,7 @@ window.SampleData = {
   }
 
   function printViewById(id) {
-    return printViews().filter(function (v) { return v.id === id; })[0] || PV.BUILT_IN[0];
+    return printViews().filter(function (v) { return v.id === id; })[0] || viewByIdOr(printViews(), 'pr-attention');
   }
 
   function printRowsForView(view, withSearch) {
@@ -11791,7 +11952,7 @@ window.SampleData = {
   }
 
   function mobViewById(id) {
-    return mobViews().filter(function (v) { return v.id === id; })[0] || MBV.BUILT_IN[0];
+    return mobViews().filter(function (v) { return v.id === id; })[0] || viewByIdOr(mobViews(), 'mb-attention');
   }
 
   function mobRowsForView(view, withSearch) {
@@ -11957,6 +12118,18 @@ window.SampleData = {
     render();
   }
 
+  /* Which population a favourite belongs to, since favourites from all four
+     sit in one list. */
+  var POP_TAGS = { pc: 'PC', net: 'Net', print: 'Print', mob: 'Mob' };
+
+  /* What each run of views is for, said once at its head. */
+  var GROUP_LABELS = {
+    all: 'Everything',
+    breakdown: 'Breakdowns',
+    issue: 'Issues',
+    custom: 'Your views'
+  };
+
   /* A collapsible sidebar section. add is an optional { title, onclick }
      button that sits in the header alongside the collapse arrow. */
   function sideSection(key, title, add) {
@@ -12026,8 +12199,11 @@ window.SampleData = {
       onclick: function () { ctx.open(v.id); }
     }, [
       U.el('span', { class: 'side-name' },
+        /* The tag came from when there were two populations and read "PC" for
+           anything that was not network — so a favourite printer view and a
+           favourite mobile view both claimed to be PC ones. */
         opts.showPopulation
-          ? [U.el('span', { class: 'side-tag' }, ctx.key === 'net' ? 'Net' : 'PC'), ' ', v.name]
+          ? [U.el('span', { class: 'side-tag' }, POP_TAGS[ctx.key] || ctx.key), ' ', v.name]
           : v.name),
       U.el('span', { class: 'count' }, U.num(ctx.count(v))),
       U.el('span', {
@@ -12116,7 +12292,19 @@ window.SampleData = {
         onclick: function () { openViewBuilder(ctx); }
       });
       if (sec.body) {
-        ctx.all().forEach(function (v) { sec.body.appendChild(viewItem(ctx, v)); });
+        /* A label at the head of each run. With twenty-two mobile views the
+           order the list is in is invisible without them, and the order is
+           the point: the whole population, then the ways of slicing it, then
+           what is wrong with it. */
+        var lastGroup = null;
+        ctx.all().forEach(function (v) {
+          var group = v.isCustom ? 'custom' : (v.group || 'issue');
+          if (group !== lastGroup) {
+            sec.body.appendChild(U.el('div', { class: 'side-group' }, GROUP_LABELS[group] || ''));
+            lastGroup = group;
+          }
+          sec.body.appendChild(viewItem(ctx, v));
+        });
       }
       host.appendChild(sec.el);
     });
@@ -16312,7 +16500,7 @@ window.SampleData = {
   function pcCtx() {
     return {
       key: 'pc',
-      label: 'Device views',
+      label: 'PC views',
       noun: 'device',
       listName: 'device list',
       tab: 'devices',

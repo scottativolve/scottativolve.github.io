@@ -637,6 +637,12 @@
   /*  views + filtering                                                   */
   /* ==================================================================== */
 
+  /* The named view, or the first one there is. Used for the fallback when a
+     stored view id names a view this build no longer has. */
+  function viewByIdOr(list, id) {
+    return list.filter(function (v) { return v.id === id; })[0] || list[0];
+  }
+
   function allViews() {
     return V.BUILT_IN.concat(state.customViews.map(function (v) {
       return Object.assign({}, v, { isCustom: true });
@@ -644,7 +650,10 @@
   }
 
   function viewById(id) {
-    return allViews().filter(function (v) { return v.id === id; })[0] || V.BUILT_IN[1];
+    /* Named, not positional. This used to be BUILT_IN[1] because the second
+       view happened to be Needs attention; reordering the list would have
+       silently made the fallback something else. */
+    return allViews().filter(function (v) { return v.id === id; })[0] || viewByIdOr(allViews(), 'attention');
   }
 
   /* withSearch reproduces the quick-search box as well as the view's own
@@ -701,7 +710,7 @@
   }
 
   function netViewById(id) {
-    return netViews().filter(function (v) { return v.id === id; })[0] || NV.BUILT_IN[0];
+    return netViews().filter(function (v) { return v.id === id; })[0] || viewByIdOr(netViews(), 'net-attention');
   }
 
   function netRowsForView(view, withSearch) {
@@ -750,7 +759,7 @@
   }
 
   function printViewById(id) {
-    return printViews().filter(function (v) { return v.id === id; })[0] || PV.BUILT_IN[0];
+    return printViews().filter(function (v) { return v.id === id; })[0] || viewByIdOr(printViews(), 'pr-attention');
   }
 
   function printRowsForView(view, withSearch) {
@@ -798,7 +807,7 @@
   }
 
   function mobViewById(id) {
-    return mobViews().filter(function (v) { return v.id === id; })[0] || MBV.BUILT_IN[0];
+    return mobViews().filter(function (v) { return v.id === id; })[0] || viewByIdOr(mobViews(), 'mb-attention');
   }
 
   function mobRowsForView(view, withSearch) {
@@ -964,6 +973,18 @@
     render();
   }
 
+  /* Which population a favourite belongs to, since favourites from all four
+     sit in one list. */
+  var POP_TAGS = { pc: 'PC', net: 'Net', print: 'Print', mob: 'Mob' };
+
+  /* What each run of views is for, said once at its head. */
+  var GROUP_LABELS = {
+    all: 'Everything',
+    breakdown: 'Breakdowns',
+    issue: 'Issues',
+    custom: 'Your views'
+  };
+
   /* A collapsible sidebar section. add is an optional { title, onclick }
      button that sits in the header alongside the collapse arrow. */
   function sideSection(key, title, add) {
@@ -1033,8 +1054,11 @@
       onclick: function () { ctx.open(v.id); }
     }, [
       U.el('span', { class: 'side-name' },
+        /* The tag came from when there were two populations and read "PC" for
+           anything that was not network — so a favourite printer view and a
+           favourite mobile view both claimed to be PC ones. */
         opts.showPopulation
-          ? [U.el('span', { class: 'side-tag' }, ctx.key === 'net' ? 'Net' : 'PC'), ' ', v.name]
+          ? [U.el('span', { class: 'side-tag' }, POP_TAGS[ctx.key] || ctx.key), ' ', v.name]
           : v.name),
       U.el('span', { class: 'count' }, U.num(ctx.count(v))),
       U.el('span', {
@@ -1123,7 +1147,19 @@
         onclick: function () { openViewBuilder(ctx); }
       });
       if (sec.body) {
-        ctx.all().forEach(function (v) { sec.body.appendChild(viewItem(ctx, v)); });
+        /* A label at the head of each run. With twenty-two mobile views the
+           order the list is in is invisible without them, and the order is
+           the point: the whole population, then the ways of slicing it, then
+           what is wrong with it. */
+        var lastGroup = null;
+        ctx.all().forEach(function (v) {
+          var group = v.isCustom ? 'custom' : (v.group || 'issue');
+          if (group !== lastGroup) {
+            sec.body.appendChild(U.el('div', { class: 'side-group' }, GROUP_LABELS[group] || ''));
+            lastGroup = group;
+          }
+          sec.body.appendChild(viewItem(ctx, v));
+        });
       }
       host.appendChild(sec.el);
     });
@@ -5319,7 +5355,7 @@
   function pcCtx() {
     return {
       key: 'pc',
-      label: 'Device views',
+      label: 'PC views',
       noun: 'device',
       listName: 'device list',
       tab: 'devices',

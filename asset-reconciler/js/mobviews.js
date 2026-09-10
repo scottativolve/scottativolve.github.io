@@ -256,5 +256,37 @@
     }
   ];
 
-  global.MobViews = Object.assign({ engine: global.Views.engine, BUILT_IN: BUILT_IN }, E);
+  /* ------------------------------------------------- order and names */
+
+  var ORDER = [
+    ['mb-all',              'all',       'All mobiles'],
+
+    ['mb-models',           'breakdown', 'By model'],
+    ['mb-tablets',          'breakdown', 'Tablets'],
+    ['mb-agents',           'breakdown', 'By agent version'],
+    ['mb-at-site',          'breakdown', 'At a site'],
+    ['mb-home',             'breakdown', 'Home and office'],
+    ['mb-owners',           'breakdown', 'Who holds what'],
+
+    ['mb-attention',        'issue',     'Needs attention'],
+    ['mb-site-unresolved',  'issue',     'Location to fix'],
+    ['mb-wrong-region',     'issue',     'Location: wrong region'],
+    ['mb-closed',           'issue',     'Location: site closed'],
+    ['mb-owner-gaps',       'issue',     'Owner to establish'],
+    ['mb-owner-left',       'issue',     'Owner has left'],
+    ['mb-site-phone-owned', 'issue',     'Owner: site phone'],
+    ['mb-import-blocked',   'issue',     'Cannot be imported'],
+    ['mb-silent',           'issue',     'Silent for months'],
+    ['mb-stale',            'issue',     'Not checked in recently'],
+    ['mb-security',         'issue',     'Security'],
+    ['mb-dup-number',       'issue',     'Duplicate phone numbers'],
+    ['mb-duplicates',       'issue',     'Duplicate records'],
+    ['mb-test',             'issue',     'Test and stock'],
+    ['mb-naming',           'issue',     'Named after a person']
+  ];
+
+  global.MobViews = Object.assign({
+    engine: global.Views.engine, ORDER: ORDER,
+    BUILT_IN: global.Views.order(BUILT_IN, ORDER)
+  }, E);
 })(window);

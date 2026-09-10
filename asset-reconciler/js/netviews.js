@@ -89,7 +89,8 @@
       sort: { key: 'severity', dir: 'asc' }
     },
     issueView('net-new', 'New since last import',
-      'Managed by FortiManager with no Freshservice record at all. These are the rows to build an import from.',
+      'Managed by FortiManager with no Freshservice record at all \u2014 in practice, everything added to the ' +
+      'network since the last manual import. These are the rows to build an import from.',
       ['missing-from-fs'],
       ['name', 'kind', 'serial', 'platform', 'siteCode', 'siteName', 'env', 'firmware', 'parent']),
     issueView('net-replaced', 'Possibly replaced',
@@ -169,9 +170,32 @@
     }
   ];
 
+  /* ------------------------------------------------- order and names */
+
+  var ORDER = [
+    ['net-all',             'all',       'All network devices'],
+
+    ['net-firewalls',       'breakdown', 'Firewalls'],
+    ['net-switches',        'breakdown', 'Switches'],
+    ['net-aps',             'breakdown', 'Access points'],
+    ['net-other-vendor',    'breakdown', 'Other vendors'],
+    ['net-ha',              'breakdown', 'HA clusters'],
+
+    ['net-attention',       'issue',     'Needs attention'],
+    ['net-location',        'issue',     'Location to fix'],
+    ['net-new',             'issue',     'Not in Freshservice'],
+    ['net-replaced',        'issue',     'Not in FortiManager'],
+    ['net-retired-managed', 'issue',     'Asset state to fix'],
+    ['net-firmware',        'issue',     'Firmware to update'],
+    ['net-never-reported',  'issue',     'Never reported in'],
+    ['net-unnamed',         'issue',     'Named after serial'],
+    ['net-dupes',           'issue',     'Duplicate serials']
+  ];
+
   global.NetViews = Object.assign({
     engine: global.Views.engine,
-    BUILT_IN: BUILT_IN,
+    ORDER: ORDER,
+    BUILT_IN: global.Views.order(BUILT_IN, ORDER),
     setEnvLabeller: function (fn) { labelEnv = fn || function (k) { return k; }; }
   }, E);
 })(window);

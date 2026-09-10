@@ -68,6 +68,38 @@
     { op: 'newerThan',   label: 'is newer than (days)', needsValue: true, numeric: true }
   ];
 
+  /* Put a population's views in the order the sidebar shows them, and give
+     them their names, from one table.
+
+     The order used to be whatever order the objects happened to be declared
+     in, which is how the four populations drifted apart: PCs led with "All
+     devices", network kit ended with it, and the same kind of view was called
+     "Fix: location" in one place and "Location to check" in another. A table
+     per population puts the four side by side in four short lists instead of
+     four long ones.
+
+     group is 'all', 'breakdown' or 'issue'; the sidebar heads each run with a
+     label. A view the table forgets is appended rather than dropped, because
+     losing a view silently is worse than showing it in the wrong place. */
+  function order(builtIn, table) {
+    var byId = {};
+    builtIn.forEach(function (v) { byId[v.id] = v; });
+    var out = [];
+    table.forEach(function (row) {
+      var v = byId[row[0]];
+      if (!v) return;                       // names a view this build does not have
+      v.group = row[1];
+      if (row[2]) v.name = row[2];
+      out.push(v);
+      delete byId[row[0]];
+    });
+    Object.keys(byId).forEach(function (id) {
+      byId[id].group = byId[id].group || 'issue';
+      out.push(byId[id]);
+    });
+    return out;
+  }
+
   /* ------------------------------------------------------ filter engine */
 
   /* The engine is the same whatever the rows are: it only ever reaches a row
@@ -339,5 +371,35 @@
      without adding the column) and impossible to get out of step. */
   var PC = engine(COLUMNS, BASE_COLS);
 
-  global.Views = Object.assign({ engine: engine, BUILT_IN: BUILT_IN }, PC);
+  /* ------------------------------------------------- order and names */
+
+  /* Everything, then the views that slice the estate by what the assets are,
+     then the issues: location first, then what the two systems disagree
+     about, then the rest. */
+  var ORDER = [
+    ['all',             'all',       'All PCs'],
+
+    ['other-assets',    'breakdown', 'Other asset types'],
+    ['risk-score',      'breakdown', 'By risk score'],
+    ['most-risks',      'breakdown', 'By open risks'],
+
+    ['attention',       'issue',     'Needs attention'],
+    ['fix-location',    'issue',     'Location to fix'],
+    ['moved-by-ip',     'issue',     'Location: IP elsewhere'],
+    ['off-network',     'issue',     'Location: off network'],
+    ['not-in-fs',       'issue',     'Not in Freshservice'],
+    ['not-in-intune',   'issue',     'Not in Intune'],
+    ['state-conflicts', 'issue',     'Asset state to fix'],
+    ['fix-user',        'issue',     'Assigned user to fix'],
+    ['stale',           'issue',     'Not checked in recently'],
+    ['not-scanned',     'issue',     'No vulnerability scan'],
+    ['duplicates',      'issue',     'Duplicate device names'],
+    ['site-check',      'issue',     'Site verification pack'],
+    ['clean',           'issue',     'Clean records']
+  ];
+
+  global.Views = Object.assign({
+    engine: engine, order: order, ORDER: ORDER,
+    BUILT_IN: order(BUILT_IN, ORDER)
+  }, PC);
 })(window);

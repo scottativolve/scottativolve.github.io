@@ -302,6 +302,15 @@ a  { color: var(--accent); }
 
 /* A star has to be readable without hovering, or you cannot see which views
    are favourites — which is the whole point of the section. */
+/* The head of a run of views: Everything, Breakdowns, Issues. Quiet enough
+   to be scenery until you look for it. */
+.side-group {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 10px 12px 3px;
+}
+.side-group:first-child { padding-top: 4px; }
+
 .side-item .star { opacity: 0.35; }
 .side-item .star.on { opacity: 1; color: var(--warning); }
 .side-item:hover .star { opacity: 0.7; }

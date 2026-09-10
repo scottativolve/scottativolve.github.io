@@ -120,7 +120,8 @@
       ['barely-used', 'closed-site', 'legacy-subnet', 'not-a-printer'],
       ['name', 'serial', 'model', 'siteName', 'pages', 'lastSeen', 'ipOnestop', 'issues']),
     issueView('pr-contract', 'Contract mismatches',
-      'In one system and not the other.',
+      'On the OneStop contract with no Freshservice record, or a Freshservice printer OneStop has never seen. ' +
+      'Both directions, because either one means the two registers disagree about what you have.',
       ['onestop-only', 'fs-only'],
       ['name', 'serial', 'status', 'model', 'fsState', 'siteResolved', 'issues']),
     issueView('pr-tags', 'Asset tag oddities',
@@ -145,5 +146,29 @@
     }
   ];
 
-  global.PrintViews = Object.assign({ engine: global.Views.engine, BUILT_IN: BUILT_IN }, E);
+  /* ------------------------------------------------- order and names */
+
+  var ORDER = [
+    ['pr-all',          'all',       'All printers'],
+
+    ['pr-volume',       'breakdown', 'By volume'],
+
+    ['pr-attention',    'issue',     'Needs attention'],
+    ['pr-location',     'issue',     'Location to fix'],
+    ['pr-contract',     'issue',     'In one system only'],
+    ['pr-state',        'issue',     'Asset state to fix'],
+    ['pr-serial',       'issue',     'Serial number to fix'],
+    ['pr-ip',           'issue',     'IP address to fix'],
+    ['pr-product',      'issue',     'Product to fix'],
+    ['pr-vendor',       'issue',     'Vendor to fix'],
+    ['pr-tags',         'issue',     'Asset tag to fix'],
+    ['pr-silent',       'issue',     'Not reporting'],
+    ['pr-unwatched',    'issue',     'Monitoring and toner'],
+    ['pr-questionable', 'issue',     'Worth questioning']
+  ];
+
+  global.PrintViews = Object.assign({
+    engine: global.Views.engine, ORDER: ORDER,
+    BUILT_IN: global.Views.order(BUILT_IN, ORDER)
+  }, E);
 })(window);
