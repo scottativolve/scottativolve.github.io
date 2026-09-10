@@ -619,9 +619,13 @@ correction file.
 
 ## Building the Freshservice import
 
-The **Freshservice import** tab is where corrections become an upload.
+Every population builds its import the same way: **Build import file** on its
+own list, which opens the builder over the rows you were looking at. PCs used
+to have a tab of their own, left over from when they were the only population
+the tool handled — so the answer to "how do I build an import" depended on
+which kind of asset you had in front of you.
 
-**Which devices.** Three options at the top of the page, with a live count
+**Which devices.** Three options at the top of the dialog, with a live count
 against each:
 
 - **The devices you ticked** — appears when you have rows selected, and is
@@ -636,6 +640,12 @@ against each:
   first — and the export always covers the same rows the table showed. Column
   choices you make in the picker are remembered per view.
 - **Every device** — the whole reconciled estate, ignoring the view.
+
+The other three populations have the same button in the same place, opening a
+builder shaped for what they import: network kit and mobiles **create** records
+and so ask for the Product and Asset Type mappings, printers **correct** fields
+that already exist, and both network and mobiles write one file per asset type
+because Freshservice imports one type at a time.
 
 The results header repeats the number of devices in scope, so the file is never
 ambiguous about what it covers.
@@ -776,9 +786,9 @@ how many of that site's network devices are missing from Freshservice.
 
 Because a dot can stand for two separate lists, it offers a button per
 population rather than guessing. **View N network** filters the Network tab to
-that site, shows a *Site: …* pill you can clear, and scopes the import builder
-to it — so building a Freshservice import for one site is three clicks from the
-map.
+that site, shows a *Site: …* pill you can clear, and scopes that population's
+import builder to it — so building a Freshservice import for one site is three
+clicks from the map.
 
 Sites that cannot be drawn are never silently dropped — they are counted and
 listed underneath, split into "in the lookup but no coordinates" and "used in

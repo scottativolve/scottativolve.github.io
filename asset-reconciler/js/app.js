@@ -884,7 +884,6 @@
       ['printers', 'Printers'],
       ['mobiles', 'Mobiles'],
       ['map', 'Map'],
-      ['export', 'Freshservice import'],
       ['settings', 'Settings']
     ];
     tabs.forEach(function (t) {
@@ -1195,7 +1194,6 @@
         printers: renderPrinters,
         mobiles: renderMobiles,
         map: renderMap,
-        export: renderExport,
         settings: renderSettings
       }[state.tab] || renderData;
       publishedBanner(main);
@@ -2236,10 +2234,10 @@
     }, 'Site check sheet'));
     controls.appendChild(U.el('button', {
       class: 'btn sm primary',
-      title: 'Build the correction file from the devices you are looking at',
+      title: 'Build the Freshservice correction file from the devices you are looking at',
       onclick: function () {
         state.exportScope = state.selectedIds.length ? 'selection' : 'view';
-        setTab('export');
+        openPcImport();
       }
     }, 'Build import file'));
     main.appendChild(controls);
@@ -4397,427 +4395,443 @@
   /*  tab: export                                                         */
   /* ==================================================================== */
 
-  function renderExport(main) {
+  /* The PC import, as a dialog.
+
+     It was a tab of its own, left over from when PCs were the only population
+     the tool handled. The network, printer and mobile imports are all built
+     from a button on their own list, and having one of the four somewhere else
+     entirely meant the answer to "how do I build an import" depended on which
+     asset you were looking at. */
+  function openPcImport() {
     var cfg = state.fsConfig;
+    var body = U.el('div', { class: 'body fill' });
+    /* Held out here so the footer buttons see what the latest draw produced
+       rather than a stale closure from when the dialog opened. */
+    var proposals = [], scopedRows = [];
 
-    main.appendChild(U.el('div', { class: 'page-head' }, [
-      U.el('h1', {}, 'Build the Freshservice import'),
-      U.el('div', { class: 'sub' },
-        'Choose what to correct and where the correct value comes from. Only rows that would actually change are ' +
-        'included, and every proposed change is listed before you download anything.')
-    ]));
+    function draw() {
+      U.clear(body);
 
-    var view = viewById(state.viewId);
-    var shownRows = rowsForView(view, true);      // exactly what the table showed
-    var viewAllRows = rowsForView(view, false);   // the view before the search box
-    var picked = selectedRows();
 
-    // A selection that no longer exists (view changed, data reloaded) must not
-    // silently export nothing.
-    if (state.exportScope === 'selection' && !picked.length) state.exportScope = 'view';
+      var view = viewById(state.viewId);
+      var shownRows = rowsForView(view, true);      // exactly what the table showed
+      var viewAllRows = rowsForView(view, false);   // the view before the search box
+      var picked = selectedRows();
 
-    var scopedRows = state.exportScope === 'selection' ? picked
-                   : state.exportScope === 'view' ? shownRows
-                   : state.result.rows;
+      // A selection that no longer exists (view changed, data reloaded) must not
+      // silently export nothing.
+      if (state.exportScope === 'selection' && !picked.length) state.exportScope = 'view';
 
-    var proposals = FX.buildProposals(scopedRows, cfg);
-    var changeCount = proposals.reduce(function (a, p) { return a + p.changes.length; }, 0);
+      scopedRows = state.exportScope === 'selection' ? picked
+                     : state.exportScope === 'view' ? shownRows
+                     : state.result.rows;
 
-    /* Which devices the file covers. Getting this wrong is expensive - it is
-       the difference between correcting 56 assets and correcting 1,000 - so it
-       is stated at the top rather than left implicit, and the view option means
-       what was actually on screen, search box included. */
-    var scopeCard = U.el('div', { class: 'card' });
-    scopeCard.appendChild(U.el('h2', {}, 'Which devices'));
+      proposals = FX.buildProposals(scopedRows, cfg);
+      var changeCount = proposals.reduce(function (a, p) { return a + p.changes.length; }, 0);
 
-    var narrowed = [];
-    if (state.viewSearch) narrowed.push('search "' + state.viewSearch + '"');
-    if (state.siteFilter) narrowed.push('site ' + state.siteFilter.name);
-    if (state.issueFilter) narrowed.push('issue ' + ((R.BY_CODE[state.issueFilter] || {}).label || ''));
+      /* Which devices the file covers. Getting this wrong is expensive - it is
+         the difference between correcting 56 assets and correcting 1,000 - so it
+         is stated at the top rather than left implicit, and the view option means
+         what was actually on screen, search box included. */
+      var scopeCard = U.el('div', { class: 'card' });
+      scopeCard.appendChild(U.el('h2', {}, 'Which devices'));
 
-    function scopeOption(value, label, sub) {
-      return U.el('div', { style: { marginBottom: '6px' } }, [
+      var narrowed = [];
+      if (state.viewSearch) narrowed.push('search "' + state.viewSearch + '"');
+      if (state.siteFilter) narrowed.push('site ' + state.siteFilter.name);
+      if (state.issueFilter) narrowed.push('issue ' + ((R.BY_CODE[state.issueFilter] || {}).label || ''));
+
+      function scopeOption(value, label, sub) {
+        return U.el('div', { style: { marginBottom: '6px' } }, [
+          U.el('label', { class: 'check' }, [
+            U.el('input', {
+              type: 'radio', name: 'exportscope', checked: state.exportScope === value,
+              onchange: function () { state.exportScope = value; draw(); }
+            }),
+            label
+          ]),
+          sub ? U.el('div', { class: 'hint', style: { marginLeft: '24px' } }, sub) : null
+        ]);
+      }
+
+      if (picked.length) {
+        scopeCard.appendChild(scopeOption('selection',
+          'The ' + U.num(picked.length) + ' devices you ticked',
+          'Just the rows you selected on the Devices tab.'));
+      }
+
+      scopeCard.appendChild(scopeOption('view',
+        'The ' + U.num(shownRows.length) + ' devices shown in ' + view.name,
+        narrowed.length
+          ? 'Exactly what the table was showing — ' + view.name + ' narrowed by ' + narrowed.join(' and ') +
+            ' (' + U.num(shownRows.length) + ' of ' + U.num(viewAllRows.length) + ').'
+          : 'The whole of the ' + view.name + ' view; nothing is filtering it further.'));
+
+      scopeCard.appendChild(scopeOption('all',
+        'Every device (' + U.num(state.result.rows.length) + ')',
+        'The entire reconciled estate, ignoring the view.'));
+
+      body.appendChild(scopeCard);
+
+      /* ------------------------------------------------------ what to fix */
+      var setup = U.el('div', { class: 'card' });
+      setup.appendChild(U.el('h2', {}, 'What to update'));
+      var tbl = U.el('table', { class: 'map-table', style: { marginTop: '10px' } });
+      tbl.appendChild(U.el('thead', {}, U.el('tr', {}, [
+        U.el('th', {}, 'Field'), U.el('th', {}, 'Take the correct value from'),
+        U.el('th', {}, 'Column heading in the import file'), U.el('th', {}, 'Rows')
+      ])));
+      var tbody = U.el('tbody');
+
+      FX.UPDATABLE.forEach(function (u) {
+        var fcfg = cfg.fields[u.field];
+        var count = proposals.reduce(function (a, p) {
+          return a + p.changes.filter(function (c) { return c.field === u.field; }).length;
+        }, 0);
+
+        var sourceSel = U.el('select', {
+          disabled: !fcfg.enabled,
+          onchange: function (e) { fcfg.source = e.target.value; persistFsConfig(); draw(); }
+        }, u.sources.map(function (s) {
+          return U.el('option', { value: s, selected: fcfg.source === s }, FX.SOURCE_LABELS[s]);
+        }));
+
+        var manualBox = u.sources.indexOf('manual') >= 0 && fcfg.source === 'manual'
+          ? U.el('input', {
+              type: 'text', placeholder: 'e.g. In Use', value: fcfg.manualValue || '',
+              style: { marginTop: '4px', width: '100%' },
+              onchange: function (e) { fcfg.manualValue = e.target.value; persistFsConfig(); draw(); }
+            })
+          : null;
+
+        /* Which form of the person to write. Freshservice matches a requester on
+           their address, so the UPN is what makes the import land on the right
+           person - but an instance keyed on display names needs the other. */
+        var formBox = u.field === 'user' && fcfg.enabled && fcfg.source === 'intune'
+          ? U.el('div', { style: { marginTop: '4px' } }, [
+              U.el('select', {
+                style: { width: '100%' },
+                onchange: function (e) { cfg.userValue = e.target.value; persistFsConfig(); draw(); }
+              }, [
+                U.el('option', { value: 'upn', selected: cfg.userValue !== 'name' },
+                  'as their email / UPN'),
+                U.el('option', { value: 'name', selected: cfg.userValue === 'name' },
+                  'as their display name')
+              ]),
+              U.el('div', { class: 'hint' },
+                cfg.userValue === 'name'
+                  ? 'Freshservice usually matches a requester on their address; a display name only works if your instance is set up that way.'
+                  : 'Falls back to the display name where Intune has no UPN.')
+            ])
+          : null;
+
+        tbody.appendChild(U.el('tr', {}, [
+          U.el('td', {}, U.el('label', { class: 'check' }, [
+            U.el('input', {
+              type: 'checkbox', checked: fcfg.enabled,
+              onchange: function (e) { fcfg.enabled = e.target.checked; persistFsConfig(); draw(); }
+            }),
+            u.label
+          ])),
+          U.el('td', {}, [sourceSel, manualBox, formBox]),
+          U.el('td', {}, U.el('input', {
+            type: 'text', value: cfg.headers[u.field] || u.field, disabled: !fcfg.enabled,
+            onchange: function (e) { cfg.headers[u.field] = e.target.value; persistFsConfig(); }
+          })),
+          U.el('td', { class: 'num' }, fcfg.enabled ? U.num(count) : '—')
+        ]));
+      });
+      tbl.appendChild(tbody);
+      setup.appendChild(tbl);
+
+      setup.appendChild(U.el('div', { class: 'row', style: { marginTop: '14px' } }, [
+        U.el('label', { class: 'field' }, [
+          U.el('label', {}, 'Match assets on'),
+          U.el('select', {
+            onchange: function (e) { cfg.matchField = e.target.value; persistFsConfig(); draw(); }
+          }, [
+            U.el('option', { value: 'name', selected: cfg.matchField === 'name' }, 'Device name'),
+            U.el('option', { value: 'assetTag', selected: cfg.matchField === 'assetTag' }, 'Asset tag'),
+            U.el('option', { value: 'serial', selected: cfg.matchField === 'serial' }, 'Serial number')
+          ])
+        ]),
+        U.el('label', { class: 'field' }, [
+          U.el('label', {}, 'Heading for that column'),
+          U.el('input', {
+            type: 'text', value: cfg.headers[cfg.matchField] || '',
+            onchange: function (e) { cfg.headers[cfg.matchField] = e.target.value; persistFsConfig(); }
+          })
+        ])
+      ]));
+
+      setup.appendChild(U.el('div', { class: 'row', style: { marginTop: '12px' } }, [
         U.el('label', { class: 'check' }, [
           U.el('input', {
-            type: 'radio', name: 'exportscope', checked: state.exportScope === value,
-            onchange: function () { state.exportScope = value; render(); }
-          }),
-          label
+            type: 'checkbox', checked: cfg.onlyChanged,
+            onchange: function (e) { cfg.onlyChanged = e.target.checked; persistFsConfig(); draw(); }
+          }), 'Only include rows where the value actually changes'
         ]),
-        sub ? U.el('div', { class: 'hint', style: { marginLeft: '24px' } }, sub) : null
-      ]);
-    }
-
-    if (picked.length) {
-      scopeCard.appendChild(scopeOption('selection',
-        'The ' + U.num(picked.length) + ' devices you ticked',
-        'Just the rows you selected on the Devices tab.'));
-    }
-
-    scopeCard.appendChild(scopeOption('view',
-      'The ' + U.num(shownRows.length) + ' devices shown in ' + view.name,
-      narrowed.length
-        ? 'Exactly what the table was showing — ' + view.name + ' narrowed by ' + narrowed.join(' and ') +
-          ' (' + U.num(shownRows.length) + ' of ' + U.num(viewAllRows.length) + ').'
-        : 'The whole of the ' + view.name + ' view; nothing is filtering it further.'));
-
-    scopeCard.appendChild(scopeOption('all',
-      'Every device (' + U.num(state.result.rows.length) + ')',
-      'The entire reconciled estate, ignoring the view.'));
-
-    main.appendChild(scopeCard);
-
-    /* ------------------------------------------------------ what to fix */
-    var setup = U.el('div', { class: 'card' });
-    setup.appendChild(U.el('h2', {}, 'What to update'));
-    var tbl = U.el('table', { class: 'map-table', style: { marginTop: '10px' } });
-    tbl.appendChild(U.el('thead', {}, U.el('tr', {}, [
-      U.el('th', {}, 'Field'), U.el('th', {}, 'Take the correct value from'),
-      U.el('th', {}, 'Column heading in the import file'), U.el('th', {}, 'Rows')
-    ])));
-    var tbody = U.el('tbody');
-
-    FX.UPDATABLE.forEach(function (u) {
-      var fcfg = cfg.fields[u.field];
-      var count = proposals.reduce(function (a, p) {
-        return a + p.changes.filter(function (c) { return c.field === u.field; }).length;
-      }, 0);
-
-      var sourceSel = U.el('select', {
-        disabled: !fcfg.enabled,
-        onchange: function (e) { fcfg.source = e.target.value; persistFsConfig(); render(); }
-      }, u.sources.map(function (s) {
-        return U.el('option', { value: s, selected: fcfg.source === s }, FX.SOURCE_LABELS[s]);
-      }));
-
-      var manualBox = u.sources.indexOf('manual') >= 0 && fcfg.source === 'manual'
-        ? U.el('input', {
-            type: 'text', placeholder: 'e.g. In Use', value: fcfg.manualValue || '',
-            style: { marginTop: '4px', width: '100%' },
-            onchange: function (e) { fcfg.manualValue = e.target.value; persistFsConfig(); render(); }
-          })
-        : null;
-
-      /* Which form of the person to write. Freshservice matches a requester on
-         their address, so the UPN is what makes the import land on the right
-         person - but an instance keyed on display names needs the other. */
-      var formBox = u.field === 'user' && fcfg.enabled && fcfg.source === 'intune'
-        ? U.el('div', { style: { marginTop: '4px' } }, [
-            U.el('select', {
-              style: { width: '100%' },
-              onchange: function (e) { cfg.userValue = e.target.value; persistFsConfig(); render(); }
-            }, [
-              U.el('option', { value: 'upn', selected: cfg.userValue !== 'name' },
-                'as their email / UPN'),
-              U.el('option', { value: 'name', selected: cfg.userValue === 'name' },
-                'as their display name')
-            ]),
-            U.el('div', { class: 'hint' },
-              cfg.userValue === 'name'
-                ? 'Freshservice usually matches a requester on their address; a display name only works if your instance is set up that way.'
-                : 'Falls back to the display name where Intune has no UPN.')
-          ])
-        : null;
-
-      tbody.appendChild(U.el('tr', {}, [
-        U.el('td', {}, U.el('label', { class: 'check' }, [
+        U.el('label', { class: 'check' }, [
           U.el('input', {
-            type: 'checkbox', checked: fcfg.enabled,
-            onchange: function (e) { fcfg.enabled = e.target.checked; persistFsConfig(); render(); }
-          }),
-          u.label
-        ])),
-        U.el('td', {}, [sourceSel, manualBox, formBox]),
-        U.el('td', {}, U.el('input', {
-          type: 'text', value: cfg.headers[u.field] || u.field, disabled: !fcfg.enabled,
-          onchange: function (e) { cfg.headers[u.field] = e.target.value; persistFsConfig(); }
-        })),
-        U.el('td', { class: 'num' }, fcfg.enabled ? U.num(count) : '—')
+            type: 'checkbox', checked: cfg.requireIntuneMatch,
+            onchange: function (e) { cfg.requireIntuneMatch = e.target.checked; persistFsConfig(); draw(); }
+          }), 'Only devices confirmed by Intune or a site return'
+        ]),
+        U.el('label', { class: 'check' }, [
+          U.el('input', {
+            type: 'checkbox', checked: cfg.skipRetired,
+            onchange: function (e) { cfg.skipRetired = e.target.checked; persistFsConfig(); draw(); }
+          }), 'Skip assets already marked retired or disposed'
+        ]),
+        U.el('span', { class: 'hint' }, '(except where the device is still checking in — those are the ones to correct)')
       ]));
-    });
-    tbl.appendChild(tbody);
-    setup.appendChild(tbl);
+      setup.appendChild(U.el('div', { class: 'hint', style: { marginTop: '8px' } },
+        'Freshservice matches rows on the column you pick here, so it has to be a field that is filled in and unique ' +
+        'on the assets you are updating. Check the headings against your own instance — a custom field will use its ' +
+        'own label.'));
+      body.appendChild(setup);
 
-    setup.appendChild(U.el('div', { class: 'row', style: { marginTop: '14px' } }, [
-      U.el('label', { class: 'field' }, [
-        U.el('label', {}, 'Match assets on'),
-        U.el('select', {
-          onchange: function (e) { cfg.matchField = e.target.value; persistFsConfig(); render(); }
-        }, [
-          U.el('option', { value: 'name', selected: cfg.matchField === 'name' }, 'Device name'),
-          U.el('option', { value: 'assetTag', selected: cfg.matchField === 'assetTag' }, 'Asset tag'),
-          U.el('option', { value: 'serial', selected: cfg.matchField === 'serial' }, 'Serial number')
-        ])
-      ]),
-      U.el('label', { class: 'field' }, [
-        U.el('label', {}, 'Heading for that column'),
-        U.el('input', {
-          type: 'text', value: cfg.headers[cfg.matchField] || '',
-          onchange: function (e) { cfg.headers[cfg.matchField] = e.target.value; persistFsConfig(); }
-        })
-      ])
-    ]));
+      /* ----------------------------------------------- always-on columns */
+      var missing = FX.missingRequired(cfg);
+      var colCard = U.el('div', { class: 'card' });
+      colCard.appendChild(U.el('header', {}, [
+        U.el('h2', {}, 'Columns on every row'),
+        U.el('span', { class: 'sub' }, 'Required fields and anything else the file should carry')
+      ]));
+      colCard.appendChild(U.el('p', { class: 'hint' },
+        'Freshservice rejects an import that is missing a mandatory field, so these appear on every row whether or ' +
+        'not they are what you are correcting. A column takes either a fixed value or the value Freshservice already ' +
+        'holds. Where a column names a field you are also correcting, the corrected value is used on the rows that ' +
+        'have one and the current value fills the rest, so the column is never blank.'));
 
-    setup.appendChild(U.el('div', { class: 'row', style: { marginTop: '12px' } }, [
-      U.el('label', { class: 'check' }, [
-        U.el('input', {
-          type: 'checkbox', checked: cfg.onlyChanged,
-          onchange: function (e) { cfg.onlyChanged = e.target.checked; persistFsConfig(); render(); }
-        }), 'Only include rows where the value actually changes'
-      ]),
-      U.el('label', { class: 'check' }, [
-        U.el('input', {
-          type: 'checkbox', checked: cfg.requireIntuneMatch,
-          onchange: function (e) { cfg.requireIntuneMatch = e.target.checked; persistFsConfig(); render(); }
-        }), 'Only devices confirmed by Intune or a site return'
-      ]),
-      U.el('label', { class: 'check' }, [
-        U.el('input', {
-          type: 'checkbox', checked: cfg.skipRetired,
-          onchange: function (e) { cfg.skipRetired = e.target.checked; persistFsConfig(); render(); }
-        }), 'Skip assets already marked retired or disposed'
-      ]),
-      U.el('span', { class: 'hint' }, '(except where the device is still checking in — those are the ones to correct)')
-    ]));
-    setup.appendChild(U.el('div', { class: 'hint', style: { marginTop: '8px' } },
-      'Freshservice matches rows on the column you pick here, so it has to be a field that is filled in and unique ' +
-      'on the assets you are updating. Check the headings against your own instance — a custom field will use its ' +
-      'own label.'));
-    main.appendChild(setup);
-
-    /* ----------------------------------------------- always-on columns */
-    var missing = FX.missingRequired(cfg);
-    var colCard = U.el('div', { class: 'card' });
-    colCard.appendChild(U.el('header', {}, [
-      U.el('h2', {}, 'Columns on every row'),
-      U.el('span', { class: 'sub' }, 'Required fields and anything else the file should carry')
-    ]));
-    colCard.appendChild(U.el('p', { class: 'hint' },
-      'Freshservice rejects an import that is missing a mandatory field, so these appear on every row whether or ' +
-      'not they are what you are correcting. A column takes either a fixed value or the value Freshservice already ' +
-      'holds. Where a column names a field you are also correcting, the corrected value is used on the rows that ' +
-      'have one and the current value fills the rest, so the column is never blank.'));
-
-    if (missing.length) {
-      colCard.appendChild(U.el('div', {
-        class: 'badge high', style: { marginBottom: '10px' }
-      }, [U.el('span', { class: 'sev sev-high' }),
-          'Missing required column' + (missing.length > 1 ? 's' : '') + ': ' + missing.join(', ')]));
-    }
-
-    var colTable = U.el('table', { class: 'map-table' });
-    colTable.appendChild(U.el('thead', {}, U.el('tr', {}, [
-      U.el('th', { style: { width: '32%' } }, 'Column heading'),
-      U.el('th', { style: { width: '34%' } }, 'Value'),
-      U.el('th', {}, 'Example from your data'),
-      U.el('th', { style: { width: '36px' } }, '')
-    ])));
-    var colBody = U.el('tbody');
-    var sampleRow = scopedRows[0] || state.result.rows[0];
-
-    (cfg.alwaysColumns || []).forEach(function (col, idx) {
-      var example = sampleRow ? FX.columnValue(sampleRow, col) : '';
-      var blanks = FX.blankCount(proposals, col);
-
-      function optionsFor(group, prefix) {
-        return FX.COLUMN_SOURCES[group].map(function (f) {
-          return U.el('option', {
-            value: prefix + ':' + f.field,
-            selected: col.kind === prefix && col.field === f.field
-          }, f.label);
-        });
+      if (missing.length) {
+        colCard.appendChild(U.el('div', {
+          class: 'badge high', style: { marginBottom: '10px' }
+        }, [U.el('span', { class: 'sev sev-high' }),
+            'Missing required column' + (missing.length > 1 ? 's' : '') + ': ' + missing.join(', ')]));
       }
 
-      var picker = U.el('select', {
-        onchange: function (e) {
-          var v = e.target.value;
-          if (v === '__fixed') {
-            col.kind = 'fixed';
-            if (col.value === undefined) col.value = '';
-          } else {
-            var parts = v.split(':');
-            col.kind = parts[0];
-            col.field = parts[1];
-          }
-          persistFsConfig(); render();
-        }
-      }, [
-        U.el('option', { value: '__fixed', selected: col.kind === 'fixed' }, 'Fixed value'),
-        U.el('optgroup', { label: 'From Freshservice' }, optionsFor('fs', 'fs')),
-        U.el('optgroup', { label: 'From Intune' }, optionsFor('intune', 'intune'))
-      ]);
-
-      var valueCell = U.el('td', {}, [
-        picker,
-        col.kind === 'fixed' ? U.el('input', {
-          type: 'text', value: col.value || '', placeholder: 'e.g. IT',
-          style: { marginTop: '4px', width: '100%' },
-          onchange: function (e) { col.value = e.target.value; persistFsConfig(); render(); }
-        }) : null,
-        blanks ? U.el('div', {
-          class: 'hint', style: { color: 'var(--critical)', marginTop: '3px' }
-        }, 'blank on ' + U.num(blanks) + ' of ' + U.num(proposals.length) + ' rows') : null
-      ]);
-
-      colBody.appendChild(U.el('tr', {}, [
-        U.el('td', {}, U.el('input', {
-          type: 'text', value: col.header, style: { width: '100%' },
-          onchange: function (e) { col.header = e.target.value; persistFsConfig(); render(); }
-        })),
-        valueCell,
-        U.el('td', { class: 'hint' }, example === '' ? '(blank in Freshservice)' : U.truncate(String(example), 34)),
-        U.el('td', {}, U.el('button', {
-          class: 'btn sm ghost', title: 'Remove this column',
-          onclick: function () { cfg.alwaysColumns.splice(idx, 1); persistFsConfig(); render(); }
-        }, '✕'))
-      ]));
-    });
-    colTable.appendChild(colBody);
-    colCard.appendChild(colTable);
-
-    var conflicts = FX.columnConflicts(cfg);
-    if (conflicts.length) {
-      colCard.appendChild(U.el('div', { style: { marginTop: '10px' } }, [
-        U.el('span', { class: 'badge medium' }, [U.el('span', { class: 'sev sev-medium' }), 'Correction overridden']),
-        U.el('div', { class: 'hint', style: { marginTop: '4px' } },
-          conflicts.map(function (c) {
-            return '"' + c.header + '" is set to ' + c.source + ', so the correction you switched on for that ' +
-                   'field will not reach the file.';
-          }).join(' ') +
-          ' The column above wins — change its source, or untick the field in "What to update".')
-      ]));
-    }
-
-    colCard.appendChild(U.el('div', { class: 'row', style: { marginTop: '10px' } }, [
-      U.el('button', {
-        class: 'btn sm',
-        onclick: function () {
-          cfg.alwaysColumns.push({ header: '', kind: 'fixed', value: '' });
-          persistFsConfig(); render();
-        }
-      }, '+ Add column'),
-      U.el('button', {
-        class: 'btn sm ghost',
-        title: 'Put back Workspace, Name and Product',
-        onclick: function () { cfg.alwaysColumns = FX.defaultAlwaysColumns(); persistFsConfig(); render(); }
-      }, 'Reset to the required three')
-    ]));
-    main.appendChild(colCard);
-
-    /* ------------------------------------------------------- the result */
-    var out = U.el('div', { class: 'card' });
-    out.appendChild(U.el('header', {}, [
-      U.el('h2', {}, 'Proposed changes'),
-      U.el('span', { class: 'sub' }, U.num(changeCount) + ' change' + (changeCount === 1 ? '' : 's') +
-        ' across ' + U.num(proposals.length) + ' asset' + (proposals.length === 1 ? '' : 's') +
-        ', from ' + U.num(scopedRows.length) + ' device' + (scopedRows.length === 1 ? '' : 's') + ' in scope')
-    ]));
-
-    out.appendChild(U.el('div', { class: 'row', style: { marginBottom: '12px' } }, [
-      U.el('button', {
-        class: 'btn primary', disabled: !proposals.length,
-        onclick: function () {
-          U.download('freshservice-import-' + U.todayStamp() + '.csv',
-            FX.toImportCsv(proposals, cfg), 'text/csv', { bom: false });
-          U.toast('Import file downloaded. Check a handful of rows before you upload it.', 'ok', 6000);
-        }
-      }, 'Download import file'),
-      U.el('button', {
-        class: 'btn', disabled: !proposals.length,
-        onclick: function () {
-          U.download('freshservice-change-log-' + U.todayStamp() + '.csv', FX.toChangeLogCsv(proposals, cfg));
-        }
-      }, 'Download change log'),
-      U.el('span', { class: 'hint' }, 'The change log records the old value against the new one, for your audit trail.')
-    ]));
-
-    if (!proposals.length) {
-      // Work out which of the switched-off fields would actually yield changes
-      // for these devices, rather than leaving the user to guess.
-      var suggestions = [];
-      FX.UPDATABLE.forEach(function (u) {
-        if (cfg.fields[u.field] && cfg.fields[u.field].enabled) return;
-        // Only offer a field some enabled check is actually complaining about.
-        // Model and OS differ structurally between the two systems, so with
-        // those checks off they are noise, not a suggestion.
-        if (!fieldHasLiveRule(u.field)) return;
-        var trial = JSON.parse(JSON.stringify(cfg));
-        trial.fields[u.field].enabled = true;
-        if (u.sources.indexOf('manual') >= 0 && u.field === 'state') {
-          trial.fields[u.field].source = 'manual';
-          trial.fields[u.field].manualValue = 'In Use';
-        }
-        var n = FX.buildProposals(scopedRows, trial)
-          .reduce(function (a, p) { return a + p.changes.filter(function (c) { return c.field === u.field; }).length; }, 0);
-        if (n) suggestions.push({ label: u.label, n: n, field: u.field, weight: fieldWeight(u.field) });
-      });
-
-      var empty = U.el('div', { class: 'empty' });
-      empty.appendChild(U.el('div', { style: { fontWeight: '600', marginBottom: '6px' } },
-        'Nothing to change for these ' + U.num(scopedRows.length) + ' devices with the fields switched on above.'));
-      if (suggestions.length) {
-        empty.appendChild(U.el('div', {}, 'These would give you something:'));
-        var list = U.el('div', { class: 'row', style: { justifyContent: 'center', marginTop: '10px' } });
-        // Order by how much the field matters, not by how many rows it touches:
-        // a cosmetic OS difference on every device should not outrank the six
-        // assets whose recorded state is actually wrong.
-        suggestions.sort(function (a, b) {
-          return b.weight - a.weight || b.n - a.n;
-        }).slice(0, 4).forEach(function (sg) {
-          list.appendChild(U.el('button', {
-            class: 'btn sm',
-            onclick: function () {
-              cfg.fields[sg.field].enabled = true;
-              if (sg.field === 'state') {
-                cfg.fields[sg.field].source = 'manual';
-                if (!cfg.fields[sg.field].manualValue) cfg.fields[sg.field].manualValue = 'In Use';
-              }
-              persistFsConfig(); render();
-            }
-          }, 'Turn on ' + sg.label + ' (' + U.num(sg.n) + ')'));
-        });
-        empty.appendChild(list);
-      } else {
-        empty.appendChild(U.el('div', { class: 'hint' },
-          'Freshservice and Intune already agree on every field this tool can correct for these devices. ' +
-          'Widen the scope above, or pick a different view.'));
-      }
-      out.appendChild(empty);
-    } else {
-      var wrap = U.el('div', { class: 'table-wrap' });
-      var t = U.el('table', { class: 'grid' });
-      t.appendChild(U.el('thead', {}, U.el('tr', {}, [
-        U.el('th', { class: 'nosort' }, 'Device'),
-        U.el('th', { class: 'nosort' }, 'Location'),
-        U.el('th', { class: 'nosort' }, 'Field'),
-        U.el('th', { class: 'nosort' }, 'Currently in Freshservice'),
-        U.el('th', { class: 'nosort' }, 'Will become'),
-        U.el('th', { class: 'nosort' }, 'Because')
+      var colTable = U.el('table', { class: 'map-table' });
+      colTable.appendChild(U.el('thead', {}, U.el('tr', {}, [
+        U.el('th', { style: { width: '32%' } }, 'Column heading'),
+        U.el('th', { style: { width: '34%' } }, 'Value'),
+        U.el('th', {}, 'Example from your data'),
+        U.el('th', { style: { width: '36px' } }, '')
       ])));
-      var tb2 = U.el('tbody');
-      proposals.slice(0, 500).forEach(function (p) {
-        p.changes.forEach(function (c, i) {
-          tb2.appendChild(U.el('tr', {
-            onclick: function () { T.openDrawer(p.row); }
-          }, [
-            U.el('td', {}, i === 0 ? U.el('strong', {}, p.row.name) : ''),
-            U.el('td', { class: 'muted' }, i === 0 ? (p.row.location || '—') : ''),
-            U.el('td', {}, c.label),
-            U.el('td', { class: 'muted' }, c.current || '(blank)'),
-            U.el('td', {}, U.el('strong', {}, c.proposed)),
-            U.el('td', { class: 'muted' }, c.reason || FX.SOURCE_LABELS[c.source])
-          ]));
-        });
+      var colBody = U.el('tbody');
+      var sampleRow = scopedRows[0] || state.result.rows[0];
+
+      (cfg.alwaysColumns || []).forEach(function (col, idx) {
+        var example = sampleRow ? FX.columnValue(sampleRow, col) : '';
+        var blanks = FX.blankCount(proposals, col);
+
+        function optionsFor(group, prefix) {
+          return FX.COLUMN_SOURCES[group].map(function (f) {
+            return U.el('option', {
+              value: prefix + ':' + f.field,
+              selected: col.kind === prefix && col.field === f.field
+            }, f.label);
+          });
+        }
+
+        var picker = U.el('select', {
+          onchange: function (e) {
+            var v = e.target.value;
+            if (v === '__fixed') {
+              col.kind = 'fixed';
+              if (col.value === undefined) col.value = '';
+            } else {
+              var parts = v.split(':');
+              col.kind = parts[0];
+              col.field = parts[1];
+            }
+            persistFsConfig(); draw();
+          }
+        }, [
+          U.el('option', { value: '__fixed', selected: col.kind === 'fixed' }, 'Fixed value'),
+          U.el('optgroup', { label: 'From Freshservice' }, optionsFor('fs', 'fs')),
+          U.el('optgroup', { label: 'From Intune' }, optionsFor('intune', 'intune'))
+        ]);
+
+        var valueCell = U.el('td', {}, [
+          picker,
+          col.kind === 'fixed' ? U.el('input', {
+            type: 'text', value: col.value || '', placeholder: 'e.g. IT',
+            style: { marginTop: '4px', width: '100%' },
+            onchange: function (e) { col.value = e.target.value; persistFsConfig(); draw(); }
+          }) : null,
+          blanks ? U.el('div', {
+            class: 'hint', style: { color: 'var(--critical)', marginTop: '3px' }
+          }, 'blank on ' + U.num(blanks) + ' of ' + U.num(proposals.length) + ' rows') : null
+        ]);
+
+        colBody.appendChild(U.el('tr', {}, [
+          U.el('td', {}, U.el('input', {
+            type: 'text', value: col.header, style: { width: '100%' },
+            onchange: function (e) { col.header = e.target.value; persistFsConfig(); draw(); }
+          })),
+          valueCell,
+          U.el('td', { class: 'hint' }, example === '' ? '(blank in Freshservice)' : U.truncate(String(example), 34)),
+          U.el('td', {}, U.el('button', {
+            class: 'btn sm ghost', title: 'Remove this column',
+            onclick: function () { cfg.alwaysColumns.splice(idx, 1); persistFsConfig(); draw(); }
+          }, '✕'))
+        ]));
       });
-      t.appendChild(tb2);
-      wrap.appendChild(t);
-      out.appendChild(wrap);
-      if (proposals.length > 500) {
-        out.appendChild(U.el('div', { class: 'hint', style: { marginTop: '8px' } },
-          'Showing the first 500 assets. The downloaded file contains all ' + U.num(proposals.length) + '.'));
+      colTable.appendChild(colBody);
+      colCard.appendChild(colTable);
+
+      var conflicts = FX.columnConflicts(cfg);
+      if (conflicts.length) {
+        colCard.appendChild(U.el('div', { style: { marginTop: '10px' } }, [
+          U.el('span', { class: 'badge medium' }, [U.el('span', { class: 'sev sev-medium' }), 'Correction overridden']),
+          U.el('div', { class: 'hint', style: { marginTop: '4px' } },
+            conflicts.map(function (c) {
+              return '"' + c.header + '" is set to ' + c.source + ', so the correction you switched on for that ' +
+                     'field will not reach the file.';
+            }).join(' ') +
+            ' The column above wins — change its source, or untick the field in "What to update".')
+        ]));
       }
+
+      colCard.appendChild(U.el('div', { class: 'row', style: { marginTop: '10px' } }, [
+        U.el('button', {
+          class: 'btn sm',
+          onclick: function () {
+            cfg.alwaysColumns.push({ header: '', kind: 'fixed', value: '' });
+            persistFsConfig(); draw();
+          }
+        }, '+ Add column'),
+        U.el('button', {
+          class: 'btn sm ghost',
+          title: 'Put back Workspace, Name and Product',
+          onclick: function () { cfg.alwaysColumns = FX.defaultAlwaysColumns(); persistFsConfig(); draw(); }
+        }, 'Reset to the required three')
+      ]));
+      body.appendChild(colCard);
+
+      /* ------------------------------------------------------- the result */
+      var out = U.el('div', { class: 'card' });
+      out.appendChild(U.el('header', {}, [
+        U.el('h2', {}, 'Proposed changes'),
+        U.el('span', { class: 'sub' }, U.num(changeCount) + ' change' + (changeCount === 1 ? '' : 's') +
+          ' across ' + U.num(proposals.length) + ' asset' + (proposals.length === 1 ? '' : 's') +
+          ', from ' + U.num(scopedRows.length) + ' device' + (scopedRows.length === 1 ? '' : 's') + ' in scope')
+      ]));
+
+
+      if (!proposals.length) {
+        // Work out which of the switched-off fields would actually yield changes
+        // for these devices, rather than leaving the user to guess.
+        var suggestions = [];
+        FX.UPDATABLE.forEach(function (u) {
+          if (cfg.fields[u.field] && cfg.fields[u.field].enabled) return;
+          // Only offer a field some enabled check is actually complaining about.
+          // Model and OS differ structurally between the two systems, so with
+          // those checks off they are noise, not a suggestion.
+          if (!fieldHasLiveRule(u.field)) return;
+          var trial = JSON.parse(JSON.stringify(cfg));
+          trial.fields[u.field].enabled = true;
+          if (u.sources.indexOf('manual') >= 0 && u.field === 'state') {
+            trial.fields[u.field].source = 'manual';
+            trial.fields[u.field].manualValue = 'In Use';
+          }
+          var n = FX.buildProposals(scopedRows, trial)
+            .reduce(function (a, p) { return a + p.changes.filter(function (c) { return c.field === u.field; }).length; }, 0);
+          if (n) suggestions.push({ label: u.label, n: n, field: u.field, weight: fieldWeight(u.field) });
+        });
+
+        var empty = U.el('div', { class: 'empty' });
+        empty.appendChild(U.el('div', { style: { fontWeight: '600', marginBottom: '6px' } },
+          'Nothing to change for these ' + U.num(scopedRows.length) + ' devices with the fields switched on above.'));
+        if (suggestions.length) {
+          empty.appendChild(U.el('div', {}, 'These would give you something:'));
+          var list = U.el('div', { class: 'row', style: { justifyContent: 'center', marginTop: '10px' } });
+          // Order by how much the field matters, not by how many rows it touches:
+          // a cosmetic OS difference on every device should not outrank the six
+          // assets whose recorded state is actually wrong.
+          suggestions.sort(function (a, b) {
+            return b.weight - a.weight || b.n - a.n;
+          }).slice(0, 4).forEach(function (sg) {
+            list.appendChild(U.el('button', {
+              class: 'btn sm',
+              onclick: function () {
+                cfg.fields[sg.field].enabled = true;
+                if (sg.field === 'state') {
+                  cfg.fields[sg.field].source = 'manual';
+                  if (!cfg.fields[sg.field].manualValue) cfg.fields[sg.field].manualValue = 'In Use';
+                }
+                persistFsConfig(); draw();
+              }
+            }, 'Turn on ' + sg.label + ' (' + U.num(sg.n) + ')'));
+          });
+          empty.appendChild(list);
+        } else {
+          empty.appendChild(U.el('div', { class: 'hint' },
+            'Freshservice and Intune already agree on every field this tool can correct for these devices. ' +
+            'Widen the scope above, or pick a different view.'));
+        }
+        out.appendChild(empty);
+      } else {
+        var wrap = U.el('div', { class: 'table-wrap' });
+        var t = U.el('table', { class: 'grid' });
+        t.appendChild(U.el('thead', {}, U.el('tr', {}, [
+          U.el('th', { class: 'nosort' }, 'Device'),
+          U.el('th', { class: 'nosort' }, 'Location'),
+          U.el('th', { class: 'nosort' }, 'Field'),
+          U.el('th', { class: 'nosort' }, 'Currently in Freshservice'),
+          U.el('th', { class: 'nosort' }, 'Will become'),
+          U.el('th', { class: 'nosort' }, 'Because')
+        ])));
+        var tb2 = U.el('tbody');
+        /* No row click here. The drawer sits at a lower z-index than a modal,
+           so opening one from inside this dialog would put it behind the very
+           thing that opened it. The row already says what will change, and the
+           device itself is one click away on the Devices tab. */
+        proposals.slice(0, 500).forEach(function (p) {
+          p.changes.forEach(function (c, i) {
+            tb2.appendChild(U.el('tr', {}, [
+              U.el('td', {}, i === 0 ? U.el('strong', {}, p.row.name) : ''),
+              U.el('td', { class: 'muted' }, i === 0 ? (p.row.location || '—') : ''),
+              U.el('td', {}, c.label),
+              U.el('td', { class: 'muted' }, c.current || '(blank)'),
+              U.el('td', {}, U.el('strong', {}, c.proposed)),
+              U.el('td', { class: 'muted' }, c.reason || FX.SOURCE_LABELS[c.source])
+            ]));
+          });
+        });
+        t.appendChild(tb2);
+        wrap.appendChild(t);
+        out.appendChild(wrap);
+        if (proposals.length > 500) {
+          out.appendChild(U.el('div', { class: 'hint', style: { marginTop: '8px' } },
+            'Showing the first 500 assets. The downloaded file contains all ' + U.num(proposals.length) + '.'));
+        }
+      }
+      body.appendChild(out);
     }
-    main.appendChild(out);
+
+    draw();
+
+    modal('Build Freshservice import \u2014 PCs', body, [
+      // "Cancel", as the other three say, rather than "Close": four dialogs
+      // doing the same job should not use two words for the same button.
+      { label: 'Cancel', ghost: true },
+      { label: 'Download change log', ghost: true, keepOpen: true, action: function () {
+        if (!proposals.length) { U.toast('Nothing to export.', 'err'); return; }
+        U.download('freshservice-change-log-' + U.todayStamp() + '.csv', FX.toChangeLogCsv(proposals, cfg));
+      } },
+      { label: 'Download import file', primary: true, keepOpen: true, action: function () {
+        if (!proposals.length) {
+          U.toast('Nothing to change with the fields switched on. Widen the scope, or turn on a field.', 'err', 8000);
+          return;
+        }
+        U.download('freshservice-import-' + U.todayStamp() + '.csv',
+          FX.toImportCsv(proposals, cfg), 'text/csv', { bom: false });
+        U.toast('Import file written for ' + U.num(proposals.length) + ' assets. Check a handful of rows ' +
+          'before you upload it.', 'ok', 8000);
+      } }
+    ], { wide: true });
   }
 
   function persistFsConfig() { global.Store.set('fsConfig', state.fsConfig); }
