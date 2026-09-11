@@ -112,6 +112,11 @@
       r.modelFormFactor = '';
       r.age = null;
       r.ageBand = '';
+      /* Whether this one is over the replacement line, worked out here rather
+         than re-derived wherever it is asked. The refresh age is a setting, so
+         a view or a tile testing it for itself would need the config passed in
+         and would drift the day the bands change. */
+      r.ageDue = false;
 
       var names = modelsFor(r);
       for (var i = 0; i < names.length; i++) {
@@ -123,6 +128,7 @@
           r.modelYear = hit.year;
           r.age = now - hit.year;
           r.ageBand = band(r.age, cfg);
+          r.ageDue = r.age >= cfg.refreshYears;
         }
         break;
       }

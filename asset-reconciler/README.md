@@ -40,6 +40,7 @@ not a server, and it can be switched off or wiped from Settings. See
 - [Network assets](#network-assets)
 - [How records are matched](#how-records-are-matched)
 - [What it checks for](#what-it-checks-for)
+- [The dashboard](#the-dashboard)
 - [The working views](#the-working-views)
 - [The site verification loop](#the-site-verification-loop)
 - [Building the Freshservice import](#building-the-freshservice-import)
@@ -327,8 +328,9 @@ resolved — the first wins and the dialog names the clash, because picking one
 silently is how a lookup rots.
 
 This adds three columns (**Year (approx)**, **Age (years)**, **Age band**) and
-two views: **By age**, the refresh planning list, oldest first; and **Model
-year missing**, the models still to add. Opening a PC shows an **Age** panel in
+three views: **By age**, the refresh planning list, oldest first; **Due for
+replacement**, the part of it at or past the refresh age, which is also a tile on
+the dashboard; and **Model year missing**, the models still to add. Opening a PC shows an **Age** panel in
 the detail drawer with the year, the age, the band and the model the year was
 matched on. It is its own panel rather than a row in the side-by-side table
 because the year comes from neither system, and it is shown even when there is
@@ -492,6 +494,42 @@ model string — so they disagree on almost every device without anything being
 wrong. Flagging that is noise, and acting on it would overwrite the better data.
 Turn them on in Settings only if you have deliberately aligned how both systems
 name hardware.
+
+---
+
+## The dashboard
+
+**Estate overview** is the landing page, and it covers every asset type you have
+loaded, not just the PCs. The big figure is everything with something to correct
+across all four populations; under it sits a row of estate-wide figures (sites
+covered, duplicate rows in the exports, assets with no usable location), and then
+one card per asset type.
+
+Each card is the same shape — how many there are, how many are flagged, how many
+are high severity, a button into that population's working list, and a row of
+tiles for the jobs worth doing first. The PCs card is no more elaborate than the
+printers card, because the question you ask of the printers is the same question
+you ask of the PCs.
+
+**Every tile is a view.** The figure on a tile is the number of rows that view
+holds, and clicking it opens that view — so the number and the list can never
+disagree, and the tile is labelled with the same words as the sidebar entry it
+lands on. That is worth spelling out because the first version of this kept a
+list of rule codes beside each tile and added their tallies up, which reported 33
+printers needing a location and then opened a list of 25: a printer with no
+location recorded *and* a site that is not in the lookup is two rule hits and one
+printer. A tile that overstates by double-counting is worse than no tile.
+
+Below the cards, **What is wrong, by type** ranks the biggest twenty issues
+across all four populations together, tagged *PC*, *Net*, *Print* or *Mob*, with
+the bars shaded by severity. Clicking one opens that population's list narrowed
+to that issue. **Biggest sites by asset count** counts every asset type standing
+in each building; **Furthest from expected** stays on the PCs alone, because the
+*Expected devices* column in the site lookup is a PC allowance and a variance
+that folded in printers and handsets would be nonsense.
+
+The Dashboard is reachable as soon as anything is loaded. A session holding only
+the SOTI export gets a mobiles-only overview rather than a greyed-out tab.
 
 ---
 

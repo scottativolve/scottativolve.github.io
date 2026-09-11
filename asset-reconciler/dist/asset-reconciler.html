@@ -5010,6 +5010,11 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
       r.modelFormFactor = '';
       r.age = null;
       r.ageBand = '';
+      /* Whether this one is over the replacement line, worked out here rather
+         than re-derived wherever it is asked. The refresh age is a setting, so
+         a view or a tile testing it for itself would need the config passed in
+         and would drift the day the bands change. */
+      r.ageDue = false;
 
       var names = modelsFor(r);
       for (var i = 0; i < names.length; i++) {
@@ -5021,6 +5026,7 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
           r.modelYear = hit.year;
           r.age = now - hit.year;
           r.ageBand = band(r.age, cfg);
+          r.ageDue = r.age >= cfg.refreshYears;
         }
         break;
       }
@@ -5521,6 +5527,17 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
       sort: { key: 'ageBand', dir: 'asc' }
     },
     {
+      id: 'due-for-replacement',
+      name: 'Due for replacement',
+      description: 'Machines at or past the replacement age set in Settings, oldest first \u2014 the list a ' +
+                   'refresh budget is built from. A machine whose model has no year in the lookup is not here, ' +
+                   'because nothing is known about it either way.',
+      columns: ['name', 'ageBand', 'modelYear', 'age', 'model', 'location', 'fsUser', 'state', 'lastCheckIn'],
+      filter: null,
+      custom: function (rows) { return rows.filter(function (r) { return r.ageDue; }); },
+      sort: { key: 'ageBand', dir: 'asc' }
+    },
+    {
       id: 'model-year-missing',
       name: 'Model year missing',
       description: 'In-scope machines whose model is not in the model year lookup, so they cannot be aged. ' +
@@ -5562,6 +5579,7 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     ['all',             'all',       'All PCs'],
 
     ['by-age',          'breakdown', 'By age'],
+    ['due-for-replacement','breakdown','Due for replacement'],
     ['model-year-missing','breakdown','Model year missing'],
     ['other-assets',    'breakdown', 'Other asset types'],
     ['risk-score',      'breakdown', 'By risk score'],
@@ -11937,6 +11955,17 @@ window.SampleData = {
     return DA.index(src && src.records ? src.records : []);
   }
 
+  /* Is there anything reconciled at all, of any asset type?
+
+     Asked by everything that is not tied to one population - the tab bar, the
+     page router, and where to land on a restored session. The Dashboard used
+     to test state.result, which is the PC reconciliation: a session holding
+     only the SOTI export had a Dashboard tab greyed out and fell back to the
+     Data screen if it was reached anyway. */
+  function anyResult() {
+    return !!(state.result || state.netResult || state.printResult || state.mobResult);
+  }
+
   /* The site list keyed by site code, which is how network devices find their
      location. Built from the same location lookup the map uses. */
   function siteIndex() {
@@ -12480,7 +12509,7 @@ window.SampleData = {
       // open the Network tab without the PC reconciliation being present.
       var needs = { network: !!state.netResult, printers: !!state.printResult,
                     mobiles: !!state.mobResult, data: true, settings: true,
-                    map: !!(state.result || state.netResult || state.printResult || state.mobResult) };
+                    dashboard: anyResult(), map: anyResult() };
       var disabled = !(Object.prototype.hasOwnProperty.call(needs, t[0]) ? needs[t[0]] : !!state.result);
       host.appendChild(U.el('button', {
         class: 'tab' + (state.tab === t[0] ? ' active' : ''),
@@ -12492,25 +12521,25 @@ window.SampleData = {
 
     host.appendChild(U.el('div', { class: 'spacer' }));
 
-    if (state.tab === 'mobiles' && state.mobResult) {
+    /* The strip beside the tabs describes whatever is on screen: one
+       population while you are looking at that population's list, and the
+       whole estate everywhere else. It used to fall back to the PC figures,
+       which put "298 devices" beside an Estate overview counting 2,878. */
+    var TAB_POP = { devices: 'pc', network: 'net', printers: 'print', mobiles: 'mob' };
+    var onePop = TAB_POP[state.tab] ? ctxFor(TAB_POP[state.tab]) : null;
+    if (onePop && onePop.result) {
+      var oc = popCounts(onePop);
       host.appendChild(U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } },
-        U.num(state.mobResult.rows.length) + ' mobiles \u00b7 ' +
-        U.num(state.mobResult.counts.atSite) + ' at a site \u00b7 ' +
-        (state.mobResult.counts.people
-          ? U.num(state.mobResult.counts.owned) + ' with an owner \u00b7 ' : '') +
-        U.num(state.mobResult.rows.filter(function (r) { return r.issueCount; }).length) + ' flagged'));
-    } else if (state.tab === 'printers' && state.printResult) {
+        U.num(oc.rows) + ' ' + onePop.noun + 's \u00b7 ' +
+        (onePop.key === 'mob'
+          ? U.num(onePop.result.counts.atSite) + ' at a site \u00b7 ' +
+            (onePop.result.counts.people ? U.num(onePop.result.counts.owned) + ' with an owner \u00b7 ' : '')
+          : '') +
+        U.num(oc.flagged) + ' flagged'));
+    } else if (loadedPops().length) {
+      var et = estateTotals();
       host.appendChild(U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } },
-        U.num(state.printResult.rows.length) + ' printers \u00b7 ' +
-        U.num(state.printResult.rows.filter(function (r) { return r.issueCount; }).length) + ' flagged'));
-    } else if (state.tab === 'network' && state.netResult) {
-      host.appendChild(U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } },
-        U.num(state.netResult.rows.length) + ' network devices \u00b7 ' +
-        U.num(state.netResult.rows.filter(function (r) { return r.issueCount; }).length) + ' flagged'));
-    } else if (state.result) {
-      host.appendChild(U.el('span', { class: 'hint', style: { whiteSpace: 'nowrap' } },
-        U.num(state.result.rows.length) + ' devices \u00b7 ' +
-        U.num(state.result.rows.filter(function (r) { return r.issueCount; }).length) + ' flagged'));
+        U.num(et.rows) + ' assets \u00b7 ' + U.num(et.flagged) + ' flagged'));
     }
 
     host.appendChild(U.el('button', {
@@ -12817,7 +12846,7 @@ window.SampleData = {
         : state.tab === 'network' ? !!state.netResult
         : state.tab === 'printers' ? !!state.printResult
         : state.tab === 'mobiles' ? !!state.mobResult
-        : state.tab === 'map' ? !!(state.result || state.netResult || state.printResult || state.mobResult)
+        : state.tab === 'map' || state.tab === 'dashboard' ? anyResult()
         : !!state.result;
       (ready ? page : renderData)(main);
     } finally {
@@ -13446,64 +13475,253 @@ window.SampleData = {
   /*  tab: dashboard                                                      */
   /* ==================================================================== */
 
+  /* The headline figures for each population, as one table.
+
+     The dashboard reported PCs and nothing else, and the reason it stayed
+     that way is that every number on it was written out longhand: another
+     asset type meant another block of tile calls rather than another row
+     here. A tile is a label, the rule codes to add up, and where clicking it
+     goes.
+
+     codes are summed, because one job is usually several rules - a printer
+     with no site is "location to fix" whether the name conflicts with
+     Freshservice, is blank, or is simply not in the lookup. value and sub may
+     be functions for the few figures that do not come from a tally at all. */
+  /* The headline figures for each population, as one table.
+
+     The dashboard reported PCs and nothing else, and the reason it stayed
+     that way is that every number on it was written out longhand: another
+     asset type meant another block of tile calls rather than another row
+     here.
+
+     A tile is a view. The figure is the number of rows that view holds, and
+     clicking opens it \u2014 so the number and the list can never disagree. The
+     first attempt at this kept a list of rule codes beside each tile and
+     added their tallies up, which said 33 printers needed a location and then
+     opened a list of 25: a printer with no location recorded AND a site that
+     is not in the lookup is two rule hits and one printer. A tile that
+     overstates by double-counting is worse than no tile.
+
+     The label defaults to the view\u2019s own name, so a tile and the sidebar
+     entry it lands on say the same words. issue narrows both the figure and
+     the landing list to one rule. value is for the two figures that are not
+     a view at all. */
+  var DASH_TILES = {
+    pc: [
+      { view: 'clean', label: 'Clean records', sub: 'in both systems, nothing flagged' },
+      { view: 'not-in-intune', sub: 'computers not enrolled or disposed' },
+      { view: 'not-in-fs', sub: 'agent not reporting' },
+      { view: 'fix-user', sub: 'can be corrected on import' },
+      { view: 'fix-location', sub: 'ask the service' },
+      { view: 'stale', sub: function () { return 'over ' + state.cfg.staleDays + ' days'; } },
+      { view: 'risk-score', label: 'High vulnerability risk', issue: 'high-risk-score',
+        sub: function (ctx) {
+          return ctx.result.counts.arcticWolf
+            ? 'score ' + state.cfg.riskScoreThreshold + ' or above'
+            : 'load an Arctic Wolf export';
+        } },
+      { view: 'moved-by-ip', sub: function (ctx) {
+          return ctx.result.counts.subnets
+            ? 'last seen on another site\u2019s network'
+            : 'add IP subnets to the lookup';
+        } },
+      { view: 'due-for-replacement',
+        sub: function (ctx) {
+          var placed = ctx.result.rows.filter(function (r) { return r.modelYear; }).length;
+          return placed ? state.cfg.refreshYears + ' years old or more' : 'load the model year lookup';
+        } }
+    ],
+
+    net: [
+      { view: 'net-new', sub: 'FortiManager manages it, no asset record' },
+      { view: 'net-replaced', sub: 'asset record with nothing managing it' },
+      { view: 'net-location', sub: 'site cannot be resolved' },
+      { view: 'net-firmware', sub: 'the two systems disagree on the version' },
+      { view: 'net-never-reported', sub: 'managed but never checked in' },
+      { view: 'net-retired-managed', sub: 'retired in Freshservice, still live' }
+    ],
+
+    print: [
+      { view: 'pr-contract', sub: 'on the contract or in the CMDB, not both' },
+      { view: 'pr-location', sub: 'site cannot be resolved' },
+      { view: 'pr-silent', sub: function () { return 'silent for over ' + state.printCfg.staleDays + ' days'; } },
+      { view: 'pr-serial', sub: 'blank in Freshservice' },
+      { view: 'pr-state', sub: 'contradicts what OneStop sees' },
+      { view: 'pr-unwatched', sub: 'outside proactive supply' }
+    ],
+
+    mob: [
+      { view: 'mb-site-unresolved', sub: 'SOTI folder not mapped to a site' },
+      { view: 'mb-owner-gaps', sub: 'no name against the handset' },
+      { view: 'mb-owner-left', sub: 'account disabled in Entra' },
+      { view: 'mb-silent', sub: function () { return 'no check-in for over ' + state.mobCfg.lostDays + ' days'; } },
+      { view: 'mb-security', sub: 'unencrypted, or an OS out of support' },
+      { view: 'mb-dup-number', sub: 'one number on more than one handset' }
+    ]
+  };
+
+  /* Populations with rows in them, in the order the page shows them. */
+  function loadedPops() {
+    return ['pc', 'net', 'print', 'mob'].map(ctxFor).filter(function (ctx) {
+      return ctx.result && ctx.result.rows.length;
+    });
+  }
+
+  function popLabel(key) {
+    return global.EstateMap.POPULATIONS[key].label;
+  }
+
+  function estateTotals() {
+    return loadedPops().reduce(function (a, ctx) {
+      var c = popCounts(ctx);
+      a.rows += c.rows; a.flagged += c.flagged; a.high += c.high;
+      return a;
+    }, { rows: 0, flagged: 0, high: 0 });
+  }
+
+  function popCounts(ctx) {
+    var rows = ctx.result.rows;
+    return {
+      rows: rows.length,
+      flagged: rows.filter(function (r) { return r.issueCount > 0; }).length,
+      high: rows.filter(function (r) { return r.severity === 'high'; }).length
+    };
+  }
+
+  /* A built-in view by id, or null. Deliberately not viewByIdOr, which falls
+     back to the first view in the list: a tile naming a view this build no
+     longer has would then quietly show the count of something else. */
+  function builtInView(ctx, id) {
+    return ctx.builtIn.filter(function (v) { return v.id === id; })[0] || null;
+  }
+
+  /* What a tile says. One rule narrows to itself; otherwise it is however
+     many rows the view holds. */
+  function tileValue(ctx, t) {
+    if (t.value) return t.value(ctx);
+    if (t.issue) return ctx.result.tally[t.issue] || 0;
+    var view = builtInView(ctx, t.view);
+    return view ? ctx.views.applyView(view, ctx.result.rows).length : 0;
+  }
+
+  /* Open a view with one issue in force.
+
+     The order matters and used to be wrong: every one of the four view
+     setters clears its population's issue filter, so setting the filter and
+     then opening the view threw the filter away, and the dashboard's issue
+     bars landed on an unfiltered list. Open first, narrow second. */
+  function openIssue(ctx, viewId, code) {
+    ctx.open(viewId);
+    if (!code) return;
+    state[ctx.issueKey] = code;
+    render();
+  }
+
+  /* One card per asset type: what it holds, what is wrong with it, and a way
+     in. Identical in shape for all four, because the question you ask of the
+     printers is the same question you ask of the PCs. */
+  function populationCard(ctx) {
+    var c = popCounts(ctx);
+    var card = U.el('div', { class: 'card' });
+    card.appendChild(U.el('header', {}, [
+      U.el('h2', {}, popLabel(ctx.key)),
+      U.el('span', { class: 'sub' },
+        U.num(c.rows) + ' ' + ctx.noun + (c.rows === 1 ? '' : 's') + ' · ' +
+        U.num(c.flagged) + ' flagged (' + U.pct(c.flagged, c.rows) + ')' +
+        (c.high ? ' · ' + U.num(c.high) + ' high severity' : '')),
+      U.el('div', { class: 'spacer' }),
+      U.el('button', {
+        class: 'btn sm', onclick: function () { ctx.open(ctx.fallbackId); }
+      }, 'Open the working list')
+    ]));
+
+    var tiles = U.el('div', { class: 'tiles', style: { marginBottom: '0' } });
+    (DASH_TILES[ctx.key] || []).forEach(function (t) {
+      var view = builtInView(ctx, t.view);
+      if (!view) return;                      // a view this build does not have
+      tiles.appendChild(C.tile(
+        t.label || view.name,
+        tileValue(ctx, t),
+        typeof t.sub === 'function' ? t.sub(ctx) : t.sub,
+        function () { openIssue(ctx, t.view, t.issue); }
+      ));
+    });
+    card.appendChild(tiles);
+    return card;
+  }
+
   function renderDashboard(main) {
-    var res = state.result;
-    var rows = res.rows;
-    var flagged = rows.filter(function (r) { return r.issueCount > 0; });
-    var high = rows.filter(function (r) { return r.severity === 'high'; });
+    var pops = loadedPops();
+    /* The router lets this page through as soon as any population has a
+       result, and a result with no rows in it is possible. Say so rather than
+       dereferencing a population that is not there. */
+    if (!pops.length) {
+      main.appendChild(U.el('div', { class: 'page-head' }, [
+        U.el('h1', {}, 'Estate overview'),
+        U.el('div', { class: 'sub' }, 'Nothing reconciled yet \u2014 load your exports on the Data screen.')
+      ]));
+      return;
+    }
+    var totals = estateTotals();
 
     main.appendChild(U.el('div', { class: 'page-head' }, [
       U.el('h1', {}, 'Estate overview'),
-      U.el('div', { class: 'sub' }, 'Built from ' + U.num(res.counts.fs) + ' Freshservice rows and ' +
-        U.num(res.counts.intune) + ' Intune rows.')
+      U.el('div', { class: 'sub' }, 'Built from ' + andList(pops.map(function (ctx) {
+        var c = popCounts(ctx);
+        return U.num(c.rows) + ' ' + ctx.noun + (c.rows === 1 ? '' : 's');
+      })) + '.')
     ]));
 
+    /* The hero counts every asset type, not only the PCs. A dashboard that
+       said "182 devices with something to correct" while eleven hundred
+       handsets and printers sat unmentioned was not describing the estate. */
+    var lead = pops[0];
     main.appendChild(U.el('div', { class: 'hero' }, [
       U.el('div', {}, [
-        U.el('div', { class: 'figure' }, U.num(flagged.length)),
-        U.el('div', { class: 'label' }, 'devices with something to correct')
+        U.el('div', { class: 'figure' }, U.num(totals.flagged)),
+        U.el('div', { class: 'label' }, 'assets with something to correct')
       ]),
       U.el('div', {}, [
-        U.el('div', { class: 'label' }, 'out of ' + U.num(rows.length) + ' across both systems (' +
-          U.pct(flagged.length, rows.length) + ')'),
-        U.el('div', { class: 'detail' }, high.length
-          ? U.num(high.length) + ' of them are high severity: a user or location that is wrong, a device one system ' +
-            'has never heard of, or an asset marked retired that is still being used.'
+        U.el('div', { class: 'label' }, 'out of ' + U.num(totals.rows) + ' across ' +
+          (pops.length === 1 ? popLabel(lead.key).toLowerCase() : pops.length + ' asset types') +
+          ' (' + U.pct(totals.flagged, totals.rows) + ')'),
+        U.el('div', { class: 'detail' }, totals.high
+          ? U.num(totals.high) + ' of them are high severity: a user or location that is wrong, an asset one ' +
+            'system has never heard of, or something marked retired that is still being used.'
           : 'Nothing high severity — the remaining issues are stale data and cosmetic differences.'),
-        U.el('button', {
-          class: 'btn primary', style: { marginTop: '10px' },
-          onclick: function () { setView('attention'); }
-        }, 'Open the working list')
+        U.el('div', { class: 'row', style: { marginTop: '10px' } }, pops.map(function (ctx) {
+          return U.el('button', {
+            class: 'btn' + (ctx === lead ? ' primary' : ''),
+            onclick: function () { ctx.open(ctx.fallbackId); }
+          }, pops.length === 1 ? 'Open the working list' : popLabel(ctx.key));
+        }))
       ])
     ]));
 
-    var c = res.counts;
+    /* Everything in the loaded exports, whatever kind of asset it is. */
+    var aggAll = global.EstateMap.aggregate(popRows(), { includeOther: false, population: 'both' });
+    var dupes = DUPE_SOURCES.reduce(function (a, id) {
+      return a + global.Dupes.summarise(dupeGroupsFor(id)).toRemove;
+    }, 0);
     main.appendChild(U.el('div', { class: 'tiles' }, [
-      C.tile('In both systems', c.matched, U.pct(c.matched, c.fs || 1) + ' of Freshservice', function () { setView('clean'); }),
-      // Counted from the rule, not from c.fsOnly: printers, switches and phones
-      // are legitimately absent from Intune and would inflate the raw figure.
-      C.tile('Missing from Intune', res.tally['not-in-intune'] || 0,
-        'computers not enrolled or disposed', function () { setView('not-in-intune'); }),
-      C.tile('Missing from Freshservice', res.tally['not-in-freshservice'] || 0,
-        'agent not reporting', function () { setView('not-in-fs'); }),
-      C.tile('User needs fixing', (res.tally['user-mismatch'] || 0) + (res.tally['user-missing-fs'] || 0),
-        'can be corrected on import', function () { setView('fix-user'); }),
-      C.tile('Location needs fixing', (res.tally['location-missing'] || 0) + (res.tally['location-unknown'] || 0),
-        'ask the service', function () { setView('fix-location'); }),
-      C.tile('Not checked in', res.tally['stale-intune'] || 0,
-        'over ' + state.cfg.staleDays + ' days', function () { setView('stale'); }),
-      C.tile('Duplicate rows in the exports', DUPE_SOURCES.reduce(function (a, id) {
-        return a + global.Dupes.summarise(dupeGroupsFor(id)).toRemove;
-      }, 0), 'same serial more than once', function () { setTab('dupes'); }),
-      C.tile('High vulnerability risk', res.tally['high-risk-score'] || 0,
-        c.arcticWolf ? 'score ' + state.cfg.riskScoreThreshold + ' or above' : 'load an Arctic Wolf export',
-        function () { setView('risk-score'); }),
-      C.tile('Moved, by IP address', (res.tally['ip-location-mismatch'] || 0) + (res.tally['ip-suggests-location'] || 0),
-        c.subnets ? 'last seen on another site\u2019s network' : 'add IP subnets to the lookup',
-        function () { setView('moved-by-ip'); })
+      C.tile('Sites with assets', aggAll.sites.length,
+        state.result || state.netResult
+          ? (aggAll.sites.length ? 'of ' + U.num(siteCount()) + ' in the lookup' : 'load the location lookup')
+          : null,
+        function () { setTab('map'); }),
+      C.tile('Duplicate rows in the exports', dupes,
+        'same serial or name more than once', function () { setTab('dupes'); }),
+      C.tile('No location at all', aggAll.unlocated.length,
+        'cannot be mapped or sent to a site', function () { setTab('map'); }),
+      C.tile('At a place not in the lookup',
+        aggAll.unmatched.reduce(function (a, u) { return a + u.rows.length; }, 0),
+        aggAll.unmatched.length + ' distinct wordings', function () { setTab('map'); })
     ]));
 
-    if (c.locations && !c.sitesWithSubnet) {
+    pops.forEach(function (ctx) { main.appendChild(populationCard(ctx)); });
+
+    var c = state.result ? state.result.counts : null;
+    if (c && c.locations && !c.sitesWithSubnet) {
       main.appendChild(U.el('div', { class: 'card' }, [
         U.el('h2', {}, 'No IP subnets in the location lookup'),
         U.el('p', { class: 'hint' },
@@ -13512,116 +13730,116 @@ window.SampleData = {
           'which devices were last seen on a network belonging to a different site. That is the strongest ' +
           'evidence available that a device has physically moved.')
       ]));
-    } else if (c.sitesWithSubnet) {
-      var covered = res.rows.filter(function (r) { return r.ip; }).length;
+    } else if (c && c.sitesWithSubnet) {
+      var covered = state.result.rows.filter(function (r) { return r.ip; }).length;
       main.appendChild(U.el('div', { class: 'card' }, [
         U.el('h2', {}, 'IP location checking'),
         U.el('p', { class: 'hint' },
           U.num(c.sitesWithSubnet) + ' of ' + U.num(c.locations) + ' sites have a subnet recorded (' +
-          U.num(c.subnets) + ' ranges in total), and ' + U.num(covered) + ' of ' + U.num(res.rows.length) +
+          U.num(c.subnets) + ' ranges in total), and ' + U.num(covered) + ' of ' + U.num(state.result.rows.length) +
           ' devices have a last-seen address to check. ' +
-          (res.tally['ip-site-no-subnet']
-            ? U.num(res.tally['ip-site-no-subnet']) + ' devices sit at sites with no range recorded.'
+          (state.result.tally['ip-site-no-subnet']
+            ? U.num(state.result.tally['ip-site-no-subnet']) + ' devices sit at sites with no range recorded.'
             : 'Sites without a range are simply not checked.'))
       ]));
     }
 
-    /* issues by type */
-    var issueData = R.RULES
-      .filter(function (rule) { return (res.tally[rule.code] || 0) > 0; })
-      .map(function (rule) {
-        return {
-          label: rule.label,
-          value: res.tally[rule.code],
-          sub: rule.help,
+    /* issues by type, across every population */
+    var multi = pops.length > 1;
+    var issueData = [];
+    pops.forEach(function (ctx) {
+      (ctx.rules.RULES || []).forEach(function (rule) {
+        var n = ctx.result.tally[rule.code] || 0;
+        if (!n) return;
+        issueData.push({
+          // Two populations can call the same problem the same thing, so the
+          // bar says which list it is in when more than one is loaded.
+          label: (multi ? POP_TAGS[ctx.key] + ' · ' : '') + rule.label,
+          value: n,
+          sub: popLabel(ctx.key) + ' — ' + (rule.help || rule.hint || ''),
           // Severity is an ordered category, so it gets ordinal steps of the one
           // sequential hue - darkest for the worst - with a legend to say so.
           color: rule.severity === 'high' ? 'var(--seq-700)'
                : rule.severity === 'medium' ? 'var(--seq-400)' : 'var(--seq-250)',
-          onClick: function () { state.issueFilter = rule.code; setView('all'); }
-        };
-      })
-      .sort(function (a, b) { return b.value - a.value; });
+          onClick: function () { openIssue(ctx, ctx.allId, rule.code); }
+        });
+      });
+    });
+    issueData.sort(function (a, b) { return b.value - a.value; });
+    // Twenty bars is already a tall chart; the rest live in the sidebar views.
+    var issueTotal = issueData.length;
+    issueData = issueData.slice(0, 20);
 
     var issuesCard = U.el('div', { class: 'card' }, [
       U.el('header', {}, [U.el('h2', {}, 'What is wrong, by type'),
-        U.el('span', { class: 'sub' }, 'Click a bar to see those devices')])
+        U.el('span', { class: 'sub' }, (issueTotal > issueData.length
+          ? 'Biggest ' + issueData.length + ' of ' + issueTotal + ' · ' : '') +
+          'Click a bar to see those assets')])
     ]);
     var issuesPlot = U.el('div');
     issuesCard.appendChild(issuesPlot);
     main.appendChild(issuesCard);
 
     /* sites */
-    var agg = global.EstateMap.aggregate(rows, { includeOther: false });
-    var topSites = agg.sites.slice().sort(function (a, b) { return b.count - a.count; }).slice(0, 12)
+    var topSites = aggAll.sites.slice().sort(function (a, b) { return b.count - a.count; }).slice(0, 12)
       .map(function (s) {
         return {
           label: s.name, value: s.count,
           sub: s.issues + ' flagged' + (s.expected !== null ? ' · expected ' + s.expected : ''),
-          onClick: function () { state.siteFilter = { key: s.key, name: s.name }; setView('all'); }
+          onClick: function () { openSite(s); }
         };
       });
 
     var sitesCard = U.el('div', { class: 'card' }, [
-      U.el('header', {}, [U.el('h2', {}, 'Biggest sites by device count'),
-        U.el('span', { class: 'sub' }, agg.sites.length ? 'Top 12 of ' + agg.sites.length : '')])
+      U.el('header', {}, [U.el('h2', {}, 'Biggest sites by asset count'),
+        U.el('span', { class: 'sub' }, aggAll.sites.length
+          ? 'Top 12 of ' + aggAll.sites.length + (multi ? ' · every asset type' : '') : '')])
     ]);
     var sitesPlot = U.el('div');
     sitesCard.appendChild(sitesPlot);
 
-    var withExpected = agg.sites.filter(function (s) { return s.variance !== null && s.variance !== 0; });
+    /* The expected column in the site lookup is a PC allowance, so this reads
+       pcCount rather than the count of everything standing in the building -
+       a variance that folded in printers and handsets would be nonsense.
+       aggregate already works the variance itself out that way. */
     var varianceCard = null, variancePlot = null;
-    if (withExpected.length) {
-      var top = withExpected.slice().sort(function (a, b) { return Math.abs(b.variance) - Math.abs(a.variance); })
-        .slice(0, 12).map(function (s) {
-          return {
-            label: s.name, value: s.variance,
-            sub: s.count + ' found, ' + s.expected + ' expected',
-            onClick: function () { state.siteFilter = { key: s.key, name: s.name }; setView('all'); }
-          };
-        });
-      varianceCard = U.el('div', { class: 'card' }, [
-        U.el('header', {}, [U.el('h2', {}, 'Furthest from expected'),
-          U.el('span', { class: 'sub' }, 'Sites to look at first')])
-      ]);
-      variancePlot = U.el('div');
-      varianceCard.appendChild(variancePlot);
-      varianceCard._data = top;
+    if (state.result) {
+      var withExpected = aggAll.sites.filter(function (s) { return s.variance !== null && s.variance !== 0; });
+      if (withExpected.length) {
+        var top = withExpected.slice().sort(function (a, b) { return Math.abs(b.variance) - Math.abs(a.variance); })
+          .slice(0, 12).map(function (s) {
+            return {
+              label: s.name, value: s.variance,
+              sub: s.pcCount + ' PCs found, ' + s.expected + ' expected',
+              onClick: function () { openSite(s, pcCtx()); }
+            };
+          });
+        varianceCard = U.el('div', { class: 'card' }, [
+          U.el('header', {}, [U.el('h2', {}, 'Furthest from expected'),
+            U.el('span', { class: 'sub' }, 'PCs against the expected column')])
+        ]);
+        variancePlot = U.el('div');
+        varianceCard.appendChild(variancePlot);
+        varianceCard._data = top;
+      }
     }
 
-    var g = U.el('div', { class: 'grid2' }, [sitesCard, varianceCard]);
-    main.appendChild(g);
-
-    if (agg.unlocated.length || agg.unmatched.length) {
-      main.appendChild(U.el('div', { class: 'card' }, [
-        U.el('h2', {}, 'Not counted against any site'),
-        U.el('p', { class: 'hint' }, 'These cannot appear on the map or in a site pack until their location is sorted out.'),
-        U.el('div', { class: 'row' }, [
-          agg.unlocated.length ? U.el('button', {
-            class: 'btn', onclick: function () { state.issueFilter = 'location-missing'; setView('fix-location'); }
-          }, U.num(agg.unlocated.length) + ' with no location at all') : null,
-          agg.unmatched.length ? U.el('button', {
-            class: 'btn', onclick: function () { state.issueFilter = 'location-unknown'; setView('fix-location'); }
-          }, U.num(agg.unmatched.reduce(function (a, u) { return a + u.rows.length; }, 0)) +
-             ' at ' + agg.unmatched.length + ' locations not in the lookup') : null
-        ])
-      ]));
-    }
+    main.appendChild(U.el('div', { class: 'grid2' }, [sitesCard, varianceCard]));
 
     // Charts need their container measured, so draw after layout.
     requestAnimationFrame(function () {
       C.barChart(issuesPlot, issueData, {
-        valueLabel: 'Devices', categoryLabel: 'Issue',
+        valueLabel: 'Assets', categoryLabel: 'Issue',
         legend: [
           { color: 'var(--seq-700)', label: 'High severity' },
           { color: 'var(--seq-400)', label: 'Medium' },
           { color: 'var(--seq-250)', label: 'Low' }
         ],
-        emptyText: 'Nothing flagged at all — the two systems agree.'
+        emptyText: 'Nothing flagged at all — every system agrees.'
       });
       C.barChart(sitesPlot, topSites, {
-        valueLabel: 'Devices', categoryLabel: 'Site',
-        emptyText: 'No sites yet. Load the location lookup, or check that Freshservice locations are filled in.'
+        valueLabel: 'Assets', categoryLabel: 'Site',
+        emptyText: 'No sites yet. Load the location lookup, or check that the locations in your exports are filled in.'
       });
       if (varianceCard) {
         C.divergingBarChart(variancePlot, varianceCard._data, {
@@ -13629,6 +13847,43 @@ window.SampleData = {
         });
       }
     });
+  }
+
+  /* The rows of every population, in the shape EstateMap.aggregate takes. */
+  function popRows() {
+    return {
+      pc: state.result ? state.result.rows : [],
+      net: state.netResult ? state.netResult.rows : [],
+      print: state.printResult ? state.printResult.rows : [],
+      mob: state.mobResult ? state.mobResult.rows : []
+    };
+  }
+
+  function siteCount() {
+    var src = state.sources.locations;
+    return src && src.records ? src.records.length : 0;
+  }
+
+  /* "a, b and c" — the page head names what the estate is made of, and a
+     comma before the last item reads as a list that got cut off. */
+  function andList(parts) {
+    if (parts.length < 2) return parts[0] || 'nothing yet';
+    return parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1];
+  }
+
+  /* Narrow one population to a site. Which population depends on where the
+     click came from: a bar in the all-asset-types chart opens whichever list
+     that site has the most of, so the click lands on something. */
+  function openSite(s, ctx) {
+    if (!ctx) {
+      ctx = loadedPops().slice().sort(function (a, b) {
+        return (s[b.key + 'Rows'] || []).length - (s[a.key + 'Rows'] || []).length;
+      })[0];
+    }
+    if (!ctx) return;
+    ctx.open(ctx.allId);
+    state[ctx.key === 'pc' ? 'siteFilter' : ctx.key + 'SiteFilter'] = { key: s.key, name: s.name };
+    render();
   }
 
   /* ==================================================================== */
@@ -16997,6 +17252,8 @@ window.SampleData = {
   function pcCtx() {
     return {
       key: 'pc',
+      issueKey: 'issueFilter',
+      allId: 'all',
       label: 'PC views',
       noun: 'device',
       listName: 'device list',
@@ -17027,6 +17284,8 @@ window.SampleData = {
   function netCtx() {
     return {
       key: 'net',
+      issueKey: 'netIssueFilter',
+      allId: 'net-all',
       label: 'Network views',
       noun: 'network device',
       listName: 'network list',
@@ -17054,6 +17313,8 @@ window.SampleData = {
   function printCtx() {
     return {
       key: 'print',
+      issueKey: 'printIssueFilter',
+      allId: 'pr-all',
       label: 'Printer views',
       noun: 'printer',
       listName: 'printer list',
@@ -17081,6 +17342,8 @@ window.SampleData = {
   function mobCtx() {
     return {
       key: 'mob',
+      issueKey: 'mobIssueFilter',
+      allId: 'mb-all',
       label: 'Mobile views',
       noun: 'mobile',
       listName: 'mobile list',
@@ -17456,10 +17719,7 @@ window.SampleData = {
     state.restoredFills = fills;
     global.EstateMap.reset();
     recompute();
-    setTab(state.result ? 'dashboard'
-      : state.netResult ? 'network'
-      : state.printResult ? 'printers'
-      : state.mobResult ? 'mobiles' : 'data');
+    setTab(anyResult() ? 'dashboard' : 'data');
     if (!quiet) {
       var when = state.publishedFrom.at ? U.fmtDateTime(state.publishedFrom.at) : 'an unknown date';
       U.toast('Loaded the published set from ' + when +
@@ -17632,13 +17892,9 @@ window.SampleData = {
 
       if (!restored) { render(); return; }
 
-      /* Land on a tab the restored data can actually fill. A session with only
-         the network exports in it has no PC reconciliation, and the Dashboard
-         reads that result unconditionally. */
-      setTab(state.result ? 'dashboard'
-        : state.netResult ? 'network'
-        : state.printResult ? 'printers'
-        : state.mobResult ? 'mobiles' : 'data');
+      /* The Dashboard covers every asset type, so it is the landing tab
+         whatever the restored session happens to hold. */
+      setTab(anyResult() ? 'dashboard' : 'data');
       U.toast('Picked up where you left off \u2014 ' +
         Object.keys(state.sources).map(function (id) {
           return S.SOURCES[id].short + ' ' + U.num(state.sources[id].records.length);

@@ -377,6 +377,17 @@
       sort: { key: 'ageBand', dir: 'asc' }
     },
     {
+      id: 'due-for-replacement',
+      name: 'Due for replacement',
+      description: 'Machines at or past the replacement age set in Settings, oldest first \u2014 the list a ' +
+                   'refresh budget is built from. A machine whose model has no year in the lookup is not here, ' +
+                   'because nothing is known about it either way.',
+      columns: ['name', 'ageBand', 'modelYear', 'age', 'model', 'location', 'fsUser', 'state', 'lastCheckIn'],
+      filter: null,
+      custom: function (rows) { return rows.filter(function (r) { return r.ageDue; }); },
+      sort: { key: 'ageBand', dir: 'asc' }
+    },
+    {
       id: 'model-year-missing',
       name: 'Model year missing',
       description: 'In-scope machines whose model is not in the model year lookup, so they cannot be aged. ' +
@@ -418,6 +429,7 @@
     ['all',             'all',       'All PCs'],
 
     ['by-age',          'breakdown', 'By age'],
+    ['due-for-replacement','breakdown','Due for replacement'],
     ['model-year-missing','breakdown','Model year missing'],
     ['other-assets',    'breakdown', 'Other asset types'],
     ['risk-score',      'breakdown', 'By risk score'],
