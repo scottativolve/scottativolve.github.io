@@ -2366,6 +2366,32 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
       ]
     },
 
+    models: {
+      id: 'models',
+      label: 'Model year lookup',
+      short: 'Model years',
+      hint: 'Model \u2192 year of manufacture (adds the age columns). Download the starter list from Devices \u2192 Model years.',
+      /* Headers the starter list is written with, plus the wordings a
+         hand-made table tends to use. Deliberately narrow: a sheet of models
+         and years is small and looks a little like every other export, and a
+         loose signature here would start claiming asset exports. */
+      /* 'model' is in here so a two-column hand-made file (Model, Year) is
+         still placed: without it such a file lands just under the confidence
+         threshold and has to be dropped on the labelled box. It is safe to
+         claim because the exports that carry a Model column all trip the anti
+         list below by a wide margin. */
+      signature: ['year of manufacture', 'model year', 'launch year', 'called this in freshservice',
+                  'called this in intune', 'form factor', 'release year', 'year', 'model'],
+      anti: ['device name', 'serial number', 'asset tag', 'last check-in'],
+      fields: [
+        { key: 'model',        label: 'Model / product',  required: true, aliases: ['model', 'product', 'product name', 'model name', 'product number', 'device model', 'type'] },
+        { key: 'year',         label: 'Year of manufacture', aliases: ['year of manufacture', 'year', 'model year', 'launch year', 'release year', 'built', 'manufactured'] },
+        { key: 'manufacturer', label: 'Manufacturer',     aliases: ['manufacturer', 'make', 'vendor', 'brand'] },
+        { key: 'formFactor',   label: 'Form factor',      aliases: ['form factor', 'form', 'chassis', 'device type', 'category'] },
+        { key: 'notes',        label: 'Notes',            aliases: ['notes', 'note', 'comments', 'comment'] }
+      ]
+    },
+
     verification: {
       id: 'verification',
       label: 'Verification returns',
@@ -3977,7 +4003,8 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     riskScoreThreshold: 9,      // Arctic Wolf score at or above this is "high"
     risksThreshold: 500,        // this many open risks on one device is "a lot"
     scanStaleDays: 21,          // no successful scan in this long is stale
-    namePrefixes: 'STD|SHR|IVOLVE|LAP|DSK'   // build prefixes that precede a serial in a device name
+    namePrefixes: 'STD|SHR|IVOLVE|LAP|DSK',  // build prefixes that precede a serial in a device name
+    refreshYears: 5             // age at which a machine is due for replacement
   };
 
   function settings(overrides) {
@@ -4868,6 +4895,252 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
 
 </script>
 <script>
+/* js/deviceage.js */
+/* Approximate age, from a model-year lookup you maintain.
+
+   Planning a refresh needs the one thing none of the systems record: roughly
+   when each machine was built. Freshservice holds a product name, Intune holds
+   a model, and neither holds a year — so the year comes from a lookup keyed on
+   the model, which is how this has always been worked out by hand.
+
+   Nothing here guesses a year. The temptation is obvious — most model names
+   carry a generation, and a table of launch years could be shipped in the
+   code — but the Dell OptiPlex 7010 is both a 2012 machine and a 2023 one, and
+   a tool that guessed would quietly put a third of the estate in the wrong
+   decade. A blank year says "look this one up"; a wrong year says nothing at
+   all until somebody spends the budget. */
+(function (global) {
+  'use strict';
+
+  var U = global.U, N = global.Norm;
+
+  /* Makers, so "Dell Latitude 5440" and "Latitude 5440" are one model. Long
+     forms first, or "HP" would strip the H off nothing and leave a stray
+     "ewlett-Packard". */
+  var MAKERS = [
+    'hewlett-packard', 'hewlett packard', 'microsoft corporation', 'dell inc.',
+    'dell computer corporation', 'lenovo', 'toshiba', 'fujitsu', 'samsung',
+    'acer', 'asus', 'apple', 'dell', 'hp', 'msi', 'lg'
+  ];
+
+  /* Noise that the two systems disagree about on the same machine. */
+  var NOISE = /\b(notebook|laptop|desktop|pc|computer|workstation|tower|sff|mt|micro|aio|all[- ]in[- ]one)\b/g;
+
+  /* The key both sides of the lookup are reduced to.
+
+     Deliberately not the printer module's modelKey: that one is tuned to
+     printer part numbers and strips every non-alphanumeric, which would turn
+     "L14 Gen 4" and "L14 Gen 40" into neighbours. Here the words matter. */
+  function modelKey(v) {
+    var s = N.clean(v).toLowerCase();
+    if (!s) return '';
+    MAKERS.forEach(function (m) {
+      if (s.indexOf(m) === 0) s = s.slice(m.length);
+    });
+    s = s.replace(NOISE, ' ')
+         .replace(/[^a-z0-9]+/g, ' ')
+         .replace(/\s+/g, ' ')
+         .trim();
+    return s;
+  }
+
+  /* The lookup, keyed. Later rows do not overwrite earlier ones: a duplicate
+     is reported rather than silently resolved, because two different years for
+     one model is a question, not a preference. */
+  function index(records) {
+    var out = {}, duplicates = [];
+    (records || []).forEach(function (r) {
+      var key = modelKey(r.model);
+      if (!key) return;
+      var year = yearOf(r.year);
+      var entry = {
+        key: key,
+        model: N.clean(r.model),
+        year: year,
+        manufacturer: N.clean(r.manufacturer),
+        formFactor: N.clean(r.formFactor),
+        notes: N.clean(r.notes)
+      };
+      if (out[key]) {
+        if (out[key].year !== year) duplicates.push({ key: key, a: out[key], b: entry });
+        return;
+      }
+      out[key] = entry;
+    });
+    return { byKey: out, duplicates: duplicates, count: Object.keys(out).length };
+  }
+
+  /* A year, or null. Four digits somewhere in the cell, so "2023", "FY2023"
+     and "2023 (refresh)" all read the same, and anything outside living memory
+     for a PC estate is a typo rather than a year. */
+  function yearOf(v) {
+    var m = String(v === undefined || v === null ? '' : v).match(/(19|20)\d{2}/);
+    if (!m) return null;
+    var y = parseInt(m[0], 10);
+    var now = new Date().getFullYear();
+    if (y < 1995 || y > now + 1) return null;
+    return y;
+  }
+
+  /* The model a row should be looked up on.
+
+     Freshservice's Product and Intune's Model disagree often enough that one
+     of them alone loses matches, so try both. Intune first: it reads the model
+     off the machine, while Freshservice holds whatever was typed when the
+     asset was created. */
+  function modelsFor(row) {
+    var out = [];
+    if (row.intune && N.clean(row.intune.model)) out.push(N.clean(row.intune.model));
+    if (row.fs && N.clean(row.fs.model)) out.push(N.clean(row.fs.model));
+    if (row.model && out.indexOf(N.clean(row.model)) < 0) out.push(N.clean(row.model));
+    return out;
+  }
+
+  /* Put the year, the age and the band on every row. Additive: nothing already
+     on the row is touched, so the reconciliation is unaffected by whether a
+     lookup has been loaded. */
+  function annotate(rows, lookup, cfg) {
+    cfg = settings(cfg);
+    var byKey = (lookup && lookup.byKey) || {};
+    var now = new Date().getFullYear();
+
+    (rows || []).forEach(function (r) {
+      r.modelYear = null;
+      r.modelMatched = '';
+      r.modelFormFactor = '';
+      r.age = null;
+      r.ageBand = '';
+
+      var names = modelsFor(r);
+      for (var i = 0; i < names.length; i++) {
+        var hit = byKey[modelKey(names[i])];
+        if (!hit) continue;
+        r.modelMatched = hit.model;
+        r.modelFormFactor = hit.formFactor;
+        if (hit.year) {
+          r.modelYear = hit.year;
+          r.age = now - hit.year;
+          r.ageBand = band(r.age, cfg);
+        }
+        break;
+      }
+      if (!r.modelYear) r.ageBand = 'Unknown';
+    });
+    return rows;
+  }
+
+  /* Bands for grouping, built around the refresh age rather than fixed: an
+     estate on a four-year cycle and one on a six-year cycle are not asking the
+     same question of the same numbers. */
+  function band(age, cfg) {
+    cfg = settings(cfg);
+    if (age === null || age === undefined) return 'Unknown';
+    if (age < 0) return 'Unknown';
+    if (age >= cfg.refreshYears + 2) return String(cfg.refreshYears + 2) + '+ years — overdue';
+    if (age >= cfg.refreshYears) return String(cfg.refreshYears) + '–' + (cfg.refreshYears + 1) + ' years — due';
+    if (age >= cfg.refreshYears - 2) return (cfg.refreshYears - 2) + '–' + (cfg.refreshYears - 1) + ' years — approaching';
+    return 'Under ' + (cfg.refreshYears - 2) + ' years';
+  }
+
+  var DEFAULTS = { refreshYears: 5 };
+  function settings(saved) { return Object.assign({}, DEFAULTS, saved || {}); }
+
+  /* --------------------------------------------------- the starter list */
+
+  /* Every distinct model in the loaded data, with how many machines carry it
+     and what the two systems each call it — the file to fill in and load back.
+
+     Built from the data rather than typed from memory, because the list of
+     models in an estate is exactly the thing nobody can recall accurately and
+     exactly the thing the two systems word differently. */
+  function modelList(rows, lookup, cfg) {
+    var seen = {};
+    var byKey = (lookup && lookup.byKey) || {};
+
+    (rows || []).forEach(function (r) {
+      if (!r.inScope) return;                 // a monitor has no refresh cycle
+      var names = modelsFor(r);
+      if (!names.length) return;
+      var key = modelKey(names[0]);
+      if (!key) return;
+      if (!seen[key]) {
+        seen[key] = {
+          key: key,
+          model: names[0],
+          fsNames: {}, intuneNames: {},
+          makers: {},
+          devices: 0,
+          known: byKey[key] ? byKey[key].year : null
+        };
+      }
+      var e = seen[key];
+      e.devices++;
+      if (r.fs && N.clean(r.fs.model)) e.fsNames[N.clean(r.fs.model)] = true;
+      if (r.intune && N.clean(r.intune.model)) e.intuneNames[N.clean(r.intune.model)] = true;
+      var make = (r.intune && N.clean(r.intune.manufacturer)) || (r.fs && N.clean(r.fs.manufacturer)) || '';
+      if (make) e.makers[make] = true;
+    });
+
+    return Object.keys(seen).map(function (k) { return seen[k]; })
+      .sort(function (a, b) { return b.devices - a.devices || (a.model < b.model ? -1 : 1); });
+  }
+
+  function modelListCsv(rows, lookup, cfg) {
+    var headers = ['Model', 'Year', 'Manufacturer', 'Form factor', 'Devices',
+                   'Called this in Freshservice', 'Called this in Intune', 'Notes'];
+    var out = modelList(rows, lookup, cfg).map(function (e) {
+      return {
+        'Model': e.model,
+        'Year': e.known === null || e.known === undefined ? '' : e.known,
+        'Manufacturer': Object.keys(e.makers).sort().join(' / '),
+        'Form factor': '',
+        'Devices': e.devices,
+        'Called this in Freshservice': Object.keys(e.fsNames).sort().join(' / '),
+        'Called this in Intune': Object.keys(e.intuneNames).sort().join(' / '),
+        'Notes': ''
+      };
+    });
+    return global.CSV.stringify(out, headers);
+  }
+
+  /* How much of the estate the lookup can actually place, for the dialog. */
+  function coverage(rows) {
+    var scoped = (rows || []).filter(function (r) { return r.inScope; });
+    var placed = scoped.filter(function (r) { return r.modelYear; });
+    return {
+      devices: scoped.length,
+      placed: placed.length,
+      unplaced: scoped.length - placed.length,
+      models: Object.keys(scoped.reduce(function (a, r) {
+        var k = modelKey(modelsFor(r)[0] || '');
+        if (k) a[k] = true;
+        return a;
+      }, {})).length,
+      modelsUnplaced: Object.keys(scoped.reduce(function (a, r) {
+        if (r.modelYear) return a;
+        var k = modelKey(modelsFor(r)[0] || '');
+        if (k) a[k] = true;
+        return a;
+      }, {})).length
+    };
+  }
+
+  global.DeviceAge = {
+    DEFAULTS: DEFAULTS,
+    settings: settings,
+    modelKey: modelKey,
+    yearOf: yearOf,
+    index: index,
+    annotate: annotate,
+    band: band,
+    modelList: modelList,
+    modelListCsv: modelListCsv,
+    coverage: coverage
+  };
+})(window);
+
+</script>
+<script>
 /* js/views.js */
 /* Columns, the filter engine, and the built-in + saved views. */
 (function (global) {
@@ -4900,6 +5173,16 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     { key: 'serial',      label: 'Serial',        width: 130, get: function (r) { return r.serial; } },
     { key: 'assetTag',    label: 'Asset tag',     width: 110, get: function (r) { return r.assetTag; } },
     { key: 'model',       label: 'Model',         width: 160, get: function (r) { return r.model; } },
+    { key: 'modelYear',   label: 'Year (approx)', width: 90, type: 'year', get: function (r) { return r.modelYear; } },
+    { key: 'age',         label: 'Age (years)',   width: 90, type: 'number', get: function (r) { return r.age; } },
+    /* Sorted on the year rather than the band's text, so the bands come out
+       oldest first and an unknown year lands at the end: a machine nobody has
+       a year for is not the same kind of thing as an old one, and should not
+       lead a refresh list. */
+    { key: 'ageBand',     label: 'Age band',      width: 170, get: function (r) { return r.ageBand; },
+      sortKey: function (r) { return r.modelYear || 9999; } },
+    { key: 'modelMatched',label: 'Matched model', width: 160, get: function (r) { return r.modelMatched; } },
+    { key: 'modelFormFactor', label: 'Form factor', width: 110, get: function (r) { return r.modelFormFactor; } },
     { key: 'os',          label: 'OS',            width: 130, get: function (r) { return r.os; } },
     { key: 'osVersion',   label: 'OS version',    width: 110, get: function (r) { return r.osVersion; } },
     { key: 'compliance',  label: 'Compliance',    width: 110, get: function (r) { return r.compliance; } },
@@ -4949,8 +5232,12 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
      per population puts the four side by side in four short lists instead of
      four long ones.
 
-     group is 'all', 'breakdown' or 'issue'; the sidebar heads each run with a
-     label. A view the table forgets is appended rather than dropped, because
+     section is 'all', 'breakdown' or 'issue'; the sidebar heads each run with a
+     label. It is deliberately not called group: a view already has a group,
+     naming the column the grid grinds the rows into, and writing the sidebar
+     section over it turned the site verification pack into an ungrouped list
+     and grouped a new view by a column called "breakdown" that does not
+     exist. A view the table forgets is appended rather than dropped, because
      losing a view silently is worse than showing it in the wrong place. */
   function order(builtIn, table) {
     var byId = {};
@@ -4959,13 +5246,13 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     table.forEach(function (row) {
       var v = byId[row[0]];
       if (!v) return;                       // names a view this build does not have
-      v.group = row[1];
+      v.section = row[1];
       if (row[2]) v.name = row[2];
       out.push(v);
       delete byId[row[0]];
     });
     Object.keys(byId).forEach(function (id) {
-      byId[id].group = byId[id].group || 'issue';
+      byId[id].section = byId[id].section || 'issue';
       out.push(byId[id]);
     });
     return out;
@@ -5223,6 +5510,30 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
       filter: { match: 'all', conditions: [{ field: '__anyIssue', op: 'isNot' }] }
     },
     {
+      id: 'by-age',
+      name: 'By age',
+      description: 'Every in-scope machine banded by approximate year of manufacture, oldest first \u2014 the ' +
+                   'refresh planning list. The year comes from the model year lookup, so a machine whose model ' +
+                   'is not in that file shows as unknown rather than guessed.',
+      columns: ['name', 'ageBand', 'modelYear', 'age', 'model', 'location', 'fsUser', 'state', 'lastCheckIn'],
+      filter: null,
+      custom: function (rows) { return rows.filter(function (r) { return r.inScope; }); },
+      sort: { key: 'ageBand', dir: 'asc' }
+    },
+    {
+      id: 'model-year-missing',
+      name: 'Model year missing',
+      description: 'In-scope machines whose model is not in the model year lookup, so they cannot be aged. ' +
+                   'Add a year for these models and every machine carrying them is placed at once. Machines ' +
+                   'with no model recorded at all are left out \u2014 there is nothing to add a year against.',
+      columns: ['name', 'model', 'location', 'fsUser', 'state', 'serial', 'lastCheckIn'],
+      filter: null,
+      custom: function (rows) {
+        return rows.filter(function (r) { return r.inScope && !r.modelYear && N.clean(r.model); });
+      },
+      sort: { key: 'model', dir: 'asc' }
+    },
+    {
       id: 'other-assets',
       name: 'Other asset types',
       description: 'Freshservice assets outside the computer types — network hardware, phones, screens. Not compared against Intune, but counted and mapped.',
@@ -5250,6 +5561,8 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
   var ORDER = [
     ['all',             'all',       'All PCs'],
 
+    ['by-age',          'breakdown', 'By age'],
+    ['model-year-missing','breakdown','Model year missing'],
     ['other-assets',    'breakdown', 'Other asset types'],
     ['risk-score',      'breakdown', 'By risk score'],
     ['most-risks',      'breakdown', 'By open risks'],
@@ -5662,6 +5975,13 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     if (col.type === 'number') {
       td.className = 'num';
       td.textContent = (v === null || v === undefined || v === '') ? '—' : U.num(v);
+      return;
+    }
+    /* A year is a number that must not be grouped: U.num turns 2012 into
+       "2,012", which reads as a quantity rather than a date. */
+    if (col.type === 'year') {
+      td.className = 'num';
+      td.textContent = (v === null || v === undefined || v === '') ? '—' : String(v);
       return;
     }
 
@@ -11152,7 +11472,8 @@ window.SampleData = {
       S = global.Schema, C = global.Charts, T = global.Table, FX = global.FSExport,
       NV = global.NetViews, NM = global.NetMatch, NX = global.NetExport, FT = global.Fortinet,
       PV = global.PrintViews, PM = global.Printers, PX2 = global.PrintExport,
-      MBV = global.MobViews, MB = global.Mobiles, MBX = global.MobExport;
+      MBV = global.MobViews, MB = global.Mobiles, MBX = global.MobExport,
+      DA = global.DeviceAge;
 
   /* Four populations, worked out separately. Each list names the exports
      that feed one of them; the location lookup is shared, because a site is a
@@ -11161,7 +11482,7 @@ window.SampleData = {
      Mobiles are the odd one out: there is no second system to reconcile
      against, because none of them is in Freshservice yet. That population is
      a site-mapping and creation job until the first import lands. */
-  var PC_SOURCES = ['freshservice', 'intune', 'arcticwolf', 'locations', 'verification'];
+  var PC_SOURCES = ['freshservice', 'intune', 'arcticwolf', 'locations', 'models', 'verification'];
   var NET_SOURCES = ['fortimanager', 'fsnetwork'];
   var PRINT_SOURCES = ['onestop', 'fsprinter'];
   var MOB_SOURCES = ['soti', 'entra'];
@@ -11545,11 +11866,24 @@ window.SampleData = {
       state.result = null;
     } else {
       state.result = R.apply(global.Match.reconcile(data, state.cfg), state.cfg, state.enabledRules);
+      /* Age is put on afterwards and never feeds a rule: a model missing from
+         the lookup is a gap in a file the user maintains, not something wrong
+         with the device, and flagging a thousand machines the first time the
+         tool is opened would bury everything that is. */
+      DA.annotate(state.result.rows, modelsIndex(), state.cfg);
     }
     recomputeNet(data);
     recomputePrinters(data);
     recomputeMobiles(data);
     saveWorkingSet();
+  }
+
+  /* The model year lookup, keyed on the model. Empty until the file is loaded,
+     which is the normal state on a first run: everything then reads as an
+     unknown year rather than a wrong one. */
+  function modelsIndex() {
+    var src = state.sources.models;
+    return DA.index(src && src.records ? src.records : []);
   }
 
   /* The site list keyed by site code, which is how network devices find their
@@ -12348,7 +12682,7 @@ window.SampleData = {
            what is wrong with it. */
         var lastGroup = null;
         ctx.all().forEach(function (v) {
-          var group = v.isCustom ? 'custom' : (v.group || 'issue');
+          var group = v.isCustom ? 'custom' : (v.section || 'issue');
           if (group !== lastGroup) {
             sec.body.appendChild(U.el('div', { class: 'side-group' }, GROUP_LABELS[group] || ''));
             lastGroup = group;
@@ -13439,6 +13773,12 @@ window.SampleData = {
       }),
       'Group by site'
     ]));
+
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      title: 'Where the approximate year of manufacture comes from, and the starter list to fill in',
+      onclick: openModelYears
+    }, 'Model years'));
 
     controls.appendChild(U.el('div', { class: 'spacer' }));
     controls.appendChild(U.el('button', {
@@ -15611,6 +15951,83 @@ window.SampleData = {
      from a button on their own list, and having one of the four somewhere else
      entirely meant the answer to "how do I build an import" depended on which
      asset you were looking at. */
+  /* --------------------------------------------------- model year lookup */
+
+  /* The refresh-planning dialog: what the lookup covers, what it is missing,
+     and the starter file to fill in.
+
+     The file is built from the estate rather than typed from memory. Nobody
+     can list the models in a thousand-machine estate accurately, and the two
+     systems word them differently often enough that a hand-typed list misses
+     matches it looks like it should make \u2014 so the tool writes the list, with
+     both systems\u2019 wording alongside each row, and the years are all that is
+     left to fill in. */
+  function openModelYears() {
+    var body = U.el('div', { class: 'body' });
+    var lookup = modelsIndex();
+    var rows = state.result ? state.result.rows : [];
+    var cov = DA.coverage(rows);
+
+    body.appendChild(U.el('p', { class: 'hint' },
+      'Neither Freshservice nor Intune records when a machine was built, so the year comes from a lookup you ' +
+      'keep: one row per model, with the year it was bought or launched. Nothing here is guessed \u2014 the same ' +
+      'model name can be a decade apart between generations, and a wrong year would not show up until the ' +
+      'budget had been spent on it.'));
+
+    body.appendChild(U.el('div', { class: 'tiles', style: { marginBottom: '12px' } }, [
+      C.tile('Machines in scope', cov.devices),
+      C.tile('Given a year', cov.placed, cov.devices ? Math.round(cov.placed / cov.devices * 100) + '% of the estate' : null),
+      C.tile('Models seen', cov.models),
+      C.tile('Models with no year', cov.modelsUnplaced)
+    ]));
+
+    var src = state.sources.models;
+    body.appendChild(U.el('p', { class: 'hint' }, src
+      ? 'Loaded from ' + src.fileName + ' \u2014 ' + U.num(lookup.count) + ' model' +
+        (lookup.count === 1 ? '' : 's') + ' with a usable year.'
+      : 'No lookup loaded yet. Download the starter list, fill in the Year column, and drop it back on the ' +
+        'Load your exports screen.'));
+
+    if (lookup.duplicates.length) {
+      body.appendChild(U.el('div', { class: 'card', style: { marginBottom: '12px' } }, [
+        U.el('h2', {}, 'Two years for the same model'),
+        U.el('p', { class: 'hint' },
+          'The first row wins, because picking one silently would be worse than saying so. Merge or delete ' +
+          'the duplicate rows in your file.'),
+        U.el('div', {}, lookup.duplicates.slice(0, 12).map(function (d) {
+          return U.el('div', { class: 'hint' },
+            d.a.model + ' \u2014 ' + (d.a.year || 'blank') + ' and ' + (d.b.year || 'blank'));
+        }))
+      ]));
+    }
+
+    body.appendChild(U.el('div', { class: 'field' }, [
+      U.el('label', {}, 'Replace machines at this age (years)'),
+      U.el('input', {
+        type: 'number', min: '2', max: '15', value: String(state.cfg.refreshYears),
+        onchange: function (e) {
+          var v = parseInt(e.target.value, 10);
+          if (isNaN(v)) return;
+          state.cfg.refreshYears = Math.min(15, Math.max(2, v));
+          saveCfg();
+        }
+      }),
+      U.el('div', { class: 'hint' },
+        'Only changes where the age bands fall \u2014 due, approaching, overdue. The years themselves are untouched.')
+    ]));
+
+    modal('Model years', body, [
+      { label: 'Done', primary: true },
+      { label: 'Download starter list', keepOpen: true, action: function () {
+        if (!rows.length) { U.toast('Load the PC exports first.', 'err'); return; }
+        var list = DA.modelList(rows, lookup, state.cfg);
+        if (!list.length) { U.toast('No models found in the loaded data.', 'err'); return; }
+        U.download('model-years-' + U.todayStamp() + '.csv', DA.modelListCsv(rows, lookup, state.cfg));
+        U.toast('Exported ' + U.num(list.length) + ' models. Fill in the Year column and drop it back in.', 'ok');
+      } }
+    ]);
+  }
+
   function openPcImport() {
     var cfg = state.fsConfig;
     var body = U.el('div', { class: 'body fill' });
@@ -16081,7 +16498,8 @@ window.SampleData = {
       ['activeDays', 'Checked in within this many days counts as definitely still in use', 1, 90],
       ['riskScoreThreshold', 'Arctic Wolf risk score at or above which a device is high risk', 0, 10],
       ['risksThreshold', 'Open risks on one device before it counts as a lot', 1, 100000],
-      ['scanStaleDays', 'Days without a successful vulnerability scan before it is stale', 1, 365]
+      ['scanStaleDays', 'Days without a successful vulnerability scan before it is stale', 1, 365],
+      ['refreshYears', 'Age in years at which a PC is due for replacement', 2, 15]
     ];
     var grid3 = U.el('div', { class: 'grid3', style: { marginTop: '12px' } });
     fields.forEach(function (f) {

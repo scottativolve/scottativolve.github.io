@@ -326,6 +326,32 @@
       ]
     },
 
+    models: {
+      id: 'models',
+      label: 'Model year lookup',
+      short: 'Model years',
+      hint: 'Model \u2192 year of manufacture (adds the age columns). Download the starter list from Devices \u2192 Model years.',
+      /* Headers the starter list is written with, plus the wordings a
+         hand-made table tends to use. Deliberately narrow: a sheet of models
+         and years is small and looks a little like every other export, and a
+         loose signature here would start claiming asset exports. */
+      /* 'model' is in here so a two-column hand-made file (Model, Year) is
+         still placed: without it such a file lands just under the confidence
+         threshold and has to be dropped on the labelled box. It is safe to
+         claim because the exports that carry a Model column all trip the anti
+         list below by a wide margin. */
+      signature: ['year of manufacture', 'model year', 'launch year', 'called this in freshservice',
+                  'called this in intune', 'form factor', 'release year', 'year', 'model'],
+      anti: ['device name', 'serial number', 'asset tag', 'last check-in'],
+      fields: [
+        { key: 'model',        label: 'Model / product',  required: true, aliases: ['model', 'product', 'product name', 'model name', 'product number', 'device model', 'type'] },
+        { key: 'year',         label: 'Year of manufacture', aliases: ['year of manufacture', 'year', 'model year', 'launch year', 'release year', 'built', 'manufactured'] },
+        { key: 'manufacturer', label: 'Manufacturer',     aliases: ['manufacturer', 'make', 'vendor', 'brand'] },
+        { key: 'formFactor',   label: 'Form factor',      aliases: ['form factor', 'form', 'chassis', 'device type', 'category'] },
+        { key: 'notes',        label: 'Notes',            aliases: ['notes', 'note', 'comments', 'comment'] }
+      ]
+    },
+
     verification: {
       id: 'verification',
       label: 'Verification returns',

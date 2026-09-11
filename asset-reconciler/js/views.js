@@ -29,6 +29,16 @@
     { key: 'serial',      label: 'Serial',        width: 130, get: function (r) { return r.serial; } },
     { key: 'assetTag',    label: 'Asset tag',     width: 110, get: function (r) { return r.assetTag; } },
     { key: 'model',       label: 'Model',         width: 160, get: function (r) { return r.model; } },
+    { key: 'modelYear',   label: 'Year (approx)', width: 90, type: 'year', get: function (r) { return r.modelYear; } },
+    { key: 'age',         label: 'Age (years)',   width: 90, type: 'number', get: function (r) { return r.age; } },
+    /* Sorted on the year rather than the band's text, so the bands come out
+       oldest first and an unknown year lands at the end: a machine nobody has
+       a year for is not the same kind of thing as an old one, and should not
+       lead a refresh list. */
+    { key: 'ageBand',     label: 'Age band',      width: 170, get: function (r) { return r.ageBand; },
+      sortKey: function (r) { return r.modelYear || 9999; } },
+    { key: 'modelMatched',label: 'Matched model', width: 160, get: function (r) { return r.modelMatched; } },
+    { key: 'modelFormFactor', label: 'Form factor', width: 110, get: function (r) { return r.modelFormFactor; } },
     { key: 'os',          label: 'OS',            width: 130, get: function (r) { return r.os; } },
     { key: 'osVersion',   label: 'OS version',    width: 110, get: function (r) { return r.osVersion; } },
     { key: 'compliance',  label: 'Compliance',    width: 110, get: function (r) { return r.compliance; } },
@@ -78,8 +88,12 @@
      per population puts the four side by side in four short lists instead of
      four long ones.
 
-     group is 'all', 'breakdown' or 'issue'; the sidebar heads each run with a
-     label. A view the table forgets is appended rather than dropped, because
+     section is 'all', 'breakdown' or 'issue'; the sidebar heads each run with a
+     label. It is deliberately not called group: a view already has a group,
+     naming the column the grid grinds the rows into, and writing the sidebar
+     section over it turned the site verification pack into an ungrouped list
+     and grouped a new view by a column called "breakdown" that does not
+     exist. A view the table forgets is appended rather than dropped, because
      losing a view silently is worse than showing it in the wrong place. */
   function order(builtIn, table) {
     var byId = {};
@@ -88,13 +102,13 @@
     table.forEach(function (row) {
       var v = byId[row[0]];
       if (!v) return;                       // names a view this build does not have
-      v.group = row[1];
+      v.section = row[1];
       if (row[2]) v.name = row[2];
       out.push(v);
       delete byId[row[0]];
     });
     Object.keys(byId).forEach(function (id) {
-      byId[id].group = byId[id].group || 'issue';
+      byId[id].section = byId[id].section || 'issue';
       out.push(byId[id]);
     });
     return out;
@@ -352,6 +366,30 @@
       filter: { match: 'all', conditions: [{ field: '__anyIssue', op: 'isNot' }] }
     },
     {
+      id: 'by-age',
+      name: 'By age',
+      description: 'Every in-scope machine banded by approximate year of manufacture, oldest first \u2014 the ' +
+                   'refresh planning list. The year comes from the model year lookup, so a machine whose model ' +
+                   'is not in that file shows as unknown rather than guessed.',
+      columns: ['name', 'ageBand', 'modelYear', 'age', 'model', 'location', 'fsUser', 'state', 'lastCheckIn'],
+      filter: null,
+      custom: function (rows) { return rows.filter(function (r) { return r.inScope; }); },
+      sort: { key: 'ageBand', dir: 'asc' }
+    },
+    {
+      id: 'model-year-missing',
+      name: 'Model year missing',
+      description: 'In-scope machines whose model is not in the model year lookup, so they cannot be aged. ' +
+                   'Add a year for these models and every machine carrying them is placed at once. Machines ' +
+                   'with no model recorded at all are left out \u2014 there is nothing to add a year against.',
+      columns: ['name', 'model', 'location', 'fsUser', 'state', 'serial', 'lastCheckIn'],
+      filter: null,
+      custom: function (rows) {
+        return rows.filter(function (r) { return r.inScope && !r.modelYear && N.clean(r.model); });
+      },
+      sort: { key: 'model', dir: 'asc' }
+    },
+    {
       id: 'other-assets',
       name: 'Other asset types',
       description: 'Freshservice assets outside the computer types — network hardware, phones, screens. Not compared against Intune, but counted and mapped.',
@@ -379,6 +417,8 @@
   var ORDER = [
     ['all',             'all',       'All PCs'],
 
+    ['by-age',          'breakdown', 'By age'],
+    ['model-year-missing','breakdown','Model year missing'],
     ['other-assets',    'breakdown', 'Other asset types'],
     ['risk-score',      'breakdown', 'By risk score'],
     ['most-risks',      'breakdown', 'By open risks'],

@@ -288,6 +288,53 @@ of the things worth finding. `-EnabledOnly` drops them if you would rather.
 
 Don't open this one in Excel either.
 
+### 11. Model year lookup (optional)
+
+One row per model, with the year it was built — what turns the estate into a
+refresh plan. Neither Freshservice nor Intune records a year, so it has to come
+from a file you keep.
+
+**Nothing is guessed.** The temptation is obvious: most model names carry a
+generation, and a table of launch years could have been shipped inside the
+tool. But the Dell OptiPlex 7010 is both a 2012 machine and a 2023 one, and a
+guessed year would quietly put a chunk of the estate in the wrong decade —
+invisible until the budget had been spent on the wrong machines. A blank year
+says "look this one up"; a wrong one says nothing at all.
+
+You do not have to compile the list by hand. **Devices → Model years →
+Download starter list** writes it from the data already loaded: every distinct
+model, how many machines carry it, and what each system calls it side by side.
+
+```
+Model,Year,Manufacturer,Form factor,Devices,Called this in Freshservice,Called this in Intune,Notes
+Latitude 5440,,Dell Inc.,,43,Dell Laptop / Latitude 5440,Latitude 5440,
+OptiPlex 7010,,Dell Inc.,,36,OptiPlex 7010,OptiPlex 7010,
+```
+
+Fill in `Year` and drop the file back on the Data screen. Only `Model` and
+`Year` are read — the rest are there to help you fill it in, and `Form factor`
+comes back as a column if you use it, which is how laptops get separated from
+desktops in a refresh list.
+
+Each model is matched loosely: the maker is stripped off the front, and words
+the two systems disagree about (`Notebook`, `Desktop`, `SFF`) are dropped, so
+`HP EliteBook 640 G10 Notebook PC` and `EliteBook 640 G10` are one model. The
+version numbers are *not* touched, so `ThinkPad L14 Gen 4` and `Gen 40` stay
+apart.
+
+Two rows giving different years for the same model are reported rather than
+resolved — the first wins and the dialog names the clash, because picking one
+silently is how a lookup rots.
+
+This adds three columns (**Year (approx)**, **Age (years)**, **Age band**) and
+two views: **By age**, the refresh planning list, oldest first; and **Model
+year missing**, the models still to add. No check is raised for a missing year
+— it is a gap in a file you maintain, not something wrong with the device, and
+flagging a thousand machines on first run would bury everything that is.
+
+The bands follow the refresh age in Settings (default five years): under three
+years, approaching, due, and overdue.
+
 ### Locating devices by IP address
 
 If your site list carries an `IP Subnet` column and the exports carry a last-seen
@@ -450,7 +497,7 @@ and all four sections are laid out the same way:
 | | |
 |---|---|
 | **Everything** | *All PCs*, *All network devices*, *All printers*, *All mobiles* |
-| **Breakdowns** | ways of slicing the population by what the assets are — *Firewalls*, *Switches*, *Tablets*, *By model*, *By volume*, *By risk score* |
+| **Breakdowns** | ways of slicing the population by what the assets are — *Firewalls*, *Switches*, *Tablets*, *By model*, *By age*, *By volume*, *By risk score* |
 | **Issues** | *Needs attention* first, then **location**, then what the two systems **disagree** about, then everything else |
 
 That order is the same in every section, so the third thing down the Issues run
@@ -1391,23 +1438,37 @@ asset-reconciler/
 │   ├── csv.js              CSV/TSV parser and writer, optional .xlsx reader
 │   ├── schema.js           canonical fields and the column auto-mapper
 │   ├── normalize.js        name, serial, person and location normalisation
+│   ├── phone.js            UK phone numbers, to E.164 and back
 │   ├── ipnet.js            IPv4 parsing and site-subnet matching
 │   ├── dupes.js            duplicate rows within each source file
-│   ├── match.js            the reconciliation engine
-│   ├── rules.js            the discrepancy checks
-│   ├── views.js            columns, the filter engine, built-in views
+│   ├── match.js            the PC reconciliation engine
+│   ├── rules.js            the PC discrepancy checks
+│   ├── deviceage.js        the model year lookup and the age bands
+│   ├── views.js            PC columns, the filter engine, built-in views
+│   ├── fortinet.js         FortiManager export flattening
+│   ├── netmatch.js         network reconciliation and its checks
+│   ├── netviews.js         network columns and views
+│   ├── netexport.js        the network import file
+│   ├── printers.js         printer reconciliation and its checks
+│   ├── printviews.js       printer columns and views
+│   ├── printexport.js      the printer import file
+│   ├── mobiles.js          SOTI site mapping, owners and the mobile checks
+│   ├── mobviews.js         mobile columns and views
+│   ├── mobexport.js        the mobile and tablet import files
 │   ├── table.js            the data grid and the detail drawer
 │   ├── charts.js           inline-SVG bar charts
 │   ├── map.js              Leaflet map and site aggregation
 │   ├── geocode.js          postcodes.io and Nominatim lookups
-│   ├── fsexport.js         import file, change log and site packs
+│   ├── fsexport.js         PC import file, change log and site packs
 │   ├── store.js            local storage for settings
 │   ├── db.js               IndexedDB store for the loaded working set
+│   ├── publish.js          reading and writing the published data file
 │   ├── notes.js            per-device notes, keyed so they survive re-imports
+│   ├── app.js              state, the tabs, and everything wired together
 │   └── sampledata.js       generated — do not edit by hand
 ├── lib/leaflet/            Leaflet 1.9.4, vendored so there is no CDN dependency
 ├── sample-data/            example input files
-├── scripts/                sample-data generator and single-file build
+├── scripts/                sample-data generator, single-file build, Entra export
 └── dist/                   the single-file build
 ```
 

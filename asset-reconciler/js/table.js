@@ -81,6 +81,13 @@
       td.textContent = (v === null || v === undefined || v === '') ? '—' : U.num(v);
       return;
     }
+    /* A year is a number that must not be grouped: U.num turns 2012 into
+       "2,012", which reads as a quantity rather than a date. */
+    if (col.type === 'year') {
+      td.className = 'num';
+      td.textContent = (v === null || v === undefined || v === '') ? '—' : String(v);
+      return;
+    }
 
     var s = v === null || v === undefined ? '' : String(v);
     if (!s) { td.appendChild(U.el('span', { class: 'muted' }, '—')); return; }

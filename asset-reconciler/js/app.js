@@ -7,7 +7,8 @@
       S = global.Schema, C = global.Charts, T = global.Table, FX = global.FSExport,
       NV = global.NetViews, NM = global.NetMatch, NX = global.NetExport, FT = global.Fortinet,
       PV = global.PrintViews, PM = global.Printers, PX2 = global.PrintExport,
-      MBV = global.MobViews, MB = global.Mobiles, MBX = global.MobExport;
+      MBV = global.MobViews, MB = global.Mobiles, MBX = global.MobExport,
+      DA = global.DeviceAge;
 
   /* Four populations, worked out separately. Each list names the exports
      that feed one of them; the location lookup is shared, because a site is a
@@ -16,7 +17,7 @@
      Mobiles are the odd one out: there is no second system to reconcile
      against, because none of them is in Freshservice yet. That population is
      a site-mapping and creation job until the first import lands. */
-  var PC_SOURCES = ['freshservice', 'intune', 'arcticwolf', 'locations', 'verification'];
+  var PC_SOURCES = ['freshservice', 'intune', 'arcticwolf', 'locations', 'models', 'verification'];
   var NET_SOURCES = ['fortimanager', 'fsnetwork'];
   var PRINT_SOURCES = ['onestop', 'fsprinter'];
   var MOB_SOURCES = ['soti', 'entra'];
@@ -400,11 +401,24 @@
       state.result = null;
     } else {
       state.result = R.apply(global.Match.reconcile(data, state.cfg), state.cfg, state.enabledRules);
+      /* Age is put on afterwards and never feeds a rule: a model missing from
+         the lookup is a gap in a file the user maintains, not something wrong
+         with the device, and flagging a thousand machines the first time the
+         tool is opened would bury everything that is. */
+      DA.annotate(state.result.rows, modelsIndex(), state.cfg);
     }
     recomputeNet(data);
     recomputePrinters(data);
     recomputeMobiles(data);
     saveWorkingSet();
+  }
+
+  /* The model year lookup, keyed on the model. Empty until the file is loaded,
+     which is the normal state on a first run: everything then reads as an
+     unknown year rather than a wrong one. */
+  function modelsIndex() {
+    var src = state.sources.models;
+    return DA.index(src && src.records ? src.records : []);
   }
 
   /* The site list keyed by site code, which is how network devices find their
@@ -1203,7 +1217,7 @@
            what is wrong with it. */
         var lastGroup = null;
         ctx.all().forEach(function (v) {
-          var group = v.isCustom ? 'custom' : (v.group || 'issue');
+          var group = v.isCustom ? 'custom' : (v.section || 'issue');
           if (group !== lastGroup) {
             sec.body.appendChild(U.el('div', { class: 'side-group' }, GROUP_LABELS[group] || ''));
             lastGroup = group;
@@ -2294,6 +2308,12 @@
       }),
       'Group by site'
     ]));
+
+    controls.appendChild(U.el('button', {
+      class: 'btn sm',
+      title: 'Where the approximate year of manufacture comes from, and the starter list to fill in',
+      onclick: openModelYears
+    }, 'Model years'));
 
     controls.appendChild(U.el('div', { class: 'spacer' }));
     controls.appendChild(U.el('button', {
@@ -4466,6 +4486,83 @@
      from a button on their own list, and having one of the four somewhere else
      entirely meant the answer to "how do I build an import" depended on which
      asset you were looking at. */
+  /* --------------------------------------------------- model year lookup */
+
+  /* The refresh-planning dialog: what the lookup covers, what it is missing,
+     and the starter file to fill in.
+
+     The file is built from the estate rather than typed from memory. Nobody
+     can list the models in a thousand-machine estate accurately, and the two
+     systems word them differently often enough that a hand-typed list misses
+     matches it looks like it should make \u2014 so the tool writes the list, with
+     both systems\u2019 wording alongside each row, and the years are all that is
+     left to fill in. */
+  function openModelYears() {
+    var body = U.el('div', { class: 'body' });
+    var lookup = modelsIndex();
+    var rows = state.result ? state.result.rows : [];
+    var cov = DA.coverage(rows);
+
+    body.appendChild(U.el('p', { class: 'hint' },
+      'Neither Freshservice nor Intune records when a machine was built, so the year comes from a lookup you ' +
+      'keep: one row per model, with the year it was bought or launched. Nothing here is guessed \u2014 the same ' +
+      'model name can be a decade apart between generations, and a wrong year would not show up until the ' +
+      'budget had been spent on it.'));
+
+    body.appendChild(U.el('div', { class: 'tiles', style: { marginBottom: '12px' } }, [
+      C.tile('Machines in scope', cov.devices),
+      C.tile('Given a year', cov.placed, cov.devices ? Math.round(cov.placed / cov.devices * 100) + '% of the estate' : null),
+      C.tile('Models seen', cov.models),
+      C.tile('Models with no year', cov.modelsUnplaced)
+    ]));
+
+    var src = state.sources.models;
+    body.appendChild(U.el('p', { class: 'hint' }, src
+      ? 'Loaded from ' + src.fileName + ' \u2014 ' + U.num(lookup.count) + ' model' +
+        (lookup.count === 1 ? '' : 's') + ' with a usable year.'
+      : 'No lookup loaded yet. Download the starter list, fill in the Year column, and drop it back on the ' +
+        'Load your exports screen.'));
+
+    if (lookup.duplicates.length) {
+      body.appendChild(U.el('div', { class: 'card', style: { marginBottom: '12px' } }, [
+        U.el('h2', {}, 'Two years for the same model'),
+        U.el('p', { class: 'hint' },
+          'The first row wins, because picking one silently would be worse than saying so. Merge or delete ' +
+          'the duplicate rows in your file.'),
+        U.el('div', {}, lookup.duplicates.slice(0, 12).map(function (d) {
+          return U.el('div', { class: 'hint' },
+            d.a.model + ' \u2014 ' + (d.a.year || 'blank') + ' and ' + (d.b.year || 'blank'));
+        }))
+      ]));
+    }
+
+    body.appendChild(U.el('div', { class: 'field' }, [
+      U.el('label', {}, 'Replace machines at this age (years)'),
+      U.el('input', {
+        type: 'number', min: '2', max: '15', value: String(state.cfg.refreshYears),
+        onchange: function (e) {
+          var v = parseInt(e.target.value, 10);
+          if (isNaN(v)) return;
+          state.cfg.refreshYears = Math.min(15, Math.max(2, v));
+          saveCfg();
+        }
+      }),
+      U.el('div', { class: 'hint' },
+        'Only changes where the age bands fall \u2014 due, approaching, overdue. The years themselves are untouched.')
+    ]));
+
+    modal('Model years', body, [
+      { label: 'Done', primary: true },
+      { label: 'Download starter list', keepOpen: true, action: function () {
+        if (!rows.length) { U.toast('Load the PC exports first.', 'err'); return; }
+        var list = DA.modelList(rows, lookup, state.cfg);
+        if (!list.length) { U.toast('No models found in the loaded data.', 'err'); return; }
+        U.download('model-years-' + U.todayStamp() + '.csv', DA.modelListCsv(rows, lookup, state.cfg));
+        U.toast('Exported ' + U.num(list.length) + ' models. Fill in the Year column and drop it back in.', 'ok');
+      } }
+    ]);
+  }
+
   function openPcImport() {
     var cfg = state.fsConfig;
     var body = U.el('div', { class: 'body fill' });
@@ -4936,7 +5033,8 @@
       ['activeDays', 'Checked in within this many days counts as definitely still in use', 1, 90],
       ['riskScoreThreshold', 'Arctic Wolf risk score at or above which a device is high risk', 0, 10],
       ['risksThreshold', 'Open risks on one device before it counts as a lot', 1, 100000],
-      ['scanStaleDays', 'Days without a successful vulnerability scan before it is stale', 1, 365]
+      ['scanStaleDays', 'Days without a successful vulnerability scan before it is stale', 1, 365],
+      ['refreshYears', 'Age in years at which a PC is due for replacement', 2, 15]
     ];
     var grid3 = U.el('div', { class: 'grid3', style: { marginTop: '12px' } });
     fields.forEach(function (f) {
