@@ -6301,6 +6301,57 @@ table.grid.raw td { max-width: 460px; overflow: hidden; text-overflow: ellipsis;
     cmp.appendChild(kv);
     body.appendChild(cmp);
 
+    /* Approximate age, on rows that have been through the model year lookup.
+
+       Deliberately its own card rather than a row in the side-by-side table:
+       the year comes from neither system, and putting it under a Freshservice
+       or Intune heading would claim one of them reported it. The card is
+       shown even when there is no year, because "why is this one blank" is
+       the question the drawer gets opened to answer. */
+    if (row.ageBand) {
+      var lookedUp = N.clean(row.modelMatched) || N.clean(row.model);
+      var age = U.el('div', { class: 'card' });
+      age.appendChild(U.el('header', {}, [
+        U.el('h3', {}, 'Age'),
+        U.el('span', { class: 'sub' }, row.modelYear ? 'from the model year lookup' : 'no year yet')
+      ]));
+
+      if (row.modelYear) {
+        age.appendChild(U.el('div', { class: 'row', style: { gap: '24px', marginBottom: '8px' } }, [
+          U.el('div', {}, [
+            U.el('div', { class: 'hint' }, 'Year (approx)'),
+            U.el('div', { style: { fontSize: '22px', fontWeight: '600' } }, String(row.modelYear))
+          ]),
+          U.el('div', {}, [
+            U.el('div', { class: 'hint' }, 'Age (years)'),
+            U.el('div', { style: { fontSize: '22px', fontWeight: '600' } }, String(row.age))
+          ])
+        ]));
+        [['Band', row.ageBand], ['Matched on model', lookedUp], ['Form factor', row.modelFormFactor]]
+          .forEach(function (p) {
+            if (N.isBlank(p[1])) return;
+            age.appendChild(U.el('div', { style: { fontSize: '12.5px' } }, [
+              U.el('span', { style: { color: 'var(--text-secondary)' } }, p[0] + ': '),
+              U.el('strong', {}, String(p[1]))
+            ]));
+          });
+        age.appendChild(U.el('div', { class: 'hint', style: { marginTop: '6px' } },
+          'The year the model first shipped, not this machine\u2019s build date \u2014 so a machine bought ' +
+          'later than launch reads older than it is.'));
+      } else if (!lookedUp) {
+        age.appendChild(U.el('div', { class: 'hint' },
+          'Neither system records a model for this device, so there is nothing to look a year up against.'));
+      } else if (N.clean(row.modelMatched)) {
+        age.appendChild(U.el('div', { class: 'hint' },
+          '\u201C' + lookedUp + '\u201D is in the model year lookup, but the Year column is blank for it.'));
+      } else {
+        age.appendChild(U.el('div', { class: 'hint' },
+          '\u201C' + lookedUp + '\u201D is not in the model year lookup. Add a row for it and every machine ' +
+          'carrying that model is aged at once.'));
+      }
+      body.appendChild(age);
+    }
+
     if (row.aw) {
       var vuln = U.el('div', { class: 'card' });
       vuln.appendChild(U.el('header', {}, [

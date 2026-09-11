@@ -328,7 +328,13 @@ silently is how a lookup rots.
 
 This adds three columns (**Year (approx)**, **Age (years)**, **Age band**) and
 two views: **By age**, the refresh planning list, oldest first; and **Model
-year missing**, the models still to add. No check is raised for a missing year
+year missing**, the models still to add. Opening a PC shows an **Age** panel in
+the detail drawer with the year, the age, the band and the model the year was
+matched on. It is its own panel rather than a row in the side-by-side table
+because the year comes from neither system, and it is shown even when there is
+no year — saying which of the three reasons applies (the model is not in the
+lookup, the lookup has the model but no year, or neither system records a model
+at all), since that is the question the drawer gets opened to answer. No check is raised for a missing year
 — it is a gap in a file you maintain, not something wrong with the device, and
 flagging a thousand machines on first run would bury everything that is.
 
